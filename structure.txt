@@ -1,0 +1,633 @@
+Структура папок
+Серийный номер тома: FCE1-1CF2
+C:.
+|   ApplicationClass.cpp
+|   ApplicationClass.h
+|   arrow.png
+|   arrow.tga
+|   assimpmodelclass.cpp
+|   assimpmodelclass.h
+|   BitmapClass.cpp
+|   BitmapClass.h
+|   cube.obj
+|   DX_FrameWork.vcxproj
+|   DX_FrameWork.vcxproj.filters
+|   DX_FrameWork.vcxproj.user
+|   EditorUI.cpp
+|   EditorUI.h
+|   gameobject.cpp
+|   gameobject.h
+|   imgui.ini
+|   ModelManager.cpp
+|   ModelManager.h
+|   objmodelclass.cpp
+|   objmodelclass.h
+|   SceneManager.cpp
+|   SceneManager.h
+|   shader-error.txt
+|   sphere.mtl
+|   sphere.obj
+|   stb_image.h
+|   stone.tga
+|   structure.txt
+|   WorldSpriteClass.cpp
+|   WorldSpriteClass.h
+|   
++---Camera
+|       cameraclass.cpp
+|       cameraclass.h
+|       
++---Core
+|       main.cpp
+|       SystemClass.cpp
+|       SystemClass.h
+|       
++---DX11
+|       D3DClass.cpp
+|       D3DClass.h
+|       
++---HelpFunc
+|       helper.h
+|       
++---imgui-master
+|   |   .editorconfig
+|   |   .gitattributes
+|   |   .gitignore
+|   |   imconfig.h
+|   |   imgui.cpp
+|   |   imgui.h
+|   |   imgui_demo.cpp
+|   |   imgui_draw.cpp
+|   |   imgui_internal.h
+|   |   imgui_tables.cpp
+|   |   imgui_widgets.cpp
+|   |   imstb_rectpack.h
+|   |   imstb_textedit.h
+|   |   imstb_truetype.h
+|   |   LICENSE.txt
+|   |   
+|   +---.github
+|   |   |   FUNDING.yml
+|   |   |   pull_request_template.md
+|   |   |   
+|   |   +---ISSUE_TEMPLATE
+|   |   |       config.yml
+|   |   |       issue_template.yml
+|   |   |       
+|   |   \---workflows
+|   |           build.yml
+|   |           build_windows_vulkan_libs.ps1
+|   |           manual.yml
+|   |           scheduled.yml
+|   |           static-analysis.yml
+|   |           
+|   +---backends
+|   |   |   imgui_impl_allegro5.cpp
+|   |   |   imgui_impl_allegro5.h
+|   |   |   imgui_impl_android.cpp
+|   |   |   imgui_impl_android.h
+|   |   |   imgui_impl_dx10.cpp
+|   |   |   imgui_impl_dx10.h
+|   |   |   imgui_impl_dx11.cpp
+|   |   |   imgui_impl_dx11.h
+|   |   |   imgui_impl_dx12.cpp
+|   |   |   imgui_impl_dx12.h
+|   |   |   imgui_impl_dx9.cpp
+|   |   |   imgui_impl_dx9.h
+|   |   |   imgui_impl_glfw.cpp
+|   |   |   imgui_impl_glfw.h
+|   |   |   imgui_impl_glut.cpp
+|   |   |   imgui_impl_glut.h
+|   |   |   imgui_impl_metal.h
+|   |   |   imgui_impl_metal.mm
+|   |   |   imgui_impl_null.cpp
+|   |   |   imgui_impl_null.h
+|   |   |   imgui_impl_opengl2.cpp
+|   |   |   imgui_impl_opengl2.h
+|   |   |   imgui_impl_opengl3.cpp
+|   |   |   imgui_impl_opengl3.h
+|   |   |   imgui_impl_opengl3_loader.h
+|   |   |   imgui_impl_osx.h
+|   |   |   imgui_impl_osx.mm
+|   |   |   imgui_impl_sdl2.cpp
+|   |   |   imgui_impl_sdl2.h
+|   |   |   imgui_impl_sdl3.cpp
+|   |   |   imgui_impl_sdl3.h
+|   |   |   imgui_impl_sdlgpu3.cpp
+|   |   |   imgui_impl_sdlgpu3.h
+|   |   |   imgui_impl_sdlgpu3_shaders.h
+|   |   |   imgui_impl_sdlrenderer2.cpp
+|   |   |   imgui_impl_sdlrenderer2.h
+|   |   |   imgui_impl_sdlrenderer3.cpp
+|   |   |   imgui_impl_sdlrenderer3.h
+|   |   |   imgui_impl_vulkan.cpp
+|   |   |   imgui_impl_vulkan.h
+|   |   |   imgui_impl_wgpu.cpp
+|   |   |   imgui_impl_wgpu.h
+|   |   |   imgui_impl_win32.cpp
+|   |   |   imgui_impl_win32.h
+|   |   |   
+|   |   +---sdlgpu3
+|   |   |       build_instructions.txt
+|   |   |       shader.frag
+|   |   |       shader.vert
+|   |   |       
+|   |   \---vulkan
+|   |           build_instructions.txt
+|   |           generate_spv.sh
+|   |           glsl_shader.frag
+|   |           glsl_shader.vert
+|   |           
+|   +---docs
+|   |       BACKENDS.md
+|   |       CHANGELOG.txt
+|   |       CONTRIBUTING.md
+|   |       EXAMPLES.md
+|   |       FAQ.md
+|   |       FONTS.md
+|   |       README.md
+|   |       TODO.txt
+|   |       
+|   +---examples
+|   |   |   imgui_examples.sln
+|   |   |   README.txt
+|   |   |   
+|   |   +---example_allegro5
+|   |   |       example_allegro5.vcxproj
+|   |   |       example_allegro5.vcxproj.filters
+|   |   |       imconfig_allegro5.h
+|   |   |       main.cpp
+|   |   |       README.md
+|   |   |       
+|   |   +---example_android_opengl3
+|   |   |   |   CMakeLists.txt
+|   |   |   |   main.cpp
+|   |   |   |   
+|   |   |   \---android
+|   |   |       |   .gitignore
+|   |   |       |   build.gradle
+|   |   |       |   settings.gradle
+|   |   |       |   
+|   |   |       +---app
+|   |   |       |   |   build.gradle
+|   |   |       |   |   
+|   |   |       |   \---src
+|   |   |       |       \---main
+|   |   |       |           |   AndroidManifest.xml
+|   |   |       |           |   
+|   |   |       |           \---java
+|   |   |       |                   MainActivity.kt
+|   |   |       |                   
+|   |   |       \---gradle
+|   |   |               libs.versions.toml
+|   |   |               
+|   |   +---example_apple_metal
+|   |   |   |   main.mm
+|   |   |   |   Makefile
+|   |   |   |   README.md
+|   |   |   |   
+|   |   |   +---example_apple_metal.xcodeproj
+|   |   |   |       project.pbxproj
+|   |   |   |       
+|   |   |   +---iOS
+|   |   |   |       Info-iOS.plist
+|   |   |   |       LaunchScreen.storyboard
+|   |   |   |       
+|   |   |   \---macOS
+|   |   |           Info-macOS.plist
+|   |   |           MainMenu.storyboard
+|   |   |           
+|   |   +---example_apple_opengl2
+|   |   |   |   main.mm
+|   |   |   |   Makefile
+|   |   |   |   
+|   |   |   \---example_apple_opengl2.xcodeproj
+|   |   |           project.pbxproj
+|   |   |           
+|   |   +---example_glfw_metal
+|   |   |       main.mm
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_glfw_opengl2
+|   |   |       build_win32.bat
+|   |   |       example_glfw_opengl2.vcxproj
+|   |   |       example_glfw_opengl2.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_glfw_opengl3
+|   |   |       build_win32.bat
+|   |   |       example_glfw_opengl3.vcxproj
+|   |   |       example_glfw_opengl3.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       Makefile.emscripten
+|   |   |       
+|   |   +---example_glfw_vulkan
+|   |   |       build_win32.bat
+|   |   |       build_win64.bat
+|   |   |       CMakeLists.txt
+|   |   |       example_glfw_vulkan.vcxproj
+|   |   |       example_glfw_vulkan.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_glfw_wgpu
+|   |   |       CMakeLists.txt
+|   |   |       main.cpp
+|   |   |       Makefile.emscripten
+|   |   |       README.md
+|   |   |       
+|   |   +---example_glut_opengl2
+|   |   |       example_glut_opengl2.vcxproj
+|   |   |       example_glut_opengl2.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_null
+|   |   |       build_win32.bat
+|   |   |       example_null.vcxproj
+|   |   |       example_null.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_sdl2_directx11
+|   |   |       build_win32.bat
+|   |   |       example_sdl2_directx11.vcxproj
+|   |   |       example_sdl2_directx11.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       
+|   |   +---example_sdl2_metal
+|   |   |       main.mm
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_sdl2_opengl2
+|   |   |       build_win32.bat
+|   |   |       example_sdl2_opengl2.vcxproj
+|   |   |       example_sdl2_opengl2.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       README.md
+|   |   |       
+|   |   +---example_sdl2_opengl3
+|   |   |       build_win32.bat
+|   |   |       example_sdl2_opengl3.vcxproj
+|   |   |       example_sdl2_opengl3.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       Makefile.emscripten
+|   |   |       README.md
+|   |   |       
+|   |   +---example_sdl2_sdlrenderer2
+|   |   |       build_win32.bat
+|   |   |       example_sdl2_sdlrenderer2.vcxproj
+|   |   |       example_sdl2_sdlrenderer2.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       README.md
+|   |   |       
+|   |   +---example_sdl2_vulkan
+|   |   |       build_win32.bat
+|   |   |       build_win64.bat
+|   |   |       example_sdl2_vulkan.vcxproj
+|   |   |       example_sdl2_vulkan.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_sdl2_wgpu
+|   |   |       CMakeLists.txt
+|   |   |       main.cpp
+|   |   |       Makefile.emscripten
+|   |   |       README.md
+|   |   |       
+|   |   +---example_sdl3_directx11
+|   |   |       build_win32.bat
+|   |   |       example_sdl3_directx11.vcxproj
+|   |   |       example_sdl3_directx11.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       
+|   |   +---example_sdl3_metal
+|   |   |       main.mm
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_sdl3_opengl3
+|   |   |       build_win32.bat
+|   |   |       build_win64.bat
+|   |   |       example_sdl3_opengl3.vcxproj
+|   |   |       example_sdl3_opengl3.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       Makefile.emscripten
+|   |   |       README.md
+|   |   |       
+|   |   +---example_sdl3_sdlgpu3
+|   |   |       build_win64.bat
+|   |   |       example_sdl3_sdlgpu3.vcxproj
+|   |   |       example_sdl3_sdlgpu3.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_sdl3_sdlrenderer3
+|   |   |       build_win32.bat
+|   |   |       example_sdl3_sdlrenderer3.vcxproj
+|   |   |       example_sdl3_sdlrenderer3.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_sdl3_vulkan
+|   |   |       build_win32.bat
+|   |   |       build_win64.bat
+|   |   |       example_sdl3_vulkan.vcxproj
+|   |   |       example_sdl3_vulkan.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       Makefile
+|   |   |       
+|   |   +---example_sdl3_wgpu
+|   |   |       CMakeLists.txt
+|   |   |       main.cpp
+|   |   |       Makefile.emscripten
+|   |   |       README.md
+|   |   |       
+|   |   +---example_win32_directx10
+|   |   |       build_win32.bat
+|   |   |       example_win32_directx10.vcxproj
+|   |   |       example_win32_directx10.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       
+|   |   +---example_win32_directx11
+|   |   |       build_win32.bat
+|   |   |       example_win32_directx11.vcxproj
+|   |   |       example_win32_directx11.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       
+|   |   +---example_win32_directx12
+|   |   |       build_win32.bat
+|   |   |       example_win32_directx12.vcxproj
+|   |   |       example_win32_directx12.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       
+|   |   +---example_win32_directx9
+|   |   |       build_win32.bat
+|   |   |       example_win32_directx9.vcxproj
+|   |   |       example_win32_directx9.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       
+|   |   +---example_win32_opengl3
+|   |   |       build_mingw.bat
+|   |   |       build_win32.bat
+|   |   |       example_win32_opengl3.vcxproj
+|   |   |       example_win32_opengl3.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       
+|   |   +---example_win32_vulkan
+|   |   |       build_win32.bat
+|   |   |       build_win64.bat
+|   |   |       example_win32_vulkan.vcxproj
+|   |   |       example_win32_vulkan.vcxproj.filters
+|   |   |       main.cpp
+|   |   |       
+|   |   \---libs
+|   |       +---emscripten
+|   |       |       emscripten_mainloop_stub.h
+|   |       |       shell_minimal.html
+|   |       |       
+|   |       +---glfw
+|   |       |   |   COPYING.txt
+|   |       |   |   
+|   |       |   +---include
+|   |       |   |   \---GLFW
+|   |       |   |           glfw3.h
+|   |       |   |           glfw3native.h
+|   |       |   |           
+|   |       |   +---lib-vc2010-32
+|   |       |   |       glfw3.lib
+|   |       |   |       
+|   |       |   \---lib-vc2010-64
+|   |       |           glfw3.lib
+|   |       |           
+|   |       \---usynergy
+|   |               README.txt
+|   |               uSynergy.c
+|   |               uSynergy.h
+|   |               
+|   \---misc
+|       |   README.txt
+|       |   
+|       +---cpp
+|       |       imgui_stdlib.cpp
+|       |       imgui_stdlib.h
+|       |       README.txt
+|       |       
+|       +---debuggers
+|       |       imgui.gdb
+|       |       imgui.natstepfilter
+|       |       imgui.natvis
+|       |       imgui_lldb.py
+|       |       README.txt
+|       |       
+|       +---fonts
+|       |       binary_to_compressed_c.cpp
+|       |       Cousine-Regular.ttf
+|       |       DroidSans.ttf
+|       |       Karla-Regular.ttf
+|       |       ProggyClean.ttf
+|       |       ProggyTiny.ttf
+|       |       Roboto-Medium.ttf
+|       |       
+|       +---freetype
+|       |       imgui_freetype.cpp
+|       |       imgui_freetype.h
+|       |       README.md
+|       |       
+|       \---single_file
+|               imgui_single_file.h
+|               
++---includes
+|   \---assimp
+|       |   .editorconfig
+|       |   aabb.h
+|       |   ai_assert.h
+|       |   anim.h
+|       |   AssertHandler.h
+|       |   Base64.hpp
+|       |   BaseImporter.h
+|       |   Bitmap.h
+|       |   BlobIOSystem.h
+|       |   ByteSwapper.h
+|       |   camera.h
+|       |   cexport.h
+|       |   cfileio.h
+|       |   cimport.h
+|       |   ColladaMetaData.h
+|       |   color4.h
+|       |   color4.inl
+|       |   commonMetaData.h
+|       |   config.h
+|       |   config.h.in
+|       |   CreateAnimMesh.h
+|       |   DefaultIOStream.h
+|       |   DefaultIOSystem.h
+|       |   DefaultLogger.hpp
+|       |   defs.h
+|       |   Exceptional.h
+|       |   Exporter.hpp
+|       |   fast_atof.h
+|       |   GenericProperty.h
+|       |   GltfMaterial.h
+|       |   Hash.h
+|       |   Importer.hpp
+|       |   importerdesc.h
+|       |   IOStream.hpp
+|       |   IOStreamBuffer.h
+|       |   IOSystem.hpp
+|       |   light.h
+|       |   LineSplitter.h
+|       |   LogAux.h
+|       |   Logger.hpp
+|       |   LogStream.hpp
+|       |   material.h
+|       |   material.inl
+|       |   MathFunctions.h
+|       |   matrix3x3.h
+|       |   matrix3x3.inl
+|       |   matrix4x4.h
+|       |   matrix4x4.inl
+|       |   MemoryIOWrapper.h
+|       |   mesh.h
+|       |   metadata.h
+|       |   module.modulemap
+|       |   NullLogger.hpp
+|       |   ObjMaterial.h
+|       |   ParsingUtils.h
+|       |   pbrmaterial.h
+|       |   postprocess.h
+|       |   Profiler.h
+|       |   ProgressHandler.hpp
+|       |   qnan.h
+|       |   quaternion.h
+|       |   quaternion.inl
+|       |   RemoveComments.h
+|       |   revision.h
+|       |   revision.h.in
+|       |   scene.h
+|       |   SceneCombiner.h
+|       |   SGSpatialSort.h
+|       |   SkeletonMeshBuilder.h
+|       |   SmallVector.h
+|       |   SmoothingGroups.h
+|       |   SmoothingGroups.inl
+|       |   SpatialSort.h
+|       |   StandardShapes.h
+|       |   StreamReader.h
+|       |   StreamWriter.h
+|       |   StringComparison.h
+|       |   StringUtils.h
+|       |   Subdivision.h
+|       |   texture.h
+|       |   TinyFormatter.h
+|       |   types.h
+|       |   vector2.h
+|       |   vector2.inl
+|       |   vector3.h
+|       |   vector3.inl
+|       |   version.h
+|       |   Vertex.h
+|       |   XmlParser.h
+|       |   XMLTools.h
+|       |   ZipArchiveIOSystem.h
+|       |   
+|       +---Compiler
+|       |       poppack1.h
+|       |       pstdint.h
+|       |       pushpack1.h
+|       |       
+|       \---port
+|           \---AndroidJNI
+|                   AndroidJNIIOSystem.h
+|                   BundledAssetIOSystem.h
+|                   
++---Input
+|       InputClass.cpp
+|       InputClass.h
+|       
++---lib
+|   \---Release
+|           assimp-vc143-mt.exp
+|           assimp-vc143-mt.lib
+|           
++---Light
+|       LightClass.cpp
+|       LightClass.h
+|       
++---Model
+|       modelclass.cpp
+|       modelclass.h
+|       
++---Shader
+|       color.ps
+|       color.vs
+|       colorshaderclass.cpp
+|       colorshaderclass.h
+|       light.ps
+|       light.vs
+|       LightShaderClass.cpp
+|       LightShaderClass.h
+|       texture.ps
+|       texture.vs
+|       Textureshaderclass.cpp
+|       Textureshaderclass.h
+|       
++---Texture
+|       Textureclass.cpp
+|       Textureclass.h
+|       
++---x64
+|   \---Debug
+|       |   ApplicationClass.obj
+|       |   assimpmodelclass.obj
+|       |   BitmapClass.obj
+|       |   cameraclass.obj
+|       |   colorshaderclass.obj
+|       |   D3DClass.obj
+|       |   DX_FrameWork.Build.CppClean.log
+|       |   DX_FrameWork.exe.recipe
+|       |   DX_FrameWork.ilk
+|       |   DX_FrameWork.log
+|       |   DX_FrameWork.vcxproj.FileListAbsolute.txt
+|       |   EditorUI.obj
+|       |   gameobject.obj
+|       |   imgui.obj
+|       |   imgui_draw.obj
+|       |   imgui_impl_dx11.obj
+|       |   imgui_impl_win32.obj
+|       |   imgui_tables.obj
+|       |   imgui_widgets.obj
+|       |   InputClass.obj
+|       |   LightClass.obj
+|       |   LightShaderClass.obj
+|       |   main.obj
+|       |   modelclass.obj
+|       |   ModelManager.obj
+|       |   objmodelclass.obj
+|       |   SceneManager.obj
+|       |   ScreenManager.obj
+|       |   SystemClass.obj
+|       |   Textureclass.obj
+|       |   Textureshaderclass.obj
+|       |   vc143.idb
+|       |   vc143.pdb
+|       |   vcpkg.applocal.log
+|       |   WorldSpriteClass.obj
+|       |   
+|       \---DX_FrameWork.tlog
+|               CL.command.1.tlog
+|               Cl.items.tlog
+|               CL.read.1.tlog
+|               CL.write.1.tlog
+|               DX_FrameWork.lastbuildstate
+|               link.command.1.tlog
+|               link.read.1.tlog
+|               link.secondary.1.tlog
+|               link.write.1.tlog
+|               
+\---Новая папка

@@ -1,0 +1,2 @@
+C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\light.vs(71,9-26): warning X3550: array reference cannot be used as an l-value; not natively addressable, forcing loop to unroll
+C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\light.vs(40,21-31): error X4503: output TEXCOORD2 used more than once
