@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="lib\imgui-master\backends\imgui_impl_dx11.cpp" />
+    <ClCompile Include="lib\imgui-master\backends\imgui_impl_win32.cpp" />
+    <ClCompile Include="lib\imgui-master\imgui.cpp" />
+    <ClCompile Include="lib\imgui-master\ImGuizmo.cpp" />
+    <ClCompile Include="lib\imgui-master\imgui_draw.cpp" />
+    <ClCompile Include="lib\imgui-master\imgui_tables.cpp" />
+    <ClCompile Include="lib\imgui-master\imgui_widgets.cpp" />
+    <ClCompile Include="src\Config\PickingSystem.cpp" />
+    <ClCompile Include="src\Core\ApplicationClass.cpp" />
+    <ClCompile Include="src\Core\main.cpp" />
+    <ClCompile Include="src\Core\SystemClass.cpp" />
+    <ClCompile Include="src\Editor\EditorUI.cpp" />
+    <ClCompile Include="src\Input\InputClass.cpp" />
+    <ClCompile Include="src\Input\InputManager.cpp" />
+    <ClCompile Include="src\Render\BitMap\BitmapClass.cpp" />
+    <ClCompile Include="src\Render\BitMap\WorldSpriteClass.cpp" />
+    <ClCompile Include="src\Render\Camera\cameraclass.cpp" />
+    <ClCompile Include="src\Render\D3DClass.cpp" />
+    <ClCompile Include="src\Render\Material\MaterialClass.cpp" />
+    <ClCompile Include="src\Render\Model\assimpmodelclass.cpp" />
+    <ClCompile Include="src\Render\Model\modelclass.cpp" />
+    <ClCompile Include="src\Render\Model\ModelManager.cpp" />
+    <ClCompile Include="src\Render\Shader\BaseShader.cpp" />
+    <ClCompile Include="src\Render\Shader\colorshaderclass.cpp" />
+    <ClCompile Include="src\Render\Shader\LightShaderClass.cpp" />
+    <ClCompile Include="src\Render\Shader\Textureshaderclass.cpp" />
+    <ClCompile Include="src\Render\Texture\Textureclass.cpp" />
+    <ClCompile Include="src\Scene\gameobject.cpp" />
+    <ClCompile Include="src\Scene\Light\LightClass.cpp" />
+    <ClCompile Include="src\Scene\SceneManager.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
+    <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h" />
+    <ClInclude Include="lib\imgui-master\ImGuizmo.h" />
+    <ClInclude Include="MaterialClass.h" />
+    <ClInclude Include="src\Config\GameSettings.h" />
+    <ClInclude Include="src\Config\PickingSystem.h" />
+    <ClInclude Include="src\Core\ApplicationClass.h" />
+    <ClInclude Include="src\Core\SystemClass.h" />
+    <ClInclude Include="src\Editor\EditorUI.h" />
+    <ClInclude Include="src\HelpFunc\helper.h" />
+    <ClInclude Include="src\Input\InputClass.h" />
+    <ClInclude Include="src\Input\InputManager.h" />
+    <ClInclude Include="src\Render\BitMap\BitmapClass.h" />
+    <ClInclude Include="src\Render\BitMap\WorldSpriteClass.h" />
+    <ClInclude Include="src\Render\Camera\cameraclass.h" />
+    <ClInclude Include="src\Render\D3DClass.h" />
+    <ClInclude Include="src\Render\Model\assimpmodelclass.h" />
+    <ClInclude Include="src\Render\Model\modelclass.h" />
+    <ClInclude Include="src\Render\Model\ModelManager.h" />
+    <ClInclude Include="src\Render\Shader\BaseShader.h" />
+    <ClInclude Include="src\Render\Shader\colorshaderclass.h" />
+    <ClInclude Include="src\Render\Shader\LightShaderClass.h" />
+    <ClInclude Include="src\Render\Shader\Textureshaderclass.h" />
+    <ClInclude Include="src\Render\Texture\Textureclass.h" />
+    <ClInclude Include="src\Scene\gameobject.h" />
+    <ClInclude Include="src\Scene\Light\LightClass.h" />
+    <ClInclude Include="src\Scene\SceneManager.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\Render\Shader\color.ps" />
+    <None Include="src\Render\Shader\color.vs" />
+    <None Include="src\Render\Shader\light.ps" />
+    <None Include="src\Render\Shader\light.vs" />
+    <None Include="src\Render\Shader\texture.ps" />
+    <None Include="src\Render\Shader\texture.vs" />
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{40466ca4-5bf7-4f5e-bc13-7d2c1508aeae}</ProjectGuid>
+    <RootNamespace>DXFrameWork</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Config;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Material;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\assimp;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\imgui-master;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene\Light;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Texture;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Model;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Camera;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\BitMap;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Input;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\HelpFunc;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Editor;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalLibraryDirectories>C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>assimp-vc143-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

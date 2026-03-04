@@ -1,0 +1,103 @@
+# === Visual Studio ===
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Visual Studio 2015/2017 cache/options directory
+.vs/
+
+# Visual Studio Code
+.vscode/
+
+# ReSharper
+_ReSharper*/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio cache files
+*.cache
+ipch/
+*.aps
+*.ncb
+*.opt
+*.plg
+*.bkp
+*.scc
+
+# === C++ ===
+# Compiled Object files
+*.o
+*.obj
+*.ilk
+*.res
+*.pch
+*.exp
+*.idb
+*.pdb
+
+# Pre-compiled headers
+*.aps
+
+# Dynamic libraries
+*.dll
+*.so
+*.dylib
+
+# Executables
+*.exe
+
+# === DirectX / Shaders ===
+# Compiled shaders (если не нужны в репозитории)
+*.cso
+*.fxo
+
+# === Build tools ===
+# CMake
+CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+
+# === OS ===
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Mac
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# === User files ===
+# Scene files (если не хочешь коммитить свои уровни)
+# assets/level/*.json
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# === Keep these ===
+# !.gitignore
+# !*.sln
+# !*.vcxproj
+# !*.vcxproj.filters
+# !*.h
+# !*.cpp
+# !*.hlsl
+# !*.fx
+# !*.obj
+# !*.tga
+# !*.png
+# !*.jpg

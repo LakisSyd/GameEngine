@@ -1,0 +1,242 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Исходные файлы">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Файлы заголовков">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Файлы ресурсов">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{3979b04d-3827-4903-9c9a-01cdc30424a3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Editor">
+      <UniqueIdentifier>{7ce20521-62d3-48a1-a3f4-81beb63d8d3d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Render">
+      <UniqueIdentifier>{35d9c23e-6e3f-4026-8c4f-b49269d6f296}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Render\Camera">
+      <UniqueIdentifier>{02ca2ef0-cfd7-4463-a8ee-ce2d753ce308}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Render\Model">
+      <UniqueIdentifier>{aebab2b1-a58b-4aac-ab4d-13a3859f032b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Render\Shader">
+      <UniqueIdentifier>{a591c4b4-90d1-4060-80bb-4204f1b12cd5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Render\Texture">
+      <UniqueIdentifier>{8a635108-cb0e-4007-a0c3-4577d6d948ac}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Render\BitMap">
+      <UniqueIdentifier>{da74f6db-f4d9-47c7-8c7e-adadfe50a11b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Img">
+      <UniqueIdentifier>{f4239a6f-c8de-4567-b78c-9b63f9bb90a2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Input">
+      <UniqueIdentifier>{eab9e317-6b95-4cd3-a3f5-8fc7b3ace8b7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Scene">
+      <UniqueIdentifier>{90bd6099-4cee-4002-bba4-bf31f9160a40}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Scene\Light">
+      <UniqueIdentifier>{db849bad-a869-4fa7-b879-e7a82c7b5206}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Render\Material">
+      <UniqueIdentifier>{852a8e4f-e6b0-438e-ae62-105eebd5033c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Config">
+      <UniqueIdentifier>{58e1e1b1-9a53-45c7-8620-959e9d6c92a6}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\Core\ApplicationClass.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Core\main.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Core\SystemClass.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Editor\EditorUI.cpp">
+      <Filter>Editor</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\D3DClass.cpp">
+      <Filter>Render</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Camera\cameraclass.cpp">
+      <Filter>Render\Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Model\assimpmodelclass.cpp">
+      <Filter>Render\Model</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Model\modelclass.cpp">
+      <Filter>Render\Model</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Model\ModelManager.cpp">
+      <Filter>Render\Model</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\BitMap\BitmapClass.cpp">
+      <Filter>Render\BitMap</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\BitMap\WorldSpriteClass.cpp">
+      <Filter>Render\BitMap</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Texture\Textureclass.cpp">
+      <Filter>Render\Texture</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\colorshaderclass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\LightShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\Textureshaderclass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\imgui-master\imgui.cpp">
+      <Filter>Img</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\imgui-master\imgui_draw.cpp">
+      <Filter>Img</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\imgui-master\backends\imgui_impl_win32.cpp">
+      <Filter>Img</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\imgui-master\imgui_widgets.cpp">
+      <Filter>Img</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\imgui-master\imgui_tables.cpp">
+      <Filter>Img</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\imgui-master\backends\imgui_impl_dx11.cpp">
+      <Filter>Img</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Input\InputClass.cpp">
+      <Filter>Input</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Scene\SceneManager.cpp">
+      <Filter>Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Scene\gameobject.cpp">
+      <Filter>Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Scene\Light\LightClass.cpp">
+      <Filter>Scene\Light</Filter>
+    </ClCompile>
+    <ClCompile Include="lib\imgui-master\ImGuizmo.cpp">
+      <Filter>Img</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\BaseShader.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Material\MaterialClass.cpp">
+      <Filter>Render\Material</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Input\InputManager.cpp">
+      <Filter>Input</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Config\PickingSystem.cpp">
+      <Filter>Config</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\HelpFunc\helper.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\ApplicationClass.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\SystemClass.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Editor\EditorUI.h">
+      <Filter>Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\D3DClass.h">
+      <Filter>Render</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Camera\cameraclass.h">
+      <Filter>Render\Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Model\ModelManager.h">
+      <Filter>Render\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Model\assimpmodelclass.h">
+      <Filter>Render\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Model\modelclass.h">
+      <Filter>Render\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\BitMap\BitmapClass.h">
+      <Filter>Render\BitMap</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\BitMap\WorldSpriteClass.h">
+      <Filter>Render\BitMap</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Texture\Textureclass.h">
+      <Filter>Render\Texture</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\colorshaderclass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\LightShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\Textureshaderclass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h">
+      <Filter>Img</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h">
+      <Filter>Img</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Input\InputClass.h">
+      <Filter>Input</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\gameobject.h">
+      <Filter>Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\SceneManager.h">
+      <Filter>Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Scene\Light\LightClass.h">
+      <Filter>Scene\Light</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\imgui-master\ImGuizmo.h">
+      <Filter>Img</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\BaseShader.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="MaterialClass.h">
+      <Filter>Render\Material</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Config\GameSettings.h">
+      <Filter>Config</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Input\InputManager.h">
+      <Filter>Input</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Config\PickingSystem.h">
+      <Filter>Config</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="src\Render\Shader\color.ps" />
+    <None Include="src\Render\Shader\color.vs" />
+    <None Include="src\Render\Shader\light.ps" />
+    <None Include="src\Render\Shader\light.vs" />
+    <None Include="src\Render\Shader\texture.ps" />
+    <None Include="src\Render\Shader\texture.vs" />
+  </ItemGroup>
+</Project>
