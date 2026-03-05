@@ -39,7 +39,7 @@ bool SystemClass::Initialize()
     InitializeWindows(screenWidth, screenHeight);
 
     // 📌 Шаг 2: Инициализировать подсистему ввода
-    m_Input = new InputClass();
+    m_Input =  std::make_unique<InputClass>();
     m_Input->Initialize();  // Обнулить массив клавиш
 
     // 📌 Шаг 3: Инициализировать графическую подсистему
@@ -51,7 +51,7 @@ bool SystemClass::Initialize()
         return false;  // 🔜 Например, если не удалось создать устройство DirectX
     }
 
-    m_Application->SetInput(m_Input);
+    m_Application->SetInput(std::move(m_Input.get()));
 
     return true;
 }
@@ -79,7 +79,7 @@ void SystemClass::Shutdown()
 
     if (m_Input)
     {
-        delete m_Input;  // Просто удаляем — внутри нет тяжёлых ресурсов
+       
         m_Input = nullptr;
     }
 

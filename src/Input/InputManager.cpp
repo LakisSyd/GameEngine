@@ -3,14 +3,15 @@
 
 void InputManager::Update(InputClass* input)
 {
-    // Обновляем сырое состояние
-    m_isLeftDown = input->IsLeftButtonDown();    // ← Было?
-    m_isRightDown = input->IsRightButtonDown();  // ← Критично! Без этого IsCameraMode() врёт
+    if (!input) return;
+
+    // Обновляем состояние мыши из InputClass
+    m_isLeftDown = input->IsLeftButtonDown();
+    m_isRightDown = input->IsRightButtonDown();
 
     if (!input->IsMouseCaptured()) {
         input->GetMousePosition(m_mouseX, m_mouseY);
     }
-
 
     // === Логика клика / начала drag ===
     if (m_isLeftDown && !m_wasLeftDown) {
@@ -61,4 +62,46 @@ void InputManager::Update(InputClass* input)
     }
 
     m_wasLeftDown = m_isLeftDown;
+}
+
+void InputManager::SetMouseCapture(InputClass* input, bool capture)
+{
+    if (!input) return;
+    input->SetMouseCapture(capture);
+  
+}
+
+void InputManager::GetMouseDelta(int& dx, int& dy) const
+{
+    dx = 0;
+    dy = 0;
+}
+
+void InputManager::ResetMouseDelta(InputClass* input)
+{
+    if (!input) return;
+    input->ResetMouseDelta();
+}
+
+bool InputManager::IsMouseCaptured(InputClass* input) const
+{
+    return input ? input->IsMouseCaptured() : false;
+}
+
+bool InputManager::IsKeyDown(InputClass* input, unsigned int key) const
+{
+    return input ? input->IsKeyDown(key) : false;
+}
+
+void InputManager::Reset()
+{
+    m_isLeftDown = false;
+    m_isRightDown = false;
+    m_wasLeftDown = false;
+    m_isDragging = false;
+    m_potentialDrag = false;
+    m_mouseX = 0;
+    m_mouseY = 0;
+    m_clickStartX = 0;
+    m_clickStartY = 0;
 }
