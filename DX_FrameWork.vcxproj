@@ -44,6 +44,7 @@
     <ClCompile Include="src\Render\Shader\BaseShader.cpp" />
     <ClCompile Include="src\Render\Shader\colorshaderclass.cpp" />
     <ClCompile Include="src\Render\Shader\LightShaderClass.cpp" />
+    <ClCompile Include="src\Render\Shader\Multitextureshaderclass.cpp" />
     <ClCompile Include="src\Render\Shader\Textureshaderclass.cpp" />
     <ClCompile Include="src\Render\Texture\Textureclass.cpp" />
     <ClCompile Include="src\Scene\gameobject.cpp" />
@@ -54,7 +55,6 @@
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h" />
     <ClInclude Include="lib\imgui-master\ImGuizmo.h" />
-    <ClInclude Include="MaterialClass.h" />
     <ClInclude Include="src\Config\GameSettings.h" />
     <ClInclude Include="src\Config\PickingSystem.h" />
     <ClInclude Include="src\Core\ApplicationClass.h" />
@@ -67,12 +67,14 @@
     <ClInclude Include="src\Render\BitMap\WorldSpriteClass.h" />
     <ClInclude Include="src\Render\Camera\cameraclass.h" />
     <ClInclude Include="src\Render\D3DClass.h" />
+    <ClInclude Include="src\Render\Material\MaterialClass.h" />
     <ClInclude Include="src\Render\Model\assimpmodelclass.h" />
     <ClInclude Include="src\Render\Model\modelclass.h" />
     <ClInclude Include="src\Render\Model\ModelManager.h" />
     <ClInclude Include="src\Render\Shader\BaseShader.h" />
     <ClInclude Include="src\Render\Shader\colorshaderclass.h" />
     <ClInclude Include="src\Render\Shader\LightShaderClass.h" />
+    <ClInclude Include="src\Render\Shader\Multitextureshaderclass.h" />
     <ClInclude Include="src\Render\Shader\Textureshaderclass.h" />
     <ClInclude Include="src\Render\Texture\Textureclass.h" />
     <ClInclude Include="src\Scene\gameobject.h" />
@@ -84,6 +86,8 @@
     <None Include="src\Render\Shader\color.vs" />
     <None Include="src\Render\Shader\light.ps" />
     <None Include="src\Render\Shader\light.vs" />
+    <None Include="src\Render\Shader\Multitexture.ps" />
+    <None Include="src\Render\Shader\Multitexture.vs" />
     <None Include="src\Render\Shader\texture.ps" />
     <None Include="src\Render\Shader\texture.vs" />
   </ItemGroup>

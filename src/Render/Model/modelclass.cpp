@@ -7,7 +7,8 @@ ModelClass::ModelClass()
 {
     m_vertexBuffer = nullptr;
     m_indexBuffer = nullptr;
-    m_Texture = nullptr;
+    m_Textures[0] = nullptr;  // 🔥 Инициализируем массив
+    m_Textures[1] = nullptr;
 }
 
 ModelClass::ModelClass(const ModelClass& other)
@@ -19,12 +20,12 @@ ModelClass::~ModelClass()
 }
 
 // Initialize создает буферы.
-bool ModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceContext, const char* textureFilename)
+bool ModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceContext, const char* tex1, const char* tex2)
 {
 
      DX_CHECK(InitializeBuffers(device));
    
-     DX_CHECK(LoadTexture(device, deviceContext, textureFilename));
+     DX_CHECK(LoadTextures(device, deviceContext, tex1, tex2));
 
 
      return true;
@@ -34,12 +35,13 @@ bool ModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceCon
 void ModelClass::Shutdown()
 {
     ShutdownBuffers();
-    ReleaseTexture();
+    ReleaseTextures();
     return;
 }
-ID3D11ShaderResourceView* ModelClass::GetTexture()
+ID3D11ShaderResourceView* ModelClass::GetTexture(int index)
 {
-    return m_Texture->GetTexture();
+    if (index < 0 || index >= 2) return nullptr;
+    return m_Textures[index] ? m_Textures[index]->GetTexture() : nullptr;
 }
 
 
@@ -190,37 +192,31 @@ void ModelClass::RenderBuffers(ID3D11DeviceContext* deviceContext)
     return;
 }
 
-bool ModelClass::LoadTexture(ID3D11Device* device, ID3D11DeviceContext* deviceContext, const char* filename)
+bool ModelClass::LoadTextures(ID3D11Device* device, ID3D11DeviceContext* deviceContext,
+    const char* filename1, const char* filename2)
 {
-    bool result;
-    m_Texture = new TextureClass;
-    if (!m_Texture) return false;
+    // Текстура 0: альбедо
+    m_Textures[0] = new TextureClass();
+    if (!m_Textures[0]->Initialize(device, deviceContext, filename1)) {
+        delete m_Textures[0]; m_Textures[0] = nullptr;
+        return false;
+    }
 
-    result = m_Texture->Initialize(device, deviceContext, filename);
-    if (!result)
-    {
-        // ▼▼▼ ДОБАВЬТЕ ЭТОТ БЛОК ▼▼▼
-        MessageBoxA(NULL,
-            "Не удалось загрузить текстуру!\nПроверьте наличие файла stone.tga\nв папке с .exe файлом.",
-            "Ошибка текстуры", MB_OK | MB_ICONERROR);
-        // ▲▲▲ КОНЕЦ БЛОКА ▲▲▲
-
-        delete m_Texture;
-        m_Texture = 0;
+    // Текстура 1: детали/нормали
+    m_Textures[1] = new TextureClass();
+    if (!m_Textures[1]->Initialize(device, deviceContext, filename2)) {
+        delete m_Textures[1]; m_Textures[1] = nullptr;
         return false;
     }
     return true;
 }
-
-void ModelClass::ReleaseTexture()
+void ModelClass::ReleaseTextures()
 {
-    // Освобождаем объект текстуры
-    if (m_Texture)
-    {
-        m_Texture->Shutdown();
-        delete m_Texture;
-        m_Texture = 0;
+    for (int i = 0; i < 2; ++i) {
+        if (m_Textures[i]) {
+            m_Textures[i]->Shutdown();
+            delete m_Textures[i];
+            m_Textures[i] = nullptr;
+        }
     }
-
-    return;
 }

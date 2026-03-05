@@ -1,15 +1,16 @@
 ﻿//=============================================================================
-// ApplicationClass.cpp - ПРАВИЛЬНАЯ ВЕРСИЯ ДЛЯ DRAG AND DROP
-// ИСПРАВЛЕНА ЛОГИКА ПЕРЕМЕЩЕНИЯ ОБЪЕКТОВ
+// ApplicationClass.cpp - Упрощённая и документированная версия
+// ✨ Рефакторинг: добавлены комментарии, небольшая структуризация, вызов
+// UpdateInputState() в Frame() для синхронизации состояния мыши.
 //=============================================================================
 
-#include "applicationclass.h"
+#include "applicationclass.h"   
+
 
 ApplicationClass::ApplicationClass()
-    : m_direct3D(nullptr)
-    , m_camera(nullptr)
-    , m_input(nullptr)
-    , m_textureShader(nullptr)
+    :
+
+    m_textureShader(nullptr)
     , m_lightShader(nullptr)
     , m_mainModel(nullptr)
     , m_lightSphereModel(nullptr)
@@ -23,8 +24,6 @@ ApplicationClass::ApplicationClass()
     , m_draggedSpriteIndex(-1)
     , m_dragDistance(0.0f)
     , m_dragOffset{ 0,0,0 }
-    , m_floorModel(nullptr)
-    , m_wallModel(nullptr)
     , m_clickStartX(0), m_clickStartY(0)
     , m_potentialDrag(false)
     , m_defaultMaterial(nullptr)
@@ -33,14 +32,12 @@ ApplicationClass::ApplicationClass()
 
 bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 {
-
-
-    
-
+    // Сохраняем размеры окна
     m_screenWidth = screenWidth;
     m_screenHeight = screenHeight;
 
-    m_direct3D = new D3DClass;
+    m_direct3D = std::make_unique<D3DClass>();
+
     if (!m_direct3D) return false;
 
     if (!m_direct3D->Initialize(screenWidth, screenHeight, VSYNC_ENABLED, hwnd,
@@ -50,25 +47,26 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
+    // Инициализация UI (ImGui + Editor)
     if (!m_editorUI.Initialize(hwnd, m_direct3D->GetDevice(), m_direct3D->GetDeviceContext()))
     {
         return false;
     }
 
-  
+    // NOTE:
+    // InputClass НЕ создаётся здесь — SystemClass владеет Input и передаёт указатель через SetInput().
+    // Если Application должен уметь работать автономно, можно добавить защиту от nullptr в методах.
+    // (m_input будет установлен SystemClass::Initialize после вызова Application::Initialize)
 
-    m_input = new InputClass;
-    if (!m_input) return false;
-    m_input->Initialize();
-
-    m_camera = new CameraClass;
+    // Камера
+    m_camera = std::make_unique<CameraClass>();
     if (!m_camera) return false;
     m_camera->SetPosition(0.0f, 2.0f, -10.0f);
     m_camera->SetRotation(0.0f, 0.0f, 0.0f);
 
+    // Загрузка моделей
     m_mainModel = new AssimpModelClass;
     if (!m_mainModel) return false;
-
     if (!m_mainModel->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
         "assets/model/sphere.obj", "assets/texture/stone.tga"))
     {
@@ -76,11 +74,10 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
-    m_sceneManager.SetFallbackModel(m_mainModel);  // 🔥 Важно!
+    m_sceneManager.SetFallbackModel(m_mainModel);  // запасная модель для менеджера сцен
 
     m_lightSphereModel = new AssimpModelClass;
     if (!m_lightSphereModel) return false;
-
     if (!m_lightSphereModel->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
         "assets/model/sphere.obj", "assets/texture/stone.tga"))
     {
@@ -88,6 +85,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
+    // Шейдеры
     m_textureShader = new TextureShaderClass;
     if (!m_textureShader || !m_textureShader->Initialize(m_direct3D->GetDevice(), hwnd))
     {
@@ -102,6 +100,16 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
+    // 🔥 ИНИЦИАЛИЗИРУЕМ MultiTextureShader
+    m_multiTextureShader = new MultiTextureShaderClass;
+    if (!m_multiTextureShader || !m_multiTextureShader->Initialize(m_direct3D->GetDevice(), hwnd))
+    {
+        MessageBox(hwnd, L"Failed to initialize multitexture shader", L"Error", MB_OK);
+        return false;
+    }
+
+
+    // Материалы
     m_defaultMaterial = new MaterialClass();
     m_defaultMaterial->Initialize(m_direct3D->GetDevice(), L"DefaultLighted");
     m_defaultMaterial->SetShader(m_lightShader);
@@ -111,9 +119,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     blueMat->SetShader(m_lightShader);
     blueMat->SetDiffuseColor(XMFLOAT3(0.2f, 0.4f, 1.0f));
 
-    
-
-    // 🔥 Загружаем текстуру!
+    // Текстура по умолчанию (назначаем на материал)
     TextureClass* defaultTexture = new TextureClass();
     if (defaultTexture->Initialize(m_direct3D->GetDevice(),
         m_direct3D->GetDeviceContext(),
@@ -122,10 +128,9 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         m_defaultMaterial->SetMainTexture(defaultTexture);
     }
 
-   
-
     m_sceneManager.SetDefaultMaterial(m_defaultMaterial);
 
+    // Примитивный спрайт в мире
     int spriteIndex = m_sceneManager.SpawnSprite(
         m_direct3D->GetDevice(),
         m_direct3D->GetDeviceContext(),
@@ -134,12 +139,11 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         0.3f, 0.3f
     );
 
-    
-
+    // Пара объектов для примера
     m_sceneManager.SpawnObject(m_mainModel, 0.0f, 0.0f, 0.0f);
     m_sceneManager.SpawnObject(m_mainModel, 3.0f, 0.0f, 0.0f);
-   
 
+    // Настройка света
     m_sceneManager.SetLight(0, XMFLOAT3(-1.0f, 2.0f, -1.0f),
         XMFLOAT4(1.0f, 1.0f, 0.9f, 1.0f), true);
 
@@ -147,15 +151,51 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_sceneManager.AttachLightToObject(1, 0, XMFLOAT3(0, 1.0f, 0));
 
     m_sceneManager.SetupLightSpheres(m_lightSpheres, m_lightSphereModel);
+    // Пара объектов для примера — сохраняем индексы и назначаем материал
+    int idx0 = m_sceneManager.SpawnObject(m_mainModel, 10.0f, 0.0f, 0.0f);
+    int idx1 = m_sceneManager.SpawnObject(m_mainModel, 5.0f, 0.0f, 0.0f);
 
+    auto* mat = new MaterialClass();
+    mat->Initialize(m_direct3D->GetDevice(), L"StoneWithDirt");
+    // назначаем мульти-шейдер (убедитесь, что m_multiTextureShader инициализирован)
+    mat->SetShader(m_multiTextureShader);
 
-    
+    TextureClass* stone = new TextureClass();
+    bool okStone = stone->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/stone.tga");
+    if (okStone) mat->AddTexture(stone);
+    else OutputDebugStringA("ERROR: stone texture failed to initialize\n");
 
+    TextureClass* dirt = new TextureClass();
+    bool okDirt = dirt->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/sand.tga");
+    if (okDirt) mat->AddTexture(dirt);
+    else OutputDebugStringA("ERROR: dirt texture failed to initialize\n");
+
+    // Печатаем указатели SRV — быстрое подтверждение, что GetTexture() не nullptr
+    {
+        char buf[256];
+        sprintf_s(buf, "DEBUG: stone SRV=%p, dirt SRV=%p, okStone=%d, okDirt=%d\n",
+            (void*)(stone->GetTexture()), (void*)(dirt->GetTexture()), okStone ? 1 : 0, okDirt ? 1 : 0);
+        OutputDebugStringA(buf);
+    }
+
+    // Назначаем материал объекту (убедитесь, что берёте правильный объект)
+    GameObject* obj0 = m_sceneManager.GetObject(idx0); // если у вас другое имя — используйте m_sceneManager
+    GameObject* obj1 = m_sceneManager.GetObject(idx1);
+    if (obj0) {
+        obj0->SetMaterial(mat);
+        OutputDebugStringA("DEBUG: Application: assigned MultiTexture material to obj0\n");
+    }
+    if (obj1) {
+        obj1->SetMaterial(mat);
+        OutputDebugStringA("DEBUG: Application: assigned MultiTexture material to obj1\n");
+    }
+   
     return true;
 }
 
 void ApplicationClass::Shutdown()
 {
+    // Очистка ресурсов в обратном порядке создания
     if (m_lightSphereModel)
     {
         m_lightSphereModel->Shutdown();
@@ -169,11 +209,19 @@ void ApplicationClass::Shutdown()
         delete m_lightShader;
         m_lightShader = nullptr;
     }
+
     if (m_textureShader)
     {
         m_textureShader->Shutdown();
         delete m_textureShader;
         m_textureShader = nullptr;
+    }
+
+    if (m_multiTextureShader)
+    {
+        m_multiTextureShader->ShutDown();
+        delete m_multiTextureShader;
+        m_multiTextureShader = nullptr;
     }
 
     if (m_mainModel)
@@ -183,46 +231,40 @@ void ApplicationClass::Shutdown()
         m_mainModel = nullptr;
     }
 
-    if (m_camera)
-    {
-        delete m_camera;
-        m_camera = nullptr;
-    }
-    if (m_input)
-    {
-        delete m_input;
-        m_input = nullptr;
+
+    if (m_direct3D) {
+        m_direct3D->Shutdown();
     }
 
     m_editorUI.Shutdown();
 
-    if (m_direct3D)
-    {
-        m_direct3D->Shutdown();
-        delete m_direct3D;
-        m_direct3D = nullptr;
-    }
+
 }
 
+
 //=============================================================================
-// Frame() - ГЛАВНЫЙ ЦИКЛ
+// Frame() - основной цикл кадра
+// - обновление ввода
+// - обработка камеры / перемещения
+// - рендер 3D + UI
+// - обработка drag & drop
 //=============================================================================
 bool ApplicationClass::Frame()
 {
-    // 1️⃣ Обновляем состояние ввода
+    // 1) Обновляем InputManager (пропускаем InputClass напрямую)
     m_inputManager.Update(m_input);
-    ImGuiIO& io = ImGui::GetIO();
-    bool uiWantsMouse = io.WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
 
-   
-   HandleCameraMovement();  // ← Переименованная функция (см. ниже)
-    
+    ImGuiIO& io = ImGui::GetIO();
+
+    // 2) 🔥 Обработка камеры — ЧЕРЕЗ InputManager
+    HandleCameraMovement();
+
     m_sceneManager.UpdateLights();
 
-    // 2️⃣ Начинаем рендер
+    // 3) Начало рендера
     m_direct3D->BeginScene(0.0f, 0.0f, 0.0f, 1.0f);
 
-    // 3️⃣ Получаем матрицы
+    // 4) Получаем матрицы камеры
     XMMATRIX viewMatrix, projMatrix;
     m_camera->Render();
     m_camera->GetViewMatrix(viewMatrix);
@@ -233,80 +275,79 @@ bool ApplicationClass::Frame()
 
     ID3D11DeviceContext* context = m_direct3D->GetDeviceContext();
 
-    // 4️⃣ Рендерим 3D
+    // 5) Рендер 3D
     Render3DObjects(context, viewMatrix, projMatrix);
     RenderLightSources(context, viewMatrix, projMatrix);
     RenderWorldSprites(context, viewMatrix, projMatrix);
 
-    // 5️⃣ Начинаем UI
+    // 6) UI
     m_editorUI.NewFrame();
-
-    // 6️⃣ Рендерим ImGuizmo для выбранного объекта
     RenderImGuizmo(viewMatrix, projMatrix);
 
-    // 7️⃣ 🔥 ОБРАБОТКА DRAG AND DROP 
-    // ⚠️ Проверяем не захватила ли ImGui мышь
-   
+    // 7) 🔥 Drag & Drop — ЧЕРЕЗ InputManager
     bool imguiWantsMouse = io.WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
-
     if (!imguiWantsMouse)
     {
         HandleDragDrop();
     }
 
-    // 8️⃣ Обновляем UI
     m_editorUI.Update(m_sceneManager);
     m_editorUI.Render();
 
-    // 9️⃣ Завершаем кадр
+    // 9) Завершение кадра
     m_direct3D->EndScene();
 
     return true;
 }
 
+
+//-----------------------------------------------------------------------------
+// RenderImGuizmo()
+// Описание: рендер и обработка ImGuizmo для редактируемого объекта.
+// Примечания: матрицы передаются и используются БЕЗ транспонирования.
+//-----------------------------------------------------------------------------
 void ApplicationClass::RenderImGuizmo(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
 {
-    // === 1. Проверка объекта ===
+    // 1) Если нет выбранного объекта — выходим
     int selectedIndex = m_editorUI.GetSelectedIndex();
     if (selectedIndex < 0) return;
 
     GameObject* obj = m_sceneManager.GetObject(selectedIndex);
     if (!obj) return;
 
-    // === 2. Матрицы — БЕЗ транспонирования (как у тебя работало) ===
+    // 2) Получаем модельную матрицу объекта
     XMMATRIX modelMatrix = obj->GetWorldMatrix();
 
+    // Храним матрицы в формате float4x4 (ImGuizmo ожидает float[4][4])
     XMFLOAT4X4 viewFloat, projFloat, modelFloat;
-    XMStoreFloat4x4(&viewFloat, viewMatrix);      // 🔥 NO transpose
-    XMStoreFloat4x4(&projFloat, projMatrix);      // 🔥 NO transpose
-    XMStoreFloat4x4(&modelFloat, modelMatrix);    // 🔥 NO transpose
+    XMStoreFloat4x4(&viewFloat, viewMatrix);    // NO transpose
+    XMStoreFloat4x4(&projFloat, projMatrix);    // NO transpose
+    XMStoreFloat4x4(&modelFloat, modelMatrix);  // NO transpose
 
-    // === 3. 🔥 ИСПРАВЛЕНИЕ №1: Реальный размер окна ===
+    // 3) Настраиваем ImGuizmo под реальное окно (DisplaySize)
     ImGuiIO& io = ImGui::GetIO();
     float width = io.DisplaySize.x;
     float height = io.DisplaySize.y;
 
     ImGuizmo::SetDrawlist(ImGui::GetForegroundDrawList());
-    ImGuizmo::SetRect(0.0f, 0.0f, width, height);  // 🔥 Было: 800, 600
-    ImGuizmo::SetGizmoSizeClipSpace(0.3f);  // 🔥 Вызови ПЕД Manipulate()!
+    ImGuizmo::SetRect(0.0f, 0.0f, width, height);
+    ImGuizmo::SetGizmoSizeClipSpace(0.3f);
 
-    // === 4. 🔥 ИСПРАВЛЕНИЕ №2: Используем возврат Manipulate() ===
+    // 4) Вызываем Manipulate и обрабатываем результат
     bool manipulated = ImGuizmo::Manipulate(
-        &viewFloat.m[0][0],   // Прямо как у тебя
+        &viewFloat.m[0][0],
         &projFloat.m[0][0],
         ImGuizmo::OPERATION::TRANSLATE,
         ImGuizmo::WORLD,
         &modelFloat.m[0][0]
     );
 
-    // === 5. 🔥 ИСПРАВЛЕНИЕ №3: Проверяем manipulated, а не IsUsing() ===
-    if (manipulated)  // 🔥 Было: if (ImGuizmo::IsUsing())
+    // 5) Если была модификация — применяем новую позицию к объекту
+    if (manipulated)
     {
-        // Конвертируем обратно — тоже БЕЗ транспонирования
-        XMMATRIX updatedMatrix = XMLoadFloat4x4(&modelFloat);  // 🔥 NO transpose
-
+        XMMATRIX updatedMatrix = XMLoadFloat4x4(&modelFloat); // NO transpose
         XMFLOAT3 newPos;
-        XMStoreFloat3(&newPos, updatedMatrix.r[3]);
+        XMStoreFloat3(&newPos, updatedMatrix.r[3]); // четвертый столбец — позиция
 
         obj->SetPosition(newPos.x, newPos.y, newPos.z);
         OutputDebugStringA(("✏️ Gizmo moved: " +
@@ -315,6 +356,9 @@ void ApplicationClass::RenderImGuizmo(const XMMATRIX& viewMatrix, const XMMATRIX
     }
 }
 
+//-----------------------------------------------------------------------------
+// Рендеринг сценических объектов, источников света и спрайтов
+//-----------------------------------------------------------------------------
 void ApplicationClass::Render3DObjects(
     ID3D11DeviceContext* context,
     const XMMATRIX& view,
@@ -343,6 +387,7 @@ void ApplicationClass::RenderLightSources(
 
     for (size_t i = 0; i < m_lightSpheres.size() && i < NUM_LIGHTS; ++i)
     {
+        // Пропускаем неактивные источники света
         if (lightPositions[i].w <= 0.0f ||
             (lightColors[i].x == 0 && lightColors[i].y == 0 && lightColors[i].z == 0))
         {
@@ -369,6 +414,9 @@ void ApplicationClass::RenderWorldSprites(
     m_direct3D->TurnAlphaBlendingOff();
 }
 
+//-----------------------------------------------------------------------------
+// Вспомогательные функции: свет, матрицы, пересечение луч-сфера
+//-----------------------------------------------------------------------------
 void ApplicationClass::SetupLights(XMFLOAT4 colors[], XMFLOAT4 positions[])
 {
     for (int i = 0; i < NUM_LIGHTS; ++i)
@@ -415,14 +463,15 @@ bool RayIntersectsSphere(
 }
 
 //=============================================================================
-// 🔥 ИСПРАВЛЕННАЯ ЛОГИКА DRAG AND DROP
+// Обработка ввода и Drag&Drop
 //=============================================================================
-
 void ApplicationClass::UpdateInputState()
 {
+    // Синхронизируем локальные флаги из низкоуровневого ввода
     m_isLeftDown = m_input->IsLeftButtonDown();
     m_isRightDown = m_input->IsRightButtonDown();
     m_isMouseCaptured = m_input->IsMouseCaptured();
+   /* m_isLeftDown = m_inputManager.IsLeftDown();*/
 
     if (!m_isMouseCaptured)
     {
@@ -431,7 +480,7 @@ void ApplicationClass::UpdateInputState()
 
     static bool wasLeftDown = false;
 
-    // 👇 ЛОГИКА: только при НОВОМ нажатии
+    // Только при новом нажатии фиксируем координаты начала клика
     if (m_isLeftDown && !wasLeftDown)
     {
         m_clickStartX = m_mouseX;
@@ -443,24 +492,23 @@ void ApplicationClass::UpdateInputState()
     wasLeftDown = m_isLeftDown;
 }
 
-// Убираем всю логику кнопок мыши — это теперь в InputManager!
 void ApplicationClass::HandleCameraMovement()
 {
-    // === 1. Захват/освобождение мыши (ПРЯМАЯ проверка!) ===
-    bool rightDown = m_input->IsRightButtonDown();  // ← Прямой запрос, без InputManager
+    // ===== 1) ЗАХВАТ / ОСВОБОЖДЕНИЕ МЫШИ — ЧЕРЕЗ InputManager =====
+    bool rightDown = m_inputManager.IsCameraMode();  // 🔥 Из InputManager, не m_input!
 
-    if (rightDown && !m_input->IsMouseCaptured()) {
-        m_input->SetMouseCapture(true);
+    if (rightDown && !m_inputManager.IsMouseCaptured(m_input)) {
+        m_inputManager.SetMouseCapture(m_input, true);
     }
-    else if (!rightDown && m_input->IsMouseCaptured()) {
-        m_input->SetMouseCapture(false);  // ← Здесь должен появиться курсор!
+    else if (!rightDown && m_inputManager.IsMouseCaptured(m_input)) {
+        m_inputManager.SetMouseCapture(m_input, false);
     }
 
-    // === 2. Вращение камеры (ТОЛЬКО при захваченной мыши) ===
-    if (m_input->IsMouseCaptured()) {
+    // ===== 2) ВРАЩЕНИЕ КАМЕРЫ — ТОЛЬКО ЕСЛИ ЗАХВАЧЕНА МЫШЬ =====
+    if (m_inputManager.IsMouseCaptured(m_input)) {
         int deltaX, deltaY;
-        m_input->GetMouseDelta(deltaX, deltaY);
-        m_input->ResetMouseDelta();
+        m_input->GetMouseDelta(deltaX, deltaY);  // Сырой InputClass для дельты
+        m_inputManager.ResetMouseDelta(m_input);
 
         float rotX = m_camera->GetRotation().x;
         float rotY = m_camera->GetRotation().y;
@@ -473,62 +521,60 @@ void ApplicationClass::HandleCameraMovement()
         m_camera->SetRotation(rotX, rotY, m_camera->GetRotation().z);
     }
 
-    // === 3. 🔥 ПЕРЕМЕЩЕНИЕ (РАБОТАЕТ ВСЕГДА, независимо от захвата!) ===
+    // ===== 3) ПЕРЕМЕЩЕНИЕ КАМЕРЫ — ВСЕГДА =====
     {
         float posX = m_camera->GetPosition().x;
         float posY = m_camera->GetPosition().y;
         float posZ = m_camera->GetPosition().z;
 
         float speed = Settings::INPUT_MOVE_SPEED;
-        if (m_input->IsKeyDown(VK_SHIFT))    speed *= 2.0f;
-        if (m_input->IsKeyDown(VK_CONTROL))  speed *= 0.5f;
+        if (m_inputManager.IsKeyDown(m_input, VK_SHIFT))    speed *= 2.0f;
+        if (m_inputManager.IsKeyDown(m_input, VK_CONTROL))  speed *= 0.5f;
 
         float yawRad = XMConvertToRadians(m_camera->GetRotation().y);
         float sinYaw = sinf(yawRad);
         float cosYaw = cosf(yawRad);
 
-        if (m_input->IsKeyDown('W')) { posX += sinYaw * speed; posZ += cosYaw * speed; }
-        if (m_input->IsKeyDown('S')) { posX -= sinYaw * speed; posZ -= cosYaw * speed; }
-        if (m_input->IsKeyDown('A')) { posX -= cosYaw * speed; posZ += sinYaw * speed; }
-        if (m_input->IsKeyDown('D')) { posX += cosYaw * speed; posZ -= sinYaw * speed; }
-        if (m_input->IsKeyDown('R')) { posY += speed; }
-        if (m_input->IsKeyDown('F')) { posY -= speed; }
+        if (m_inputManager.IsKeyDown(m_input, 'W')) { posX += sinYaw * speed; posZ += cosYaw * speed; }
+        if (m_inputManager.IsKeyDown(m_input, 'L')) { m_sceneManager.LoadScene("f.json", m_direct3D->GetDevice(), m_direct3D->GetDeviceContext()); }
+        if (m_inputManager.IsKeyDown(m_input, 'S')) { posX -= sinYaw * speed; posZ -= cosYaw * speed; }
+        if (m_inputManager.IsKeyDown(m_input, 'A')) { posX -= cosYaw * speed; posZ += sinYaw * speed; }
+        if (m_inputManager.IsKeyDown(m_input, 'D')) { posX += cosYaw * speed; posZ -= sinYaw * speed; }
+        if (m_inputManager.IsKeyDown(m_input, 'R')) { posY += speed; }
+        if (m_inputManager.IsKeyDown(m_input, 'F')) { posY -= speed; }
 
-        m_camera->SetPosition(posX, posY, posZ);  // ← Применяем всегда
+        m_camera->SetPosition(posX, posY, posZ);
     }
 }
-//=============================================================================
-// 🔥 ПРАВИЛЬНАЯ ЛОГИКА DRAG AND DROP
-//=============================================================================
+
 void ApplicationClass::HandleDragDrop()
 {
     ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse || ImGuizmo::IsOver()) return;  // Игнорируем, если UI активен
+    if (io.WantCaptureMouse || ImGuizmo::IsOver()) return;
 
-    // === 1. Начало drag (через InputManager события) ===
+    // 1) Если уже dragging — обновляем позицию
     if (m_inputManager.IsDragging() && m_inputManager.IsLeftDown())
     {
-        // Создаём луч по текущей позиции мыши
         CameraClass::Ray ray = m_camera->CreatePickingRay(
             m_inputManager.GetMouseX(),
             m_inputManager.GetMouseY(),
             m_screenWidth, m_screenHeight,
-            m_viewMatrix, m_projMatrix  // ← матрицы из Frame()
+            m_viewMatrix, m_projMatrix
         );
 
-        UpdateDraggedPosition(ray);  // Ваша существующая функция
+        UpdateDraggedPosition(ray);
         return;
     }
 
-    // === 2. Быстрый клик — выбор объекта через PickingSystem ===
+    // 2) Быстрый клик — выбор объекта
     if (!m_inputManager.IsDragging() && !m_inputManager.IsCameraMode())
     {
         auto result = m_pickingSystem.PickAt(
             m_inputManager.GetMouseX(),
             m_inputManager.GetMouseY(),
             *m_camera,
-            m_viewMatrix,        // ← Вид отдельно
-            m_projMatrix,        // ← Проекция отдельно
+            m_viewMatrix,
+            m_projMatrix,
             m_sceneManager,
             m_lightSpheres,
             m_screenWidth,
@@ -537,7 +583,6 @@ void ApplicationClass::HandleDragDrop()
 
         if (result.IsValid())
         {
-            // 🔥 Конвертируем тип из PickingSystem в EditorUI::SelectedType
             EditorUI::SelectedType uiType = EditorUI::SelectedType::None;
             switch (result.type) {
             case PickingSystem::PickedType::Object: uiType = EditorUI::SelectedType::Object; break;
@@ -547,16 +592,42 @@ void ApplicationClass::HandleDragDrop()
 
             m_editorUI.SetSelection(uiType, result.index);
 
-            // 🔥 Если выбран свет — начинаем drag сразу
-            if (result.type == PickingSystem::PickedType::Light) {
-                StartDraggingLight(result.index, {});  // Пустой Ray, позиция не важна
+            // 🔥 НОВОЕ: Начинаем drag для ВСЕХ типов, не только света
+            CameraClass::Ray ray = m_camera->CreatePickingRay(
+                m_inputManager.GetMouseX(),
+                m_inputManager.GetMouseY(),
+                m_screenWidth, m_screenHeight,
+                m_viewMatrix, m_projMatrix
+            );
+
+            if (result.type == PickingSystem::PickedType::Light)
+            {
+                StartDraggingLight(result.index, ray);
+            }
+            else if (result.type == PickingSystem::PickedType::Object)
+            {
+                GameObject* obj = m_sceneManager.GetObject(result.index);
+                if (obj)
+                {
+                    XMFLOAT3 objPos = obj->GetPosition();  // или GetWorldMatrix().r[3]
+                    StartDraggingObject(result.index, ray, objPos);
+                }
+            }
+            else if (result.type == PickingSystem::PickedType::Sprite)
+            {
+                WorldSpriteClass* sprite = m_sceneManager.GetSprite(result.index);
+                if (sprite)
+                {
+                    XMFLOAT3 spritePos = sprite->GetPosition();
+                    StartDraggingSprite(result.index, ray, spritePos);
+                }
             }
         }
     }
 }
-
-
-
+//-----------------------------------------------------------------------------
+// Начало перетаскивания (light / sprite / object) и обновление позиции
+//-----------------------------------------------------------------------------
 void ApplicationClass::StartDraggingLight(int index, const CameraClass::Ray& pickRay)
 {
     m_isDragging = true;
@@ -601,6 +672,7 @@ void ApplicationClass::StartDraggingObject(int index, const CameraClass::Ray& pi
 
 void ApplicationClass::UpdateDraggedPosition(const CameraClass::Ray& ray)
 {
+    // Простейшее позиционирование вдоль луча на фиксированном расстоянии
     XMFLOAT3 newPos;
     newPos.x = ray.origin.x + ray.direction.x * m_dragDistance;
     newPos.y = ray.origin.y + ray.direction.y * m_dragDistance;

@@ -9,8 +9,8 @@
 #include "helper.h"  // Ваша утилита для проверки HRESULT
 
 
-const WCHAR* LightPsPath = L"src/Render/Shader/light.ps";
-const WCHAR* LightVsPath = L"src/Render/Shader/light.vs";
+const WCHAR* LightPsPath = L"src/Render/Shader/Ps/light.ps";
+const WCHAR* LightVsPath = L"src/Render/Shader/Vs/light.vs";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Конструктор

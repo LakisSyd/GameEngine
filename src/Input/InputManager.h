@@ -1,6 +1,10 @@
-﻿#pragma once
+﻿
+#pragma once
 #include <functional>
 #include "InputClass.h"
+#include <memory>
+
+
 
 class InputManager {
 public:
@@ -10,7 +14,7 @@ public:
     std::function<void(int, int, int, int)> OnLeftDrag;
     std::function<void()> OnLeftDragEnd;
 
-    void Update(InputClass* input);
+    void Update(InputClass* input); // изменено: не передаём владение
 
     // Состояние
     bool IsDragging() const { return m_isDragging; }
@@ -23,6 +27,27 @@ public:
     void SetDragging(bool value) { m_isDragging = value; }
     bool IsLeftDown() const { return m_isLeftDown; }  // ← геттер для HandleDragDrop
 
+    void SetMouseCapture(InputClass* input, bool capture);
+
+	//Get DELTA MOUSE position since last update (for camera rotation)
+
+	void GetMouseDelta(int& dx, int& dy) const;
+
+    void ResetMouseDelta(InputClass* input);
+
+    // Проверить, захвачена ли мышь
+    bool IsMouseCaptured(InputClass* input) const;
+
+    // ===== 🔥 НОВОЕ: Запросы клавиш (для WASD/RF движения) =====
+    bool IsKeyDown(InputClass* input, unsigned int key) const;
+
+    // Сброс состояния при выходе из фокуса окна
+    void Reset();
+
+ 
+        
+	
+
 private:
     // Сырое состояние
     bool m_isLeftDown = false;
@@ -33,4 +58,4 @@ private:
 
     int m_mouseX = 0, m_mouseY = 0;
     int m_clickStartX = 0, m_clickStartY = 0;
-};
+};;
