@@ -38,13 +38,17 @@ void MaterialClass::Bind(ID3D11DeviceContext* context)
 {
     if (!m_shader) return;
 
-    // 🔥 АКТИВИРУЕМ ШЕЙДЕР (главное исправление!)
-    m_shader->BindShader(context);  // Устанавливает VS, PS, InputLayout, Sampler
+    // Активируем шейдер (VS, PS, input layout, sampler и т.д.)
+    m_shader->BindShader(context);
 
-    // Привязываем текстуры
-    if (!m_textures.empty() && m_textures[0]) {
-        ID3D11ShaderResourceView* srv = m_textures[0]->GetTexture();
-        if (srv) context->PSSetShaderResources(0, 1, &srv);
+    // Привязываем текстуры в слоты t0..t3 (или меньше)
+    ID3D11ShaderResourceView* nullSRV = nullptr;
+    for (size_t i = 0; i < m_textures.size() && i < 4; ++i)
+    {
+        ID3D11ShaderResourceView* srv = nullptr;
+        if (m_textures[i]) srv = m_textures[i]->GetTexture();
+        // Если texture отсутствует — привязываем null (чтобы не оставить старый SRV)
+        context->PSSetShaderResources(static_cast<UINT>(i), 1, srv ? &srv : &nullSRV);
     }
 }
 

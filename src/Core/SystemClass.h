@@ -12,7 +12,7 @@
 //    ApplicationClass — будущая графика (DirectX)
 #include "InputClass.h"
 #include "ApplicationClass.h"
-
+#include <memory>  // Для std::unique_ptr
 
 
 
@@ -50,7 +50,7 @@ private:
     HWND m_hwnd;                // Дескриптор окна — "адрес" окна в системе
 
     // 📌 Подсистемы
-    InputClass* m_Input;        // Управление клавиатурой
+    std::unique_ptr<InputClass> m_Input;        // Управление клавиатурой
     ApplicationClass* m_Application;  // Графика (будет содержать DirectX)
 };
 

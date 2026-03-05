@@ -2,8 +2,8 @@
 #include "helper.h"
 
 
-const wchar_t* TexturePsPath = L"src/Render/Shader/texture.ps";
-const wchar_t* TextureVsPath = L"src/Render/Shader/texture.vs";
+const wchar_t* TexturePsPath = L"src/Render/Shader/Ps/texture.ps";
+const wchar_t* TextureVsPath = L"src/Render/Shader/Vs/texture.vs";
 
 
 TextureShaderClass::TextureShaderClass()

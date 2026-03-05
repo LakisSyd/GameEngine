@@ -1,0 +1,47 @@
+////////////////////////////////////////////////////////////////////////////////
+// Filename: multitexture.ps
+////////////////////////////////////////////////////////////////////////////////
+
+
+/////////////
+// GLOBALS //
+/////////////
+//The multitexture shader will texture in two textures. We will assign the stone01.tga texture to shaderTexture1. And we will assign the dirt01.tga texture to shaderTexture2.
+
+Texture2D shaderTexture1 : register(t0);
+Texture2D shaderTexture2 : register(t1);
+SamplerState SampleType : register(s0);
+
+
+//////////////
+// TYPEDEFS //
+//////////////
+struct PixelInputType
+{
+    float4 position : SV_POSITION;
+    float2 tex : TEXCOORD0;
+};
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Pixel Shader
+////////////////////////////////////////////////////////////////////////////////
+float4 MultiTexturePixelShader(PixelInputType input) : SV_TARGET
+{
+    float4 color1;
+    float4 color2;
+    float4 blendColor;
+//In the pixel shader we will sample the stone and the dirt texture. Once we have the pixel for each, we then combine them using the blending equation we discussed at the beginning of the tutorial. We also always saturate the final result to make sure the pixel value is between 0 and 1 for all colors.
+
+    // Sample the pixel color from the textures using the sampler at this texture coordinate location.
+    color1 = shaderTexture1.Sample(SampleType, input.tex);
+    color2 = shaderTexture2.Sample(SampleType, input.tex);
+	
+    // Combine the two textures together.
+    blendColor = color1 * color2 * 2.0;
+
+    // Saturate the final color.
+    blendColor = saturate(blendColor);
+
+    return blendColor;
+}

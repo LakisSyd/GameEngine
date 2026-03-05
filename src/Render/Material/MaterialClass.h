@@ -28,14 +28,23 @@ public:
     void SetShader(ShaderBaseClass* shader) { m_shader = shader; }
     ShaderBaseClass* GetShader() const { return m_shader; }
 
+    // Устанавливает основную текстуру (гарантирует слот 0)
     void SetMainTexture(TextureClass* texture) {
-        if (!m_textures.empty()) m_textures[0] = texture;
+        if (m_textures.empty()) m_textures.resize(2, nullptr);
+        m_textures[0] = texture;
     }
     TextureClass* GetMainTexture() const {
         return (!m_textures.empty() && m_textures[0]) ? m_textures[0] : nullptr;
     }
 
-    void AddTexture(TextureClass* texture) { m_textures.push_back(texture); }
+    // Добавляет текстуру: ищет первый пустой слот, иначе push_back
+    void AddTexture(TextureClass* texture) {
+        if (m_textures.empty()) m_textures.resize(2, nullptr);
+        for (auto& t : m_textures) {
+            if (t == nullptr) { t = texture; return; }
+        }
+        m_textures.push_back(texture);
+    }
     TextureClass* GetTexture(size_t index) const {
         return (index < m_textures.size()) ? m_textures[index] : nullptr;
     }

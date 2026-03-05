@@ -1,5 +1,6 @@
 #include "colorshaderclass.h"
 #include "../HelpFunc/helper.h"
+
 ColorShaderClass::ColorShaderClass()
 {
 	m_vertexShader = nullptr;
@@ -43,10 +44,7 @@ bool ColorShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
 
 }
 
-void ColorShaderClass::ShutDown()
-{
-	ShutdownShader();
-}
+
 
 bool ColorShaderClass::Render(ID3D11DeviceContext* deviceContext, int indexCount, XMMATRIX worldMatrix, 
 	XMMATRIX viewMatrix, 

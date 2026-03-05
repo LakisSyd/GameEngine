@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿
+#pragma once
 
 #include <windows.h>
 #include <vector>
@@ -17,6 +18,7 @@
 #include "GameSettings.h"
 #include "PickingSystem.h"
 #include "InputManager.h"
+#include "Multitextureshaderclass.h"
 
 class EditorUI;
 class MaterialClass;
@@ -42,6 +44,7 @@ public:
     void Shutdown();
     bool Frame();
 
+    // Теперь принимает не‑владеющий указатель — Application не владеет InputClass
     void SetInput(InputClass* input) { m_input = input; }
 
 private:
@@ -70,13 +73,18 @@ private:
 
 private:
     // Core subsystems
-    D3DClass* m_direct3D;
-    CameraClass* m_camera;
-    InputClass* m_input;
+    std::unique_ptr<D3DClass> m_direct3D;
+
+    std::unique_ptr<CameraClass> m_camera;
+    // НЕ владеющий указатель на InputClass — SystemClass остаётся владельцем
+    InputClass* m_input = nullptr;
 
     // Shaders
     TextureShaderClass* m_textureShader;
     LightShaderClass* m_lightShader;
+    MultiTextureShaderClass* m_multiTextureShader;
+
+    
 
     // Models
     AssimpModelClass* m_mainModel;

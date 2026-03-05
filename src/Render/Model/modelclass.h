@@ -1,4 +1,4 @@
-#pragma once
+п»ї#pragma once
 #include <d3d11.h>
 #include <directxmath.h>
 #include "Textureclass.h"
@@ -11,7 +11,7 @@ using namespace DirectX;
 class ModelClass
 {
 private:
-    // Определение типа вершины. Должно совпадать с layout в ColorShaderClass и структурой в шейдере.
+    // РћРїСЂРµРґРµР»РµРЅРёРµ С‚РёРїР° РІРµСЂС€РёРЅС‹. Р”РѕР»Р¶РЅРѕ СЃРѕРІРїР°РґР°С‚СЊ СЃ layout РІ ColorShaderClass Рё СЃС‚СЂСѓРєС‚СѓСЂРѕР№ РІ С€РµР№РґРµСЂРµ.
     struct VertexType
     {
         XMFLOAT3 position;
@@ -19,28 +19,35 @@ private:
         XMFLOAT3 normal;
     };
 
+    struct ModelType
+    {
+        float x, y, z;
+        float tu, tv;
+        float nx, ny, nz;
+    };
+
 public:
     ModelClass();
     ModelClass(const ModelClass&);
     ~ModelClass();
 
-    bool Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceContext, const char* textureFilename);
+    bool Initialize(ID3D11Device*, ID3D11DeviceContext*, const char* tex1, const char* tex2);
     void Shutdown();
     void Render(ID3D11DeviceContext*);
     int GetIndexCount();
 
-    ID3D11ShaderResourceView* GetTexture();
+    ID3D11ShaderResourceView* GetTexture(int index);
 
 private:
     bool InitializeBuffers(ID3D11Device*);
     void ShutdownBuffers();
     void RenderBuffers(ID3D11DeviceContext*);
 
-    bool LoadTexture(ID3D11Device*, ID3D11DeviceContext*, const char*);
-    void ReleaseTexture();
+    bool LoadTextures(ID3D11Device*, ID3D11DeviceContext*, const char* tex1, const char* tex2);
+    void ReleaseTextures();
 
 private:
     ID3D11Buffer* m_vertexBuffer, * m_indexBuffer;
     int m_vertexCount, m_indexCount;
-    TextureClass* m_Texture;
+    TextureClass* m_Textures[2];  // рџ”Ґ РњР°СЃСЃРёРІ РёР· 2 С‚РµРєСЃС‚СѓСЂ
 };
