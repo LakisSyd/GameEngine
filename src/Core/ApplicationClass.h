@@ -1,5 +1,4 @@
-﻿
-#pragma once
+﻿#pragma once
 
 #include <windows.h>
 #include <vector>
@@ -19,9 +18,12 @@
 #include "PickingSystem.h"
 #include "InputManager.h"
 #include "Multitextureshaderclass.h"
+#include "../../LightMapShaderClass.h"
+#include "NormalMapShaderClass.h"
 
 class EditorUI;
 class MaterialClass;
+class NormalMapShaderClass;
 
 // Global graphics settings
 const bool FULL_SCREEN = false;
@@ -83,7 +85,8 @@ private:
     TextureShaderClass* m_textureShader;
     LightShaderClass* m_lightShader;
     MultiTextureShaderClass* m_multiTextureShader;
-
+	LightMapShaderClass* m_lightMapShader;
+	NormalMapShaderClass* m_normalMapShader;
     
 
     // Models
