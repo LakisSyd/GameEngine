@@ -88,42 +88,22 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
-    // Шейдеры
-    m_textureShader = new TextureShaderClass;
-    if (!m_textureShader || !m_textureShader->Initialize(m_direct3D->GetDevice(), hwnd))
-    {
-        MessageBox(hwnd, L"Failed to initialize texture shader", L"Error", MB_OK);
-        return false;
-    }
+    // ════════════════════════════════════
+   // Загрузка шейдеров через ShaderManager
+   // ════════════════════════════════════
+    auto& sm = ShaderManager::Get();
 
-    m_lightShader = new LightShaderClass;
-    if (!m_lightShader || !m_lightShader->Initialize(m_direct3D->GetDevice(), hwnd))
-    {
-        MessageBox(hwnd, L"Failed to initialize light shader", L"Error", MB_OK);
-        return false;
-    }
+    m_textureShader = sm.Load<TextureShaderClass>("texture", m_direct3D->GetDevice(), hwnd);
+    m_lightShader = sm.Load<LightShaderClass>("light", m_direct3D->GetDevice(), hwnd);
+    m_multiTextureShader = sm.Load<MultiTextureShaderClass>("multitex", m_direct3D->GetDevice(), hwnd);
+    m_lightMapShader = sm.Load<LightMapShaderClass>("lightmap", m_direct3D->GetDevice(), hwnd);
+    m_normalMapShader = sm.Load<NormalMapShaderClass>("normalmap", m_direct3D->GetDevice(), hwnd);
 
-    // 🔥 ИНИЦИАЛИЗИРУЕМ MultiTextureShader
-    m_multiTextureShader = new MultiTextureShaderClass;
-    if (!m_multiTextureShader || !m_multiTextureShader->Initialize(m_direct3D->GetDevice(), hwnd))
+    if (!m_textureShader || !m_lightShader ||
+        !m_multiTextureShader || !m_lightMapShader || !m_normalMapShader)
     {
-        MessageBox(hwnd, L"Failed to initialize multitexture shader", L"Error", MB_OK);
-        return false;
+        return false; // ошибка уже показана через MessageBox внутри Load()
     }
-
-	m_lightMapShader = new LightMapShaderClass;
-    if(!(m_lightMapShader) || !m_lightMapShader->Initialize(m_direct3D->GetDevice(), hwnd))
-    {
-        MessageBox(hwnd, L"Failed to initialize light map shader", L"Error", MB_OK);
-        return false;
-	}
-    
-    m_normalMapShader = new NormalMapShaderClass;
-    if(!m_normalMapShader || !m_normalMapShader->Initialize(m_direct3D->GetDevice(), hwnd))
-    {
-        MessageBox(hwnd, L"Failed to initialize normal map shader", L"Error", MB_OK);
-        return false;
-	}   
 
     // Материалы
     m_defaultMaterial = new MaterialClass();
@@ -205,6 +185,26 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         obj1->SetMaterial(mat);
         OutputDebugStringA("DEBUG: Application: assigned MultiTexture material to obj1\n");
     }
+
+   // Render - to - texture
+        m_renderTexture = new RenderTextureClass;
+    if (!m_renderTexture->Initialize(m_direct3D->GetDevice(),
+        512, 512, SCREEN_DEPTH, SCREEN_NEAR, 1))
+    {
+        MessageBox(hwnd, L"Failed to initialize RenderTexture", L"Error", MB_OK);
+        return false;
+    }
+
+    // Квадрат для отображения текстуры (позиция в пикселях)
+    m_renderQuad = new BitmapClass;
+	if (!m_renderQuad->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), screenHeight, screenWidth,
+         256, 256))
+    {
+        MessageBox(hwnd, L"Failed to initialize RenderQuad", L"Error", MB_OK);
+        return false;
+    }
+    m_renderQuad->SetRenderLocation(10, 10); // верхний левый угол
+
    
     return true;
 }
@@ -219,33 +219,7 @@ void ApplicationClass::Shutdown()
         m_lightSphereModel = nullptr;
     }
 
-    if (m_lightShader)
-    {
-        m_lightShader->Shutdown();
-        delete m_lightShader;
-        m_lightShader = nullptr;
-    }
-
-    if (m_textureShader)
-    {
-        m_textureShader->Shutdown();
-        delete m_textureShader;
-        m_textureShader = nullptr;
-    }
-
-    if (m_multiTextureShader)
-    {
-        m_multiTextureShader->ShutDown();
-        delete m_multiTextureShader;
-        m_multiTextureShader = nullptr;
-    }
-
-	if (m_lightMapShader)
-    {
-        m_lightMapShader->Shutdown();
-        delete m_lightMapShader;
-        m_lightMapShader = nullptr;
-    }
+    ShaderManager::Get().Shutdown();
 
     if (m_mainModel)
     {
@@ -274,40 +248,67 @@ void ApplicationClass::Shutdown()
 //=============================================================================
 bool ApplicationClass::Frame()
 {
-    // 1) Обновляем InputManager (пропускаем InputClass напрямую)
+    // 1) Обновляем InputManager
     m_inputManager.Update(m_input);
-
     ImGuiIO& io = ImGui::GetIO();
 
-    // 2) 🔥 Обработка камеры — ЧЕРЕЗ InputManager
+    // 2) Обработка камеры
     HandleCameraMovement();
-
     m_sceneManager.UpdateLights();
 
-    // 3) Начало рендера
-    m_direct3D->BeginScene(0.0f, 0.0f, 0.0f, 1.0f);
-
-    // 4) Получаем матрицы камеры
-    XMMATRIX viewMatrix, projMatrix;
+    // 3) Обновляем матрицы камеры ОДИН РАЗ до всех проходов
     m_camera->Render();
-    m_camera->GetViewMatrix(viewMatrix);
-    m_direct3D->GetProjectionMatrix(projMatrix);
-
-    m_viewMatrix = viewMatrix;
-    m_projMatrix = projMatrix;
+    m_camera->GetViewMatrix(m_viewMatrix);
+    m_direct3D->GetProjectionMatrix(m_projMatrix);
 
     ID3D11DeviceContext* context = m_direct3D->GetDeviceContext();
 
-    // 5) Рендер 3D
-    Render3DObjects(context, viewMatrix, projMatrix);
-    RenderLightSources(context, viewMatrix, projMatrix);
-    RenderWorldSprites(context, viewMatrix, projMatrix);
+    // ══════════════════════════════════════════
+    // 🔹 ПРОХОД 1 — рендер сцены В ТЕКСТУРУ
+    // ══════════════════════════════════════════
+    m_renderTexture->SetRenderTarget(context);
+    m_renderTexture->ClearRenderTarget(context, 0.1f, 0.1f, 0.3f, 1.0f);
 
-    // 6) UI
-    m_editorUI.NewFrame();
-    RenderImGuizmo(viewMatrix, projMatrix);
+    XMMATRIX rtProj;
+    m_renderTexture->GetProjectionMatrix(rtProj);
 
-    // 7) 🔥 Drag & Drop — ЧЕРЕЗ InputManager
+    Render3DObjects(context, m_viewMatrix, rtProj);
+
+    // ══════════════════════════════════════════
+    // 🔹 ПРОХОД 2 — рендер на ЭКРАН
+    // ══════════════════════════════════════════
+    m_direct3D->SetBackBufferRenderTarget();
+    m_direct3D->ResetViewport();
+    m_direct3D->BeginScene(0.0f, 0.0f, 0.0f, 1.0f);
+
+    // Основная 3D сцена
+    Render3DObjects(context, m_viewMatrix, m_projMatrix);
+    RenderLightSources(context, m_viewMatrix, m_projMatrix);
+    RenderWorldSprites(context, m_viewMatrix, m_projMatrix);
+
+    
+
+    XMMATRIX world, ortho;
+    m_direct3D->GetWorldMatrix(world);
+    m_direct3D->GetOrthoMatrix(ortho);
+
+   
+
+    // ══════════════════════════════════════════
+    // 🔹 UI — NewFrame ОБЯЗАТЕЛЬНО ПЕРВЫЙ
+    // ══════════════════════════════════════════
+    m_editorUI.NewFrame(); // ← сначала NewFrame!
+
+    RenderImGuizmo(m_viewMatrix, m_projMatrix);
+
+    // ✅ ImGui::Begin только ПОСЛЕ NewFrame
+    ImGui::Begin("Scene Preview");
+    ImGui::Image(
+        (ImTextureID)m_renderTexture->GetShaderResourceView(),
+        ImVec2(256, 256)
+    );
+    ImGui::End();
+
     bool imguiWantsMouse = io.WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
     if (!imguiWantsMouse)
     {
@@ -317,7 +318,6 @@ bool ApplicationClass::Frame()
     m_editorUI.Update(m_sceneManager);
     m_editorUI.Render();
 
-    // 9) Завершение кадра
     m_direct3D->EndScene();
 
     return true;

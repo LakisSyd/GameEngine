@@ -44,6 +44,20 @@ bool BitmapClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceCo
 
 	return true;
 
+
+}
+bool BitmapClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceContext,
+    int screenWidth, int screenHeight, int bitmapWidth, int bitmapHeight)
+{
+    m_screenWidth = screenWidth;
+    m_screenHeight = screenHeight;
+    m_bitmapWidth = bitmapWidth;
+    m_bitmapHeight = bitmapHeight;
+    m_renderX = 0;
+    m_renderY = 0;
+    m_Texture = nullptr; // текстура не нужна — будем передавать SRV снаружи
+
+    return InitializeBuffers(device);
 }
 
 void BitmapClass::Shutdown()
