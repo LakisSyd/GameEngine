@@ -4,7 +4,7 @@
 // UpdateInputState() в Frame() для синхронизации состояния мыши.
 //=============================================================================
 
-#include "applicationclass.h"   
+#include "applicationclass.h"   // Добавлен include для NormalMapShaderClass
 
 
 ApplicationClass::ApplicationClass()
@@ -12,6 +12,8 @@ ApplicationClass::ApplicationClass()
 
     m_textureShader(nullptr)
     , m_lightShader(nullptr)
+	, m_multiTextureShader(nullptr)
+	, m_lightMapShader(nullptr)
     , m_mainModel(nullptr)
     , m_lightSphereModel(nullptr)
     , m_isLeftDown(false)
@@ -27,6 +29,7 @@ ApplicationClass::ApplicationClass()
     , m_clickStartX(0), m_clickStartY(0)
     , m_potentialDrag(false)
     , m_defaultMaterial(nullptr)
+    , m_normalMapShader(nullptr)
 {
 }
 
@@ -108,6 +111,19 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
+	m_lightMapShader = new LightMapShaderClass;
+    if(!(m_lightMapShader) || !m_lightMapShader->Initialize(m_direct3D->GetDevice(), hwnd))
+    {
+        MessageBox(hwnd, L"Failed to initialize light map shader", L"Error", MB_OK);
+        return false;
+	}
+    
+    m_normalMapShader = new NormalMapShaderClass;
+    if(!m_normalMapShader || !m_normalMapShader->Initialize(m_direct3D->GetDevice(), hwnd))
+    {
+        MessageBox(hwnd, L"Failed to initialize normal map shader", L"Error", MB_OK);
+        return false;
+	}   
 
     // Материалы
     m_defaultMaterial = new MaterialClass();
@@ -158,7 +174,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     auto* mat = new MaterialClass();
     mat->Initialize(m_direct3D->GetDevice(), L"StoneWithDirt");
     // назначаем мульти-шейдер (убедитесь, что m_multiTextureShader инициализирован)
-    mat->SetShader(m_multiTextureShader);
+    mat->SetShader(m_normalMapShader);
 
     TextureClass* stone = new TextureClass();
     bool okStone = stone->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/stone.tga");
@@ -166,7 +182,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     else OutputDebugStringA("ERROR: stone texture failed to initialize\n");
 
     TextureClass* dirt = new TextureClass();
-    bool okDirt = dirt->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/sand.tga");
+    bool okDirt = dirt->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/uv.tga");
     if (okDirt) mat->AddTexture(dirt);
     else OutputDebugStringA("ERROR: dirt texture failed to initialize\n");
 
@@ -222,6 +238,13 @@ void ApplicationClass::Shutdown()
         m_multiTextureShader->ShutDown();
         delete m_multiTextureShader;
         m_multiTextureShader = nullptr;
+    }
+
+	if (m_lightMapShader)
+    {
+        m_lightMapShader->Shutdown();
+        delete m_lightMapShader;
+        m_lightMapShader = nullptr;
     }
 
     if (m_mainModel)
@@ -494,7 +517,7 @@ void ApplicationClass::UpdateInputState()
 
 void ApplicationClass::HandleCameraMovement()
 {
-    // ===== 1) ЗАХВАТ / ОСВОБОЖДЕНИЕ МЫШИ — ЧЕРЕЗ InputManager =====
+    // ===== 1) ЗАХВАТ / ОСВОБОДЕНИЕ МЫШИ — ЧЕРЕЗ InputManager =====
     bool rightDown = m_inputManager.IsCameraMode();  // 🔥 Из InputManager, не m_input!
 
     if (rightDown && !m_inputManager.IsMouseCaptured(m_input)) {

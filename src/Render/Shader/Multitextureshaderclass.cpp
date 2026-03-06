@@ -101,30 +101,7 @@ bool MultiTextureShaderClass::InitializeShader(ID3D11Device* device, HWND hwnd,
         return false;
     }
 
-    // --- DEBUG: показать время модификации файла и размер скомпилированного блоба ---
-    {
-        // file time
-        WIN32_FILE_ATTRIBUTE_DATA fileInfo;
-        if (GetFileAttributesExW(psFilename, GetFileExInfoStandard, &fileInfo)) {
-            FILETIME ft = fileInfo.ftLastWriteTime;
-            ULONGLONG t = ((ULONGLONG)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-            char buf[256];
-            sprintf_s(buf, "DEBUG: Pixel shader file last write (FILETIME): 0x%016llX  path=%ls\n", t, psFilename);
-            OutputDebugStringA(buf);
-        } else {
-            char buf[256];
-            sprintf_s(buf, "DEBUG: GetFileAttributesExW FAILED for %ls\n", psFilename);
-            OutputDebugStringA(buf);
-        }
-
-        // blob size
-        SIZE_T blobSize = pixelShaderBuffer->GetBufferSize();
-        {
-            char buf[128];
-            sprintf_s(buf, "DEBUG: Pixel shader blob size: %llu bytes\n", (unsigned long long)blobSize);
-            OutputDebugStringA(buf);
-        }
-    }
+    
 
     // Создаем вершинный шейдер из буфера.
     result = device->CreateVertexShader(vertexShaderBuffer->GetBufferPointer(),

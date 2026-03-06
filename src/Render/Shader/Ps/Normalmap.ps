@@ -1,0 +1,66 @@
+////////////////////////////////////////////////////////////////////////////////
+// Имя файла: normalmap.ps
+////////////////////////////////////////////////////////////////////////////////
+/////////////
+// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ //
+/////////////
+Texture2D shaderTexture1 : register(t0);  // Базовая цветовая текстура
+Texture2D shaderTexture2 : register(t1);  // Карта нормалей
+SamplerState SampleType : register(s0);
+
+cbuffer LightBuffer
+{
+    float4 diffuseColor;
+    float3 lightDirection;
+    float padding;
+};
+
+//////////////
+// ОПРЕДЕЛЕНИЯ ТИПОВ //
+//////////////
+struct PixelInputType
+{
+    float4 position : SV_POSITION;
+    float2 tex : TEXCOORD0;
+    float3 normal : NORMAL;
+    float3 tangent : TANGENT;
+    float3 binormal : BINORMAL;
+    float3 lightDirTangent : TEXCOORD1;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Пиксельный шейдер //
+////////////////////////////////////////////////////////////////////////////////
+float4 NormalMapPixelShader(PixelInputType input) : SV_TARGET
+{
+    float4 textureColor;
+    float4 bumpMap;
+    float3 bumpNormal;
+    float3 lightDir;
+    float lightIntensity;
+    float4 color;
+    
+    // Сэмплируем базовую текстуру
+    textureColor = shaderTexture1.Sample(SampleType, input.tex);
+    
+    // Сэмплируем карту нормалей
+    bumpMap = shaderTexture2.Sample(SampleType, input.tex);
+    
+    // Преобразуем из [0, 1] в [-1, 1]
+    bumpMap = (bumpMap * 2.0f) - 1.0f;
+    
+    // Нормаль уже в касательном пространстве — просто нормализуем
+    bumpNormal = normalize(bumpMap.xyz);
+    
+    // Направление света уже преобразовано в касательное пространство в VS
+    lightDir = normalize(input.lightDirTangent);
+    
+    // Вычисляем интенсивность света
+    lightIntensity = saturate(dot(bumpNormal, lightDir));
+    
+    // Вычисляем финальный цвет
+    color = saturate(diffuseColor * lightIntensity);
+    color = color * textureColor;
+    
+    return color;
+}

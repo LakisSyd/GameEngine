@@ -1,0 +1,38 @@
+// Имя файла: lightmap.ps
+////////////////////////////////////////////////////////////////////////////////
+/////////////
+// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ //
+/////////////
+Texture2D shaderTexture1 : register(t0);  // Базовая цветовая текстура
+Texture2D shaderTexture2 : register(t1);  // Световая карта
+SamplerState SampleType : register(s0);
+
+//////////////
+// ОПРЕДЕЛЕНИЯ ТИПОВ //
+//////////////
+struct PixelInputType
+{
+    float4 position : SV_POSITION;
+    float2 tex : TEXCOORD0;
+};
+
+////////////////////////////////////////////////////////////////////////////////
+// Пиксельный шейдер //
+////////////////////////////////////////////////////////////////////////////////
+float4 LightMapPixelShader(PixelInputType input) : SV_TARGET
+{
+    float4 color;
+    float4 lightColor;
+    float4 finalColor;
+    
+    // Получаем цвет пикселя из цветовой текстуры.
+    color = shaderTexture1.Sample(SampleType, input.tex);
+    
+    // Получаем цвет пикселя из световой карты.
+    lightColor = shaderTexture2.Sample(SampleType, input.tex);
+    
+    // Смешиваем два пикселя путём умножения.
+    finalColor = color * lightColor;
+    
+    return finalColor;
+}

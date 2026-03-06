@@ -150,6 +150,12 @@
     <ClCompile Include="src\Render\Shader\Multitextureshaderclass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
+    <ClCompile Include="LightMapShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\NormalMapShaderClass.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\HelpFunc\helper.h">
@@ -236,19 +242,51 @@
     <ClInclude Include="src\Render\Shader\Multitextureshaderclass.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
+    <ClInclude Include="LightMapShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\NormalMapShaderClass.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\Render\Shader\color.ps" />
-    <None Include="src\Render\Shader\color.vs" />
-    <None Include="src\Render\Shader\light.ps" />
-    <None Include="src\Render\Shader\light.vs" />
-    <None Include="src\Render\Shader\texture.ps" />
-    <None Include="src\Render\Shader\texture.vs" />
     <None Include="src\Render\Shader\Multitexture.vs">
       <Filter>Render\Shader</Filter>
     </None>
     <None Include="src\Render\Shader\Multitexture.ps">
       <Filter>Render\Shader</Filter>
+    </None>
+    <None Include="src\Render\Shader\Vs\Lightmap.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Ps\Lightmap.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\color.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\color.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\light.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\light.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\texture.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\texture.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="normalmap.vs" />
+    <None Include="normalmap.ps" />
+    <None Include="src\Render\Shader\Ps\Normalmap.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Vs\Normalmap.vs">
+      <Filter>Файлы ресурсов</Filter>
     </None>
   </ItemGroup>
 </Project>
