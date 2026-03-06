@@ -4,13 +4,14 @@
 #include <directxmath.h>
 #include <fstream>
 #include "LightShaderClass.h"
+#include "BaseShader.h"
 using namespace DirectX;
 using namespace std;
 
 
 
 
-class TextureShaderClass {
+class TextureShaderClass : public ShaderBaseClass {
 private:
 	struct MatrixBufferType
 	{

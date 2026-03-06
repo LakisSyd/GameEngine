@@ -18,8 +18,11 @@
 #include "PickingSystem.h"
 #include "InputManager.h"
 #include "Multitextureshaderclass.h"
-#include "../../LightMapShaderClass.h"
+#include "LightMapShaderClass.h"
 #include "NormalMapShaderClass.h"
+#include "../../RenderTextureClass.h"
+#include <BitmapClass.h>
+#include "../../ShaderManager .h"
 
 class EditorUI;
 class MaterialClass;
@@ -81,12 +84,10 @@ private:
     // НЕ владеющий указатель на InputClass — SystemClass остаётся владельцем
     InputClass* m_input = nullptr;
 
-    // Shaders
-    TextureShaderClass* m_textureShader;
-    LightShaderClass* m_lightShader;
-    MultiTextureShaderClass* m_multiTextureShader;
-	LightMapShaderClass* m_lightMapShader;
-	NormalMapShaderClass* m_normalMapShader;
+
+    ///TEST
+    RenderTextureClass* m_renderTexture = nullptr; // Целевая текстура
+    BitmapClass* m_renderQuad = nullptr; 
     
 
     // Models
@@ -132,6 +133,14 @@ private:
     //Material
 
     MaterialClass* m_defaultMaterial;
+
+    // Shaders — теперь НЕ хранятся здесь, только кэшированные указатели для удобства
+    TextureShaderClass*       m_textureShader   = nullptr; // ← просто кэш из ShaderManager
+    LightShaderClass*         m_lightShader     = nullptr;
+    MultiTextureShaderClass*  m_multiTextureShader = nullptr;
+    LightMapShaderClass*      m_lightMapShader  = nullptr;
+    NormalMapShaderClass*     m_normalMapShader = nullptr;
+   
 };
 
 // Utility function for ray-sphere intersection

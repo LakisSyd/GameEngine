@@ -55,6 +55,9 @@
     <Filter Include="Config">
       <UniqueIdentifier>{58e1e1b1-9a53-45c7-8620-959e9d6c92a6}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Render\RenderToTexture">
+      <UniqueIdentifier>{76bb6648-870d-481d-a7d7-eee8958a5471}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Core\ApplicationClass.cpp">
@@ -150,11 +153,14 @@
     <ClCompile Include="src\Render\Shader\Multitextureshaderclass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
-    <ClCompile Include="LightMapShaderClass.cpp">
-      <Filter>Render\Shader</Filter>
-    </ClCompile>
     <ClCompile Include="src\Render\Shader\NormalMapShaderClass.cpp">
       <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\LightMapShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="RenderTextureClass.cpp">
+      <Filter>Render\RenderToTexture</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -242,10 +248,19 @@
     <ClInclude Include="src\Render\Shader\Multitextureshaderclass.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
-    <ClInclude Include="LightMapShaderClass.h">
+    <ClInclude Include="src\Render\Shader\NormalMapShaderClass.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\LightMapShaderClass.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
-    <ClInclude Include="src\Render\Shader\NormalMapShaderClass.h">
+    <ClInclude Include="RenderTextureClass.h">
+      <Filter>Render\RenderToTexture</Filter>
+    </ClInclude>
+    <ClInclude Include="ShaderManager .h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\ShaderManager.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

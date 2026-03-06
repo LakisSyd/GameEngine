@@ -20,6 +20,7 @@ public:
 
 
 	bool Initialize(ID3D11Device*, ID3D11DeviceContext*, int, int, const  char*, int, int);
+	bool Initialize(ID3D11Device*, ID3D11DeviceContext*, int screenW, int screenH, int bitmapW, int bitmapH);
 	void Shutdown();
 	bool Render(ID3D11DeviceContext* deviceContext);
 
