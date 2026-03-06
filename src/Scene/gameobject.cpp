@@ -1,7 +1,7 @@
 ﻿#include "gameobject.h"
 #include "Textureshaderclass.h"
 #include "Multitextureshaderclass.h" // ← добавлено
-#include "../../LightMapShaderClass.h"
+#include "LightMapShaderClass.h"
 #include "../Render/Shader/NormalMapShaderClass.h" // ← ДОБАВИТЬ
 
 GameObject::GameObject()
