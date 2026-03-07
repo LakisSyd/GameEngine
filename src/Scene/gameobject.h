@@ -2,7 +2,7 @@
 #include <DirectXMath.h>
 #include "assimpmodelclass.h"
 #include "materialclass.h"  // ← БЫЛО: #include "lightshaderclass.h" и "textureshaderclass.h"
-
+#include "GameSettings.h"
 class TextureShaderClass;
 using namespace DirectX;
 
@@ -35,7 +35,9 @@ public:
         MaterialClass* material,
         XMFLOAT4 lightColors[],
         XMFLOAT4 lightPositions[],
+        const Settings::FogSettings& fog,
         bool selected = false
+		
     );
 
     // 🔥 RenderSimple: оставляем старую сигнатуру для спрайтов!

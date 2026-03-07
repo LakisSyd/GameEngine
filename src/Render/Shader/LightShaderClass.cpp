@@ -52,65 +52,39 @@ bool LightShaderClass::InitializeShader(
     ID3D10Blob* vsBlob = nullptr, * psBlob = nullptr;
     HRESULT result;
 
-    // 1. Компиляция и создание шейдеров (базовый класс)
     if (!CompileShader(vsFilename, "LightVertexShader", "vs_5_0", &vsBlob)) return false;
 
-    // 🔥 РЕАЛЬНЫЙ INPUT LAYOUT (замени заглушку на это):
     D3D11_INPUT_ELEMENT_DESC polygonLayout[3];
-
-    polygonLayout[0].SemanticName = "POSITION";
-    polygonLayout[0].SemanticIndex = 0;
-    polygonLayout[0].Format = DXGI_FORMAT_R32G32B32_FLOAT;
-    polygonLayout[0].InputSlot = 0;
-    polygonLayout[0].AlignedByteOffset = 0;
-    polygonLayout[0].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
-    polygonLayout[0].InstanceDataStepRate = 0;
-
-    polygonLayout[1].SemanticName = "TEXCOORD";
-    polygonLayout[1].SemanticIndex = 0;
-    polygonLayout[1].Format = DXGI_FORMAT_R32G32_FLOAT;
-    polygonLayout[1].InputSlot = 0;
-    polygonLayout[1].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
-    polygonLayout[1].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
-    polygonLayout[1].InstanceDataStepRate = 0;
-
-    polygonLayout[2].SemanticName = "NORMAL";
-    polygonLayout[2].SemanticIndex = 0;
-    polygonLayout[2].Format = DXGI_FORMAT_R32G32B32_FLOAT;
-    polygonLayout[2].InputSlot = 0;
-    polygonLayout[2].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT;
-    polygonLayout[2].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
-    polygonLayout[2].InstanceDataStepRate = 0;
+    polygonLayout[0] = { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,                        D3D11_INPUT_PER_VERTEX_DATA, 0 };
+    polygonLayout[1] = { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 };
+    polygonLayout[2] = { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 };
 
     if (!CreateInputLayout(device, polygonLayout, 3, vsBlob)) return false;
 
-    result = device->CreateVertexShader(
-        vsBlob->GetBufferPointer(),
-        vsBlob->GetBufferSize(),
-        nullptr, &m_vertexShader);
-    if (FAILED(result)) { vsBlob->Release(); if (psBlob) psBlob->Release(); return false; }
+    result = device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &m_vertexShader);
+    if (FAILED(result)) { vsBlob->Release(); return false; }
 
-    if (!CompileShader(psFilename, "LightPixelShader", "ps_5_0", &psBlob)) {
-        vsBlob->Release(); return false;
-    }
+    if (!CompileShader(psFilename, "LightPixelShader", "ps_5_0", &psBlob)) { vsBlob->Release(); return false; }
 
-    result = device->CreatePixelShader(
-        psBlob->GetBufferPointer(),
-        psBlob->GetBufferSize(),
-        nullptr, &m_pixelShader);
+    result = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_pixelShader);
     if (FAILED(result)) { vsBlob->Release(); psBlob->Release(); return false; }
 
     vsBlob->Release();
     psBlob->Release();
 
-    // 2. Общие ресурсы (базовый класс)
     if (!CreateDefaultSampler(device)) return false;
 
-    // 3. Уникальные буферы (хелпер базового класса)
-    if (!CreateConstantBuffer(device, sizeof(MatrixBufferType), &m_matrixBuffer)) return false;
+    if (!CreateConstantBuffer(device, sizeof(MatrixBufferType),        &m_matrixBuffer))        return false;
     if (!CreateConstantBuffer(device, sizeof(LightPositionBufferType), &m_lightPositionBuffer)) return false;
-    if (!CreateConstantBuffer(device, sizeof(LightColorBufferType), &m_lightColorBuffer)) return false;
-    if (!CreateConstantBuffer(device, sizeof(SelectedBufferType), &m_selectedBuffer)) return false;
+    if (!CreateConstantBuffer(device, sizeof(LightColorBufferType),    &m_lightColorBuffer))    return false;
+    if (!CreateConstantBuffer(device, sizeof(SelectedBufferType),      &m_selectedBuffer))      return false;
+
+    // ✅ Создаём FogBuffer (слот b2) — общий для всех шейдеров
+    if (!CreateFogBuffer(device))
+    {
+        OutputDebugStringA("LightShaderClass: CreateFogBuffer FAILED!\n");
+        return false;
+    }
 
     return true;
 }
@@ -317,13 +291,11 @@ bool LightShaderClass::SetSelectedFactor(ID3D11DeviceContext* deviceContext, flo
 
     SelectedBufferType* dataPtr = (SelectedBufferType*)mappedResource.pData;
     dataPtr->selectedFactor = factor;
-    // padding не трогаем
 
     deviceContext->Unmap(m_selectedBuffer, 0);
 
-    // Привязываем буфер к пиксельному шейдеру, например, в слоте 2
-    unsigned int bufferNumber = 2;
-    deviceContext->PSSetConstantBuffers(bufferNumber, 1, &m_selectedBuffer);
+    // ✅ Перенесён на слот b3 (b2 теперь занят FogBuffer)
+    deviceContext->PSSetConstantBuffers(3, 1, &m_selectedBuffer);
 
     return true;
 }

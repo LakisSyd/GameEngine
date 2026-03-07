@@ -20,9 +20,10 @@
 #include "Multitextureshaderclass.h"
 #include "LightMapShaderClass.h"
 #include "NormalMapShaderClass.h"
-#include "../../RenderTextureClass.h"
+#include "RenderTextureClass.h"
 #include <BitmapClass.h>
-#include "../../ShaderManager .h"
+#include "ShaderManager.h"
+#include "FogShaderClass.h"
 
 class EditorUI;
 class MaterialClass;
@@ -134,13 +135,18 @@ private:
 
     MaterialClass* m_defaultMaterial;
 
+    //Fog
+
+	Settings::FogSettings m_fogSettings;
+    
+
     // Shaders — теперь НЕ хранятся здесь, только кэшированные указатели для удобства
     TextureShaderClass*       m_textureShader   = nullptr; // ← просто кэш из ShaderManager
     LightShaderClass*         m_lightShader     = nullptr;
     MultiTextureShaderClass*  m_multiTextureShader = nullptr;
     LightMapShaderClass*      m_lightMapShader  = nullptr;
     NormalMapShaderClass*     m_normalMapShader = nullptr;
-   
+	FogShaderClass*           m_fogShader = nullptr;
 };
 
 // Utility function for ray-sphere intersection

@@ -217,29 +217,29 @@ void SceneManager::RenderAll(
     ID3D11Device* device,
     XMMATRIX viewMatrix,
     XMMATRIX projectionMatrix,
-    MaterialClass* material,  // ← Теперь MaterialClass*
+    MaterialClass* material,
     XMFLOAT4 lightColors[],
     XMFLOAT4 lightPositions[],
-    int selectedObjectIndex)
+    int selectedObjectIndex,
+    const Settings::FogSettings& fog)
 {
-    // Копируем данные света в массивы для шейдера
     for (int i = 0; i < NUM_LIGHTS; ++i) {
         lightColors[i] = m_lights[i].color;
         lightPositions[i] = m_lights[i].position;
     }
 
-    // Рендерим объекты
     int index = 0;
     for (auto& obj : m_objects)
     {
-        // 🔥 Если у объекта есть свой материал — используем его, иначе — переданный
         auto* objMaterial = obj.GetMaterial();
         auto* renderMaterial = objMaterial ? objMaterial : material;
 
+        // ✅ Правильный порядок: fog ПЕРЕД selected
         obj.Render(context, device, viewMatrix, projectionMatrix,
-            renderMaterial,  // ← Передаём материал
+            renderMaterial,
             lightColors, lightPositions,
-            index == selectedObjectIndex);
+            fog,                           // ← сначала fog
+            index == selectedObjectIndex); // ← потом selected
         index++;
     }
 }
