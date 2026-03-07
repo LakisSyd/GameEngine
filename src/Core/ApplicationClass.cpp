@@ -30,6 +30,8 @@ ApplicationClass::ApplicationClass()
     , m_potentialDrag(false)
     , m_defaultMaterial(nullptr)
     , m_normalMapShader(nullptr)
+	, m_fogShader(nullptr)
+	
 {
 }
 
@@ -98,7 +100,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_multiTextureShader = sm.Load<MultiTextureShaderClass>("multitex", m_direct3D->GetDevice(), hwnd);
     m_lightMapShader = sm.Load<LightMapShaderClass>("lightmap", m_direct3D->GetDevice(), hwnd);
     m_normalMapShader = sm.Load<NormalMapShaderClass>("normalmap", m_direct3D->GetDevice(), hwnd);
-
+	m_fogShader = sm.Load<FogShaderClass>("fog", m_direct3D->GetDevice(), hwnd);
     if (!m_textureShader || !m_lightShader ||
         !m_multiTextureShader || !m_lightMapShader || !m_normalMapShader)
     {
@@ -154,7 +156,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     auto* mat = new MaterialClass();
     mat->Initialize(m_direct3D->GetDevice(), L"StoneWithDirt");
     // назначаем мульти-шейдер (убедитесь, что m_multiTextureShader инициализирован)
-    mat->SetShader(m_normalMapShader);
+    mat->SetShader(m_fogShader);
 
     TextureClass* stone = new TextureClass();
     bool okStone = stone->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/stone.tga");
@@ -248,60 +250,57 @@ void ApplicationClass::Shutdown()
 //=============================================================================
 bool ApplicationClass::Frame()
 {
-    // 1) Обновляем InputManager
     m_inputManager.Update(m_input);
     ImGuiIO& io = ImGui::GetIO();
 
-    // 2) Обработка камеры
     HandleCameraMovement();
     m_sceneManager.UpdateLights();
 
-    // 3) Обновляем матрицы камеры ОДИН РАЗ до всех проходов
     m_camera->Render();
     m_camera->GetViewMatrix(m_viewMatrix);
     m_direct3D->GetProjectionMatrix(m_projMatrix);
 
     ID3D11DeviceContext* context = m_direct3D->GetDeviceContext();
 
-    // ══════════════════════════════════════════
-    // 🔹 ПРОХОД 1 — рендер сцены В ТЕКСТУРУ
-    // ══════════════════════════════════════════
+    // ── ПРОХОД 1: рендер в текстуру ─────────────────────────────────────────
     m_renderTexture->SetRenderTarget(context);
-    m_renderTexture->ClearRenderTarget(context, 0.1f, 0.1f, 0.3f, 1.0f);
+    m_renderTexture->ClearRenderTarget(context,
+        m_fogSettings.color.x,
+        m_fogSettings.color.y,
+        m_fogSettings.color.z, 1.0f);
 
     XMMATRIX rtProj;
     m_renderTexture->GetProjectionMatrix(rtProj);
-
     Render3DObjects(context, m_viewMatrix, rtProj);
 
-    // ══════════════════════════════════════════
-    // 🔹 ПРОХОД 2 — рендер на ЭКРАН
-    // ══════════════════════════════════════════
+    // ── ПРОХОД 2: рендер на экран ────────────────────────────────────────────
     m_direct3D->SetBackBufferRenderTarget();
     m_direct3D->ResetViewport();
-    m_direct3D->BeginScene(0.0f, 0.0f, 0.0f, 1.0f);
 
-    // Основная 3D сцена
+    // ✅ Фон = цвет тумана ТОЛЬКО если туман включён, иначе чёрный
+    if (m_fogSettings.enabled)
+    {
+        m_direct3D->BeginScene(
+            m_fogSettings.color.x,
+            m_fogSettings.color.y,
+            m_fogSettings.color.z, 1.0f);
+    }
+    else
+    {
+        m_direct3D->BeginScene(0.0f, 0.0f, 0.0f, 1.0f);
+    }
+
     Render3DObjects(context, m_viewMatrix, m_projMatrix);
     RenderLightSources(context, m_viewMatrix, m_projMatrix);
     RenderWorldSprites(context, m_viewMatrix, m_projMatrix);
-
-    
 
     XMMATRIX world, ortho;
     m_direct3D->GetWorldMatrix(world);
     m_direct3D->GetOrthoMatrix(ortho);
 
-   
-
-    // ══════════════════════════════════════════
-    // 🔹 UI — NewFrame ОБЯЗАТЕЛЬНО ПЕРВЫЙ
-    // ══════════════════════════════════════════
-    m_editorUI.NewFrame(); // ← сначала NewFrame!
-
+    m_editorUI.NewFrame();
     RenderImGuizmo(m_viewMatrix, m_projMatrix);
 
-    // ✅ ImGui::Begin только ПОСЛЕ NewFrame
     ImGui::Begin("Scene Preview");
     ImGui::Image(
         (ImTextureID)m_renderTexture->GetShaderResourceView(),
@@ -309,17 +308,22 @@ bool ApplicationClass::Frame()
     );
     ImGui::End();
 
+    // ── Fog UI панель ────────────────────────────────────────────────────────
+    ImGui::Begin("Fog Settings");
+    ImGui::Checkbox("Enable Fog", &m_fogSettings.enabled);
+    ImGui::SliderFloat("Fog Start", &m_fogSettings.FOG_START, 0.0f, 50.0f);
+    ImGui::SliderFloat("Fog End",   &m_fogSettings.FOG_END,   1.0f, 200.0f);
+    ImGui::ColorEdit3("Fog Color",  &m_fogSettings.color.x);
+    ImGui::End();
+
     bool imguiWantsMouse = io.WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
     if (!imguiWantsMouse)
-    {
         HandleDragDrop();
-    }
 
     m_editorUI.Update(m_sceneManager);
     m_editorUI.Render();
 
     m_direct3D->EndScene();
-
     return true;
 }
 
@@ -390,13 +394,19 @@ void ApplicationClass::Render3DObjects(
     m_direct3D->TurnZBufferOn();
     m_direct3D->TurnAlphaBlendingOff();
 
+    // ✅ Обновляем FogBuffer во ВСЕХ шейдерах один раз перед рендером сцены
+    ShaderManager::Get().ForEach([&](ShaderBaseClass* shader) {
+        shader->UpdateFog(context, m_fogSettings);
+    });
+
     XMFLOAT4 lightColors[NUM_LIGHTS];
     XMFLOAT4 lightPositions[NUM_LIGHTS];
     SetupLights(lightColors, lightPositions);
 
     int selectedIndex = m_editorUI.GetSelectedIndex();
     m_sceneManager.RenderAll(context, m_direct3D->GetDevice(), view, projection,
-        m_defaultMaterial, lightColors, lightPositions, selectedIndex);
+        m_defaultMaterial, lightColors, lightPositions, selectedIndex,
+        m_fogSettings);
 }
 
 void ApplicationClass::RenderLightSources(
@@ -517,7 +527,7 @@ void ApplicationClass::UpdateInputState()
 
 void ApplicationClass::HandleCameraMovement()
 {
-    // ===== 1) ЗАХВАТ / ОСВОБОДЕНИЕ МЫШИ — ЧЕРЕЗ InputManager =====
+    // ===== 1) ЗАХВАТ / ОСВОБОЖДЕНИЕ МЫШИ — ЧЕРЕЗ InputManager =====
     bool rightDown = m_inputManager.IsCameraMode();  // 🔥 Из InputManager, не m_input!
 
     if (rightDown && !m_inputManager.IsMouseCaptured(m_input)) {

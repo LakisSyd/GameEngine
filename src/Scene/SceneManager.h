@@ -9,6 +9,7 @@
 #include "WorldSpriteClass.h"
 #include "MaterialClass.h"
 #include "Json/json.hpp"
+#include "GameSettings.h"
 
 using namespace DirectX;
 using json = nlohmann::json;
@@ -83,11 +84,11 @@ public:
         ID3D11Device* device,
         XMMATRIX viewMatrix,
         XMMATRIX projectionMatrix,
-        MaterialClass* material,  // ← БЫЛО: LightShaderClass* shader
+        MaterialClass* material,
         XMFLOAT4 lightColors[],
         XMFLOAT4 lightPositions[],
-        int selectedObjectIndex = -1
-    );
+        int selectedObjectIndex,
+        const Settings::FogSettings& fog);  // ← ДОБАВИТЬ
     const XMFLOAT4& GetLightColor(int index) const { return m_lights[index].color; }
     const XMFLOAT4& GetLightPosition(int index) const { return m_lights[index].position; }
     bool IsLightActive(int index) const { return m_lights[index].active; }
@@ -107,6 +108,8 @@ public:
         TextureShaderClass* shader
     );
 
+    void SetFog(const Settings::FogSettings& fog) { m_fogSettings = fog; m_fogSettings.enabled = true; }
+	Settings::FogSettings& GetFogSettings() { return m_fogSettings; }
    
 
 private:
@@ -119,6 +122,8 @@ private:
 
 
     MaterialClass* m_defaultMaterial; 
+
+	Settings::FogSettings m_fogSettings;
 
 
     // === Вспомогательные методы для сериализации ===

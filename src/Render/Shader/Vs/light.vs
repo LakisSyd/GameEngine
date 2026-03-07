@@ -1,3 +1,4 @@
+
 /////////////
 // ОПРЕДЕЛЕНИЯ
 /////////////
@@ -19,6 +20,9 @@ cbuffer LightPositionBuffer : register(b1)
     float4 lightPosition[NUM_LIGHTS];
 };
 
+// ✅ Туман — слот b2 (одинаково во всех шейдерах)
+#include "fog_common.hlsli"
+
 /////////////
 // TYPEDEFS
 /////////////
@@ -36,6 +40,7 @@ struct PixelInputType
     float3 normal : NORMAL;
     // Передаем в пиксельный шейдер массив направлений к лампам
     float3 lightVec[NUM_LIGHTS] : TEXCOORD1; 
+    float  fogFactor : FOG;   // ✅ передаём fogFactor в пиксельный шейдер
 };
 
 /////////////
@@ -51,8 +56,17 @@ PixelInputType LightVertexShader(VertexInputType input)
     
     // Стандартные преобразования
     worldPosition = mul(input.position, worldMatrix);
-    output.position = mul(worldPosition, viewMatrix);
-    output.position = mul(output.position, projectionMatrix);
+    // Мировое пространство
+    worldPosition = mul(input.position, worldMatrix);
+
+    // View-space позиция (ДО проекции) — нужна для расчёта тумана
+    float4 viewPosition = mul(worldPosition, viewMatrix);
+
+    // ✅ Глубина в view-space = расстояние от камеры
+    output.fogFactor = ComputeFogFactor(viewPosition.z);
+
+    // Финальная проекция
+    output.position = mul(viewPosition, projectionMatrix);
     
     output.tex = input.tex;
     

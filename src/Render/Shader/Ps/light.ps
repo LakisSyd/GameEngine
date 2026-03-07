@@ -6,19 +6,29 @@
 /////////////
 // ГЛОБАЛЬНЫЕ ПАРАМЕТРЫ
 /////////////
-Texture2D shaderTexture : register(t0);
-SamplerState SampleType : register(s0);
+Texture2D    shaderTexture : register(t0);
+SamplerState SampleType   : register(s0);
 
-// 🔹 Цвета ламп (Pixel Shader, слот 0)
+// Слот b0 — цвета источников света
 cbuffer LightColorBuffer : register(b0)
 {
     float4 diffuseColor[NUM_LIGHTS];
 };
 
-// 🔹 НОВОЕ: Буфер для фактора выделения (Pixel Shader, слот 2)
-cbuffer SelectedBuffer : register(b2)
+// Слот b1 — позиции источников (передаются и в PS)
+cbuffer LightPositionBuffer : register(b1)
 {
-    float selectedFactor;  // 1.0 = обычное, 2.0 = выделено
+    float4 lightPosition[4];
+};
+
+// Слот b2 — туман (зарезервирован глобально)
+#include "fog_common.hlsli"
+
+// Слот b3 — фактор выделения объекта (был b2, перенесён)
+cbuffer SelectedBuffer : register(b3)
+{
+    float selectedFactor;
+    float3 selectedPadding;
 };
 
 /////////////
@@ -30,6 +40,7 @@ struct PixelInputType
     float2 tex : TEXCOORD0;
     float3 normal : NORMAL;
     float3 lightVec[NUM_LIGHTS] : TEXCOORD1;
+    float fogFactor : FOG;   // ✅ из вершинного шейдера
 };
 
 /////////////
@@ -37,38 +48,32 @@ struct PixelInputType
 /////////////
 float4 LightPixelShader(PixelInputType input) : SV_TARGET
 {
-    float4 textureColor;
+    float4 textureColor = shaderTexture.Sample(SampleType, input.tex);
     float4 colorSum = float4(0.0f, 0.0f, 0.0f, 1.0f);
-    
-    // Получаем цвет текстуры
-    textureColor = shaderTexture.Sample(SampleType, input.tex);
 
-    // 🔥 ЦИКЛ ПО ИСТОЧНИКАМ СВЕТА
+    // Освещение по всем источникам
     for (int i = 0; i < NUM_LIGHTS; i++)
     {
         float intensity = saturate(dot(input.normal, input.lightVec[i]));
         colorSum += diffuseColor[i] * intensity;
     }
 
-    // Ограничиваем яркость
     colorSum = saturate(colorSum);
-    
-    // 🔹 ПРИМЕНЯЕМ ВЫДЕЛЕНИЕ
-    // Вариант 1: Просто ярче (selectedFactor = 2.0)
     float4 finalColor = colorSum * textureColor;
-    
-    // 🔹 АЛЬТЕРНАТИВА: Контурная подсветка (edge highlight)
-if (selectedFactor > 1.5f)
-{
-    // Вычисляем "край" объекта через нормаль и направление к камере
-    float edgeFactor = 1.0 - saturate(dot(input.normal, float3(0, 0, 1)));
-    // Добавляем золотой контур по краям
-    finalColor.rgb = lerp(finalColor.rgb, float3(1.0, 0.85, 0.3), edgeFactor * 0.7);
-}
+
+    // Выделение объекта
+    if (selectedFactor > 1.5f)
+    {
+        float edgeFactor = 1.0 - saturate(dot(input.normal, float3(0, 0, 1)));
+        finalColor.rgb = lerp(finalColor.rgb, float3(1.0, 0.85, 0.3), edgeFactor * 0.7);
+    }
     else
     {
         finalColor.rgb *= selectedFactor;
     }
-    
-    return saturate(finalColor);
+
+    finalColor = saturate(finalColor);
+
+    // ✅ Применяем туман — одна строка для всех шейдеров
+    return ApplyFog(finalColor, input.fogFactor);
 }
