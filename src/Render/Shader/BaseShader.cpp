@@ -2,16 +2,18 @@
 
 ShaderBaseClass::ShaderBaseClass()
     : m_vertexShader(nullptr), m_pixelShader(nullptr)
-    , m_layout(nullptr), m_sampleState(nullptr) {
+    , m_layout(nullptr), m_sampleState(nullptr)
+    , m_fogBuffer(nullptr) {
 }
 
 ShaderBaseClass::~ShaderBaseClass() { Shutdown(); }
 
 void ShaderBaseClass::Shutdown()
 {
-    if (m_sampleState) { m_sampleState->Release(); m_sampleState = nullptr; }
-    if (m_layout) { m_layout->Release(); m_layout = nullptr; }
-    if (m_pixelShader) { m_pixelShader->Release(); m_pixelShader = nullptr; }
+    if (m_fogBuffer)    { m_fogBuffer->Release();    m_fogBuffer    = nullptr; }
+    if (m_sampleState)  { m_sampleState->Release();  m_sampleState  = nullptr; }
+    if (m_layout)       { m_layout->Release();       m_layout       = nullptr; }
+    if (m_pixelShader)  { m_pixelShader->Release();  m_pixelShader  = nullptr; }
     if (m_vertexShader) { m_vertexShader->Release(); m_vertexShader = nullptr; }
 }
 
@@ -28,13 +30,24 @@ bool ShaderBaseClass::CompileShader(
 
     ID3D10Blob* errorBlob = nullptr;
     HRESULT hr = D3DCompileFromFile(
-        filename.c_str(), nullptr, nullptr,
+        filename.c_str(), nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,  // ✅ Включаем поддержку #include
         entryPoint, profile,
         flags, 0, shaderBlob, &errorBlob);
 
     if (FAILED(hr))
     {
-        if (errorBlob) OutputShaderErrorMessage(errorBlob, nullptr, filename.c_str());
+        if (errorBlob)
+        {
+            // Выводим текст ошибки в Output окно VS
+            OutputDebugStringA((char*)errorBlob->GetBufferPointer());
+            OutputShaderErrorMessage(errorBlob, nullptr, filename.c_str());
+        }
+        else
+        {
+            // Файл не найден
+            OutputDebugStringW((L"Shader file not found: " + filename + L"\n").c_str());
+        }
         return false;
     }
     if (errorBlob) errorBlob->Release();
@@ -137,4 +150,33 @@ bool ShaderBaseClass::UpdateConstantBuffer(
         context->PSSetConstantBuffers(slot, 1, &buffer);
 
     return true;
+}
+
+// ✅ Создаёт FogBuffer (слот b2)
+bool ShaderBaseClass::CreateFogBuffer(ID3D11Device* device)
+{
+    return CreateConstantBuffer(device, sizeof(FogBufferType), &m_fogBuffer);
+}
+
+// ✅ Обновляет FogBuffer и привязывает к VS+PS слот 2
+void ShaderBaseClass::UpdateFog(ID3D11DeviceContext* context, const Settings::FogSettings& fog)
+{
+    if (!m_fogBuffer) return;
+
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    if (FAILED(context->Map(m_fogBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
+        return;
+
+    FogBufferType* ptr = (FogBufferType*)mapped.pData;
+    ptr->fogColor   = XMFLOAT4(fog.color.x, fog.color.y, fog.color.z, 1.0f);
+    ptr->fogStart   = fog.enabled ? fog.FOG_START : 100000.0f;
+    ptr->fogEnd     = fog.enabled ? fog.FOG_END   : 100001.0f;
+    ptr->fogEnabled = fog.enabled ? 1.0f : 0.0f;
+    ptr->padding    = 0.0f;
+
+    context->Unmap(m_fogBuffer, 0);
+
+    // Слот b2 — резервируем для тумана во ВСЕХ шейдерах
+    context->VSSetConstantBuffers(2, 1, &m_fogBuffer);
+    context->PSSetConstantBuffers(2, 1, &m_fogBuffer);
 }

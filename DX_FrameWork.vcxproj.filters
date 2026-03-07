@@ -159,8 +159,11 @@
     <ClCompile Include="src\Render\Shader\LightMapShaderClass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
-    <ClCompile Include="RenderTextureClass.cpp">
+    <ClCompile Include="src\Render\Texture\RenderTextureClass.cpp">
       <Filter>Render\RenderToTexture</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\FogShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -254,23 +257,17 @@
     <ClInclude Include="src\Render\Shader\LightMapShaderClass.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
-    <ClInclude Include="RenderTextureClass.h">
-      <Filter>Render\RenderToTexture</Filter>
-    </ClInclude>
-    <ClInclude Include="ShaderManager .h">
+    <ClInclude Include="src\Render\Shader\ShaderManager.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
-    <ClInclude Include="src\Render\Shader\ShaderManager.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="src\Render\Texture\RenderTextureClass.h">
+      <Filter>Render\RenderToTexture</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\FogShaderClass.h">
+      <Filter>Render\Shader</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\Render\Shader\Multitexture.vs">
-      <Filter>Render\Shader</Filter>
-    </None>
-    <None Include="src\Render\Shader\Multitexture.ps">
-      <Filter>Render\Shader</Filter>
-    </None>
     <None Include="src\Render\Shader\Vs\Lightmap.vs">
       <Filter>Файлы ресурсов</Filter>
     </None>
@@ -283,25 +280,30 @@
     <None Include="src\Render\Shader\color.vs">
       <Filter>Файлы ресурсов</Filter>
     </None>
-    <None Include="src\Render\Shader\light.ps">
-      <Filter>Файлы ресурсов</Filter>
-    </None>
-    <None Include="src\Render\Shader\light.vs">
-      <Filter>Файлы ресурсов</Filter>
-    </None>
     <None Include="src\Render\Shader\texture.ps">
       <Filter>Файлы ресурсов</Filter>
     </None>
     <None Include="src\Render\Shader\texture.vs">
       <Filter>Файлы ресурсов</Filter>
     </None>
-    <None Include="normalmap.vs" />
-    <None Include="normalmap.ps" />
     <None Include="src\Render\Shader\Ps\Normalmap.ps">
       <Filter>Файлы ресурсов</Filter>
     </None>
     <None Include="src\Render\Shader\Vs\Normalmap.vs">
       <Filter>Файлы ресурсов</Filter>
     </None>
+    <None Include="src\Render\Shader\Ps\fog.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Vs\fog.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Ps\light.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Vs\light.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\fog_common.hlsli" />
   </ItemGroup>
 </Project>

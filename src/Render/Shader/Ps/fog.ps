@@ -1,0 +1,22 @@
+Texture2D    shaderTexture : register(t0);
+SamplerState SampleType   : register(s0);
+
+// Тот же цвет что и BeginScene(0.5, 0.5, 0.5)
+static const float4 fogColor = float4(0.5f, 0.5f, 0.5f, 1.0f);
+
+struct PixelInputType
+{
+    float4 position : SV_POSITION;
+    float2 tex      : TEXCOORD0;
+    float  fogFactor : FOG;
+};
+
+float4 FogPixelShader(PixelInputType input) : SV_TARGET
+{
+    float4 textureColor = shaderTexture.Sample(SampleType, input.tex);
+
+    // Смешиваем текстуру с цветом тумана по fogFactor
+    float4 finalColor = lerp(fogColor, textureColor, input.fogFactor);
+
+    return finalColor;
+}

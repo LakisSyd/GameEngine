@@ -25,4 +25,12 @@ namespace Settings {
     constexpr bool FULLSCREEN = false;
     constexpr float SCREEN_DEPTH = 1000.0f;
     constexpr float SCREEN_NEAR = 0.3f;
+
+    struct FogSettings {
+        float FOG_START = 5.0f;
+        float FOG_END = 50.0f;
+		XMFLOAT3 color = XMFLOAT3(0.5f, 0.5f, 0.5f);
+		bool enabled = false;
+    };
 }
+

@@ -1,8 +1,9 @@
 ﻿#include "gameobject.h"
 #include "Textureshaderclass.h"
-#include "Multitextureshaderclass.h" // ← добавлено
+#include "Multitextureshaderclass.h"
 #include "LightMapShaderClass.h"
-#include "../Render/Shader/NormalMapShaderClass.h" // ← ДОБАВИТЬ
+#include "NormalMapShaderClass.h"
+#include "FogShaderClass.h" // ← ДОБАВИТЬ
 
 GameObject::GameObject()
     : m_model(nullptr),
@@ -27,7 +28,6 @@ void GameObject::Initialize(AssimpModelClass* model, float x, float y, float z)
 
 void GameObject::Update(float deltaTime)
 {
-    // Логика движения (пока пустая)
 }
 
 void GameObject::SetScale(float x, float y, float z)
@@ -35,7 +35,6 @@ void GameObject::SetScale(float x, float y, float z)
     m_scale = XMFLOAT3(x, y, z);
 }
 
-// 🔥 РЕАЛИЗАЦИЯ НОВОГО МЕТОДА
 XMMATRIX GameObject::GetWorldMatrix()
 {
     XMMATRIX scaleMatrix = XMMatrixScaling(m_scale.x, m_scale.y, m_scale.z);
@@ -44,8 +43,6 @@ XMMATRIX GameObject::GetWorldMatrix()
     XMMATRIX rotZ = XMMatrixRotationZ(m_rotation.z);
     XMMATRIX rotationMatrix = rotX * rotY * rotZ;
     XMMATRIX translationMatrix = XMMatrixTranslation(m_position.x, m_position.y, m_position.z);
-
-    // Порядок: Масштаб -> Вращение -> Перемещение
     return scaleMatrix * rotationMatrix * translationMatrix;
 }
 
@@ -57,43 +54,21 @@ void GameObject::Render(
     MaterialClass* material,
     XMFLOAT4 lightColors[],
     XMFLOAT4 lightPositions[],
+    const Settings::FogSettings& fog,
     bool selected)
 {
     if (!m_model || !material) return;
 
-    // DEBUG: покажем указатель на материал и на шейдер
-    {
-        char buf[256];
-        sprintf_s(buf, "DEBUG: GameObject::Render - material=%p shader=%p\n", (void*)material, (void*)material->GetShader());
-        OutputDebugStringA(buf);
-    }
-
-    // Получаем шейдер из материала
     auto* shader = material->GetShader();
     if (!shader) {
         OutputDebugStringA("DEBUG: GameObject::Render - material->GetShader() == nullptr\n");
         return;
     }
 
-    if (material) {
-        ID3D11ShaderResourceView* debugSrv0 = nullptr;
-        ID3D11ShaderResourceView* debugSrv1 = nullptr;
-        auto* t0 = material->GetTexture(0);
-        auto* t1 = material->GetTexture(1);
-        if (t0) debugSrv0 = t0->GetTexture();
-        if (t1) debugSrv1 = t1->GetTexture();
-        char bufDbg[256];
-        sprintf_s(bufDbg, "DEBUG: material=%p tex0=%p tex1=%p\n", (void*)material, (void*)debugSrv0, (void*)debugSrv1);
-        OutputDebugStringA(bufDbg);
-    }
-
     XMMATRIX worldMatrix = GetWorldMatrix();
 
-    // Попытка привести к LightShaderClass
+    // ── LightShaderClass ─────────────────────────────────────────────────────
     if (auto* lightShader = dynamic_cast<LightShaderClass*>(shader)) {
-        OutputDebugStringA("DEBUG: GameObject::Render - using LightShaderClass\n");
-
-        // Привязываем текстуру из материала (если есть)
         auto* texture = material->GetMainTexture();
         ID3D11ShaderResourceView* textureSRV = texture ? texture->GetTexture() : nullptr;
 
@@ -107,21 +82,12 @@ void GameObject::Render(
         return;
     }
 
+    // ── LightMapShaderClass ──────────────────────────────────────────────────
     if (auto* lightMapShader = dynamic_cast<LightMapShaderClass*>(shader)) {
-        OutputDebugStringA("DEBUG: GameObject::Render - using LightMapShaderClass\n");
-
         ID3D11ShaderResourceView* srv0 = nullptr;
         ID3D11ShaderResourceView* srv1 = nullptr;
-
-        auto* t0 = material->GetTexture(0);
-        if (t0) srv0 = t0->GetTexture();
-
-        auto* t1 = material->GetTexture(1);
-        if (t1) srv1 = t1->GetTexture();
-
-        char buf[256];
-        sprintf_s(buf, "DEBUG: LightMapShader - srv0=%p srv1=%p\n", (void*)srv0, (void*)srv1);
-        OutputDebugStringA(buf);
+        if (auto* t0 = material->GetTexture(0)) srv0 = t0->GetTexture();
+        if (auto* t1 = material->GetTexture(1)) srv1 = t1->GetTexture();
 
         m_model->Render(deviceContext);
         if (!lightMapShader->Render(deviceContext,
@@ -131,33 +97,19 @@ void GameObject::Render(
         {
             OutputDebugStringA("❌ DEBUG: LightMapShader::Render FAILED\n");
         }
-
         ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
         deviceContext->PSSetShaderResources(0, 2, nullSRVs);
         return;
     }
 
-    // Попытка привести к MultiTextureShaderClass
+    // ── MultiTextureShaderClass ──────────────────────────────────────────────
     if (auto* multiShader = dynamic_cast<MultiTextureShaderClass*>(shader)) {
-        OutputDebugStringA("DEBUG: GameObject::Render - using MultiTextureShaderClass\n");
-
         ID3D11ShaderResourceView* srv0 = nullptr;
         ID3D11ShaderResourceView* srv1 = nullptr;
-
-        auto* t0 = material->GetTexture(0);
-        if (t0) srv0 = t0->GetTexture();
-
-        auto* t1 = material->GetTexture(1);
-        if (t1) srv1 = t1->GetTexture();
-
-        {
-            char buf[256];
-            sprintf_s(buf, "DEBUG: GameObject::Render - srv0=%p srv1=%p\n", (void*)srv0, (void*)srv1);
-            OutputDebugStringA(buf);
-        }
+        if (auto* t0 = material->GetTexture(0)) srv0 = t0->GetTexture();
+        if (auto* t1 = material->GetTexture(1)) srv1 = t1->GetTexture();
 
         m_model->Render(deviceContext);
-
         if (!multiShader->Render(deviceContext,
             m_model->GetIndexCount(),
             worldMatrix, viewMatrix, projectionMatrix,
@@ -165,50 +117,22 @@ void GameObject::Render(
         {
             OutputDebugStringA("❌ DEBUG: MultiTextureShader::Render FAILED\n");
         }
-
-        if (material) {
-        ID3D11ShaderResourceView* debugSrv0 = nullptr;
-        ID3D11ShaderResourceView* debugSrv1 = nullptr;
-        auto* t0 = material->GetTexture(0);
-        auto* t1 = material->GetTexture(1);
-        if (t0) debugSrv0 = t0->GetTexture();
-        if (t1) debugSrv1 = t1->GetTexture();
-        char bufDbg[256];
-        sprintf_s(bufDbg, "DEBUG: material=%p tex0=%p tex1=%p\n", (void*)material, (void*)debugSrv0, (void*)debugSrv1);
-        OutputDebugStringA(bufDbg);
-    }
-
-        // Очистка слотов
         ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
         deviceContext->PSSetShaderResources(0, 2, nullSRVs);
         return;
     }
 
-    // Попытка привести к NormalMapShaderClass
+    // ── NormalMapShaderClass ─────────────────────────────────────────────────
     if (auto* normalMapShader = dynamic_cast<NormalMapShaderClass*>(shader)) {
-        OutputDebugStringA("DEBUG: GameObject::Render - using NormalMapShaderClass\n");
-
         ID3D11ShaderResourceView* srv0 = nullptr;
         ID3D11ShaderResourceView* srv1 = nullptr;
+        if (auto* t0 = material->GetTexture(0)) srv0 = t0->GetTexture();
+        if (auto* t1 = material->GetTexture(1)) srv1 = t1->GetTexture();
 
-        auto* t0 = material->GetTexture(0);
-        if (t0) srv0 = t0->GetTexture();
-
-        auto* t1 = material->GetTexture(1);
-        if (t1) srv1 = t1->GetTexture();
-
-        {
-            char buf[256];
-            sprintf_s(buf, "DEBUG: GameObject::Render - srv0=%p srv1=%p\n", (void*)srv0, (void*)srv1);
-            OutputDebugStringA(buf);
-        }
+        XMFLOAT3 lightDir(0.707f, 0.707f, 0.0f);
+        XMFLOAT4 diffuseColor(1.0f, 1.0f, 1.0f, 1.0f);
 
         m_model->Render(deviceContext);
-
-        // 🔥 ИСПРАВЛЕНО: добавлены параметры освещения
-        XMFLOAT3 lightDir(0.707f, 0.707f, 0.0f);  // Направление света (нормализовано)
-        XMFLOAT4 diffuseColor(1.0f, 1.0f, 1.0f, 1.0f);  // Белый свет
-
         if (!normalMapShader->Render(deviceContext,
             m_model->GetIndexCount(),
             worldMatrix, viewMatrix, projectionMatrix,
@@ -217,26 +141,33 @@ void GameObject::Render(
         {
             OutputDebugStringA("❌ DEBUG: NormalMapShader::Render FAILED\n");
         }
-
-        if (material) {
-            ID3D11ShaderResourceView* debugSrv0 = nullptr;
-            ID3D11ShaderResourceView* debugSrv1 = nullptr;
-            auto* t0 = material->GetTexture(0);
-            auto* t1 = material->GetTexture(1);
-            if (t0) debugSrv0 = t0->GetTexture();
-            if (t1) debugSrv1 = t1->GetTexture();
-            char bufDbg[256];
-            sprintf_s(bufDbg, "DEBUG: material=%p tex0=%p tex1=%p\n", (void*)material, (void*)debugSrv0, (void*)debugSrv1);
-            OutputDebugStringA(bufDbg);
-        }
-
-        // Очистка слотов
         ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
         deviceContext->PSSetShaderResources(0, 2, nullSRVs);
         return;
     }
 
-    OutputDebugStringA("DEBUG: GameObject::Render - unsupported shader type\n");
+    // ── FogShaderClass ───────────────────────────────────────────────────────
+    if (auto* fogShader = dynamic_cast<FogShaderClass*>(shader)) {
+        auto* texture = material->GetMainTexture();
+        ID3D11ShaderResourceView* textureSRV = texture ? texture->GetTexture() : nullptr;
+
+        // Если туман выключен — рендерим объект без тумана через textureShader невозможно,
+        // просто пропускаем либо рендерим с нулевым туманом (объект виден полностью)
+        const float fogStart = fog.enabled ? fog.FOG_START : 10000.0f;
+        const float fogEnd = fog.enabled ? fog.FOG_END : 10001.0f;
+
+        m_model->Render(deviceContext);
+        if (!fogShader->Render(deviceContext,
+            m_model->GetIndexCount(),
+            worldMatrix, viewMatrix, projectionMatrix,
+            textureSRV, fogStart, fogEnd))
+        {
+            OutputDebugStringA("❌ DEBUG: FogShader::Render FAILED\n");
+        }
+        ID3D11ShaderResourceView* nullSRVs[1] = { nullptr };
+        deviceContext->PSSetShaderResources(0, 1, nullSRVs);
+        return;
+    }
 }
 
 void GameObject::SetPosition(float x, float y, float z)
