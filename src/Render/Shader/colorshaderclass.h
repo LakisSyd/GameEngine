@@ -3,11 +3,11 @@
 #include <d3dcompiler.h>
 #include <directxmath.h>
 #include <fstream>
-
+#include "BaseShader.h"
 using namespace DirectX;
 using namespace std;
 
-class ColorShaderClass {
+class ColorShaderClass : public ShaderBaseClass {
 private:
 	struct  MatrixBufferType
 	{
@@ -17,6 +17,8 @@ private:
 	};
 
 public:
+
+	ShaderType GetType() const override { return ShaderType::Color; }
 	ColorShaderClass();
 	ColorShaderClass(const ColorShaderClass&);
 	~ColorShaderClass();

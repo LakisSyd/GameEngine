@@ -34,7 +34,8 @@ public:
     bool Render(ID3D11DeviceContext* deviceContext, int indexCount, XMMATRIX worldMatrix,
         XMMATRIX viewMatrix, XMMATRIX projectionMatrix, ID3D11ShaderResourceView* texture1,
         ID3D11ShaderResourceView* texture2);
-
+    
+	ShaderType GetType() const override { return ShaderType::LightMap; }
 
 private:
     bool InitializeShader(ID3D11Device*, HWND, WCHAR* vs, WCHAR* ps);

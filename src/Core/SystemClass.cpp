@@ -1,167 +1,174 @@
-﻿#include "systemclass.h"
+﻿// ============================================================================
+// SystemClass.cpp — «корневой» класс: создаёт окно, запускает игровой цикл
+// ============================================================================
+
+#include "systemclass.h"
 #include <windowsx.h>
 
 #include "backends/imgui_impl_win32.h"
 
+// Объявляем обработчик ImGui, определённый в imgui_impl_win32.cpp
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 Конструктор — инициализация указателей нулём
-// 💡 ВАЖНО: если указатель не обнулить, а инициализация упадёт — в Shutdown()
-//    произойдёт попытка удалить "мусорный" указатель → крах приложения.
-//////////////////////////////////////////////////////////////////////////////// 
+// ============================================================================
+// Конструктор
+// Обнуляем все указатели явно.
+// Если этого не сделать и Initialize() упадёт на середине —
+// Shutdown() попытается удалить мусорные адреса → краш.
+// ============================================================================
 SystemClass::SystemClass()
 {
-    m_Input = nullptr;        // 💡 nullptr вместо 0 — современный C++ стиль
+    m_Input = nullptr;
     m_Application = nullptr;
 }
 
-// 📌 Пустые копирующий конструктор и деструктор
-// 💡 Почему деструктор пустой? См. Shutdown() ниже — очистка делается ЯВНО
+// Пустые: копирование не поддерживается, очистка делается явно в Shutdown()
 SystemClass::SystemClass(const SystemClass& other) {}
 SystemClass::~SystemClass() {}
 
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 Initialize() — запуск всего приложения
-// 🔜 Порядок будущих этапов:
-//    1. Создать окно Windows
-//    2. Инициализировать ввод (клавиатура)
-//    3. Инициализировать DirectX (урок 3+)
-//    4. Загрузить ресурсы (шейдеры, текстуры — уроки 5+)
-//////////////////////////////////////////////////////////////////////////////// 
+// ============================================================================
+// Initialize — запуск всего приложения
+//
+// Порядок инициализации:
+//   1. Создать окно Windows и узнать его размеры
+//   2. Создать подсистему ввода
+//   3. Создать и инициализировать графическую подсистему (ApplicationClass)
+//   4. Передать указатель на InputClass в Application
+// ============================================================================
 bool SystemClass::Initialize()
 {
     int screenWidth = 0, screenHeight = 0;
-    bool result;
 
-    // 📌 Шаг 1: Создать окно Windows и получить его размеры
-    // ⚙️ Параметры передаются по ссылке — функция запишет туда реальные размеры
+    // Шаг 1: создаём окно, screenWidth/screenHeight заполняются функцией
     InitializeWindows(screenWidth, screenHeight);
 
-    // 📌 Шаг 2: Инициализировать подсистему ввода
-    m_Input =  std::make_unique<InputClass>();
-    m_Input->Initialize();  // Обнулить массив клавиш
+    // Шаг 2: подсистема ввода — хранит состояние всех клавиш и кнопок мыши
+    m_Input = std::make_unique<InputClass>();
+    m_Input->Initialize();
 
-    // 📌 Шаг 3: Инициализировать графическую подсистему
-    // 💡 Пока пустая заглушка — в уроке 3 сюда приедет инициализация DirectX
+    // Шаг 3: графическая подсистема — Direct3D, шейдеры, сцена, редактор
     m_Application = new ApplicationClass();
-    result = m_Application->Initialize(screenWidth, screenHeight, m_hwnd);
+    bool result = m_Application->Initialize(screenWidth, screenHeight, m_hwnd);
     if (!result)
-    {
-        return false;  // 🔜 Например, если не удалось создать устройство DirectX
-    }
+        return false;
 
-    m_Application->SetInput(std::move(m_Input.get()));
+    // Шаг 4: ApplicationClass не владеет InputClass — передаём не-владеющий указатель
+    m_Application->SetInput(m_Input.get());
 
     return true;
 }
 
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 Shutdown() — безопасная очистка ресурсов
-// 💡 Почему НЕ в деструкторе?
-//    - Функции вроде ExitProcess() НЕ вызывают деструкторы → утечки
-//    - Явный контроль порядка освобождения (сначала графика, потом окно)
-//    - Возможность перезапуска подсистем без пересоздания объекта
-//////////////////////////////////////////////////////////////////////////////// 
+// ============================================================================
+// Shutdown — безопасная очистка в обратном порядке
+//
+// Порядок важен:
+//   1. Сначала Application (зависит от окна и ввода)
+//   2. Потом Input
+//   3. В конце само окно
+//
+// Почему не в деструкторе?
+    // ExitProcess() не вызывает деструкторы → утечки памяти
+//   - Явный порядок освобождения легче контролировать
+// ============================================================================
 void SystemClass::Shutdown()
 {
-    // 📌 Порядок освобождения ВАЖЕН:
-    //    1. Сначала графика (зависит от окна)
-    //    2. Потом ввод
-    //    3. В конце — само окно
-
     if (m_Application)
     {
-        m_Application->Shutdown();  // 🔜 Освободит ресурсы DirectX (шейдеры, буферы)
+        m_Application->Shutdown();
         delete m_Application;
         m_Application = nullptr;
     }
 
+    // unique_ptr очистится сам, но явно обнуляем для читаемости
     if (m_Input)
-    {
-       
         m_Input = nullptr;
-    }
 
-    ShutdownWindows();  // Уничтожить окно последним
+    ShutdownWindows();
 }
 
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 Run() — главный игровой цикл
-// 💡 Паттерн "игровой цикл с фиксированным шагом" (упрощённая версия)
-// ⚙️ Алгоритм:
-//    Пока не выход:
-//      1. Обработать системные сообщения Windows (мышь, фокус, закрытие)
-//      2. Если не выход — выполнить логику кадра (ввод + рендеринг)
-//////////////////////////////////////////////////////////////////////////////// 
+// ============================================================================
+// Run — главный игровой цикл
+//
+// Используем PeekMessage (неблокирующую проверку сообщений), а не GetMessage,
+// которая блокирует поток до следующего события — в игре нам нужен
+// непрерывный цикл рендеринга.
+//
+// Алгоритм каждой итерации:
+//   1. Обработать все накопившиеся сообщения Windows
+//   2. Проверить WM_QUIT → завершить цикл
+//   3. Иначе → обработать один кадр игры
+// ============================================================================
 void SystemClass::Run()
 {
-    MSG msg;      // Структура сообщения Windows
+    MSG  msg;
     bool done = false;
 
-    // 📌 Обнулить структуру сообщения — хорошая практика безопасности
+    // Подсказка — что добавить в Run() перед циклом:
+    LARGE_INTEGER frequency, lastTime, currentTime;
+    QueryPerformanceFrequency(&frequency);
+    QueryPerformanceCounter(&lastTime);
+
+
     ZeroMemory(&msg, sizeof(MSG));
 
     while (!done)
     {
-        // 📌 PeekMessage — НЕБЛОКИРУЮЩАЯ проверка сообщений
-        // 💡 Важно: GetMessage() БЛОКИРУЕТ поток до получения сообщения → игра "зависнет"
-        //    Для игр нужен непрерывный цикл рендеринга → используем PeekMessage
+
+        QueryPerformanceCounter(&currentTime);
+        float dt = static_cast<float>(currentTime.QuadPart - lastTime.QuadPart)
+            / static_cast<float>(frequency.QuadPart);
+        lastTime = currentTime;
+
+        // Извлекаем сообщения из очереди и отправляем в WndProc
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
         {
-            TranslateMessage(&msg);   // Преобразовать виртуальные коды клавиш
-            DispatchMessage(&msg);    // Отправить сообщение в WndProc
+            TranslateMessage(&msg); // преобразуем виртуальные коды клавиш
+            DispatchMessage(&msg);  // отправляем в WndProc
         }
 
-        // 📌 Проверка выхода из приложения
         if (msg.message == WM_QUIT)
         {
             done = true;
         }
         else
         {
-            // 📌 Выполнить логику одного кадра
-            // 💡 Возвращает false если пользователь нажал Escape или произошла ошибка
-            bool result = Frame();
-            if (!result)
-            {
+            // Frame() возвращает false при нажатии Escape или ошибке рендера
+            if (!Frame(dt))
                 done = true;
-            }
         }
     }
+
     Shutdown();
 }
 
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 Frame() — обработка одного кадра
-// 🔜 В будущем здесь будет:
-//    - Обновление позиций объектов
-//    - Проверка коллизий
-//    - Вызов рендерера
-//////////////////////////////////////////////////////////////////////////////// 
-bool SystemClass::Frame()
+// ============================================================================
+// Frame — логика одного кадра
+//
+// Сначала проверяем ввод, потом передаём управление графической подсистеме.
+// ApplicationClass::Frame() внутри себя вызывает рендер.
+// ============================================================================
+bool SystemClass::Frame(float dt)
 {
-    // 📌 Шаг 1: Проверить ввод пользователя
-    // 💡 Паттерн "опрос состояния" (polling) вместо событийной модели
-    //    Удобно для игр: в любой момент можно спросить "нажата ли клавиша?"
+    // Escape — запросить выход из приложения
     if (m_Input->IsKeyDown(VK_ESCAPE))
-    {
-        return false;  // Пользователь хочет выйти
-    }
+        return false;
 
-    // 📌 Шаг 2: Передать управление графической подсистеме
-    // 💡 ApplicationClass::Frame() вызовет Render() внутри себя
-    return m_Application->Frame();
+    // Обновление и рендер одного кадра в ApplicationClass
+    return m_Application->Frame(dt);
 }
 
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 MessageHandler() — маршрутизация сообщений Windows в объектную модель
-// 💡 Вызывается из глобальной WndProc через ApplicationHandle
-//////////////////////////////////////////////////////////////////////////////// 
+// ============================================================================
+// MessageHandler — маршрутизация сообщений Windows в объектную модель
+//
+// Вызывается из глобальной WndProc через указатель ApplicationHandle.
+// Здесь обрабатываем только то, что нужно нашему движку:
+// клавиатура и мышь. Всё остальное уходит в DefWindowProc.
+// ============================================================================
 LRESULT CALLBACK SystemClass::MessageHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     switch (msg)
     {
+        // ── Клавиатура ────────────────────────────────────────────────────────────
     case WM_KEYDOWN:
         m_Input->KeyDown(static_cast<unsigned int>(wparam));
         return 0;
@@ -170,14 +177,16 @@ LRESULT CALLBACK SystemClass::MessageHandler(HWND hwnd, UINT msg, WPARAM wparam,
         m_Input->KeyUp(static_cast<unsigned int>(wparam));
         return 0;
 
-        // 🔹 Обработка мыши
+        // ── Мышь ─────────────────────────────────────────────────────────────────
     case WM_MOUSEMOVE:
     {
         int mouseX = GET_X_LPARAM(lparam);
         int mouseY = GET_Y_LPARAM(lparam);
 
-        if (m_Input->IsMouseCaptured()) {
-            // При захвате: считаем дельту относительно центра
+        if (m_Input->IsMouseCaptured())
+        {
+            // Режим захвата: считаем дельту относительно центра окна,
+            // затем возвращаем курсор в центр (FPS-управление)
             RECT rect;
             GetClientRect(hwnd, &rect);
             POINT center = {
@@ -190,113 +199,100 @@ LRESULT CALLBACK SystemClass::MessageHandler(HWND hwnd, UINT msg, WPARAM wparam,
 
             m_Input->AddMouseDelta(deltaX, deltaY);
 
-            // Возвращаем курсор в центр
+            // Возвращаем курсор в центр — следующее WM_MOUSEMOVE снова даст дельту
             ClientToScreen(hwnd, &center);
             SetCursorPos(center.x, center.y);
         }
-        else {
-            // Свободная мышь: просто обновляем позицию
+        else
+        {
+            // Обычный режим: просто запоминаем координаты для UI / picking
             m_Input->SetMousePosition(mouseX, mouseY);
         }
         return 0;
     }
 
-    case WM_LBUTTONDOWN:
-        m_Input->MouseLeftDown();
-        return 0;
-
-    case WM_LBUTTONUP:
-        m_Input->MouseLeftUp();
-        return 0;
-
-    case WM_RBUTTONDOWN:
-        m_Input->MouseRightDown();
-        return 0;
-
-    case WM_RBUTTONUP:
-        m_Input->MouseRightUp();
-        return 0;
+    case WM_LBUTTONDOWN: m_Input->MouseLeftDown();  return 0;
+    case WM_LBUTTONUP:   m_Input->MouseLeftUp();    return 0;
+    case WM_RBUTTONDOWN: m_Input->MouseRightDown(); return 0;
+    case WM_RBUTTONUP:   m_Input->MouseRightUp();   return 0;
 
     default:
         return DefWindowProc(hwnd, msg, wparam, lparam);
     }
 }
 
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 InitializeWindows() — создание окна через WinAPI
-// 💡 Подводные камни:
-//    - Стиль WS_POPUP убирает рамки — чистый холст для рендеринга
-//    - BLACK_BRUSH — фон окна (временно, пока нет DirectX)
-//    - ShowCursor(false) — скрываем системный курсор (в играх свой)
-//////////////////////////////////////////////////////////////////////////////// 
+// ============================================================================
+// InitializeWindows — создание окна WinAPI
+//
+// Регистрирует класс окна, создаёт окно нужного размера (полный экран / оконный)
+// и показывает его. Стиль WS_POPUP убирает рамку и заголовок.
+// ============================================================================
 void SystemClass::InitializeWindows(int& screenWidth, int& screenHeight)
 {
-    WNDCLASSEX wc;        // Описание класса окна
-    DEVMODE dmSettings;   // Настройки дисплея (для полноэкранного режима)
-    int posX, posY;       // Позиция окна на экране
+    WNDCLASSEX wc;
+    DEVMODE    dmSettings;
+    int posX, posY;
 
-    // 📌 Сохранить указатель на текущий объект для маршрутизации сообщений
-    // 💡 Это "мост" между процедурным стилем WinAPI и ООП
+    // Сохраняем указатель на себя в глобальной переменной —
+    // это «мост» между WinAPI (C-функции) и ООП (методы класса)
     ApplicationHandle = this;
 
-    // 📌 Получить дескриптор текущего экземпляра приложения
     m_hinstance = GetModuleHandle(nullptr);
+    m_applicationName = L"Engine";
 
-    // 📌 Имя приложения — используется и как заголовок окна, и как имя класса
-    m_applicationName = L"Engine";  // L — префикс для wide-string (Unicode)
-
-    // 📌 Настроить класс окна
+    // Настройка класса окна
     wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-    // 💡 CS_OWNDC — каждое окно получает СОБСТВЕННЫЙ контекст устройства (DC)
-    //    Критически важно для DirectX — иначе могут быть артефакты при рендеринге
-
-    wc.lpfnWndProc = WndProc;          // 📌 Глобальная функция-обработчик
+    // CS_OWNDC: каждое окно получает свой Device Context — критично для DirectX
+    wc.lpfnWndProc = WndProc;
     wc.cbClsExtra = 0;
     wc.cbWndExtra = 0;
     wc.hInstance = m_hinstance;
-    wc.hIcon = LoadIcon(nullptr, IDI_WINLOGO);  // Стандартная иконка Windows
+    wc.hIcon = LoadIcon(nullptr, IDI_WINLOGO);
     wc.hIconSm = wc.hIcon;
     wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)); // Чёрный фон
+    wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
     wc.lpszMenuName = nullptr;
     wc.lpszClassName = m_applicationName;
     wc.cbSize = sizeof(WNDCLASSEX);
 
-    // 📌 Зарегистрировать класс окна в системе
     RegisterClassEx(&wc);
 
-    // 📌 Определить разрешение РАБОЧЕГО СТОЛА пользователя
-    screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    screenHeight = GetSystemMetrics(SM_CYSCREEN);
+    int desktopWidth = GetSystemMetrics(SM_CXSCREEN);
+    int desktopHeight = GetSystemMetrics(SM_CYSCREEN);
 
-    // 📌 Настроить окно в зависимости от режима (полноэкранный / оконный)
     if (FULL_SCREEN)
     {
-        // 📌 Полноэкранный режим — меняем настройки дисплея системы
+        // Полноэкранный режим: меняем разрешение дисплея и занимаем весь экран
+        screenWidth = desktopWidth;
+        screenHeight = desktopHeight;
+
         ZeroMemory(&dmSettings, sizeof(dmSettings));
         dmSettings.dmSize = sizeof(dmSettings);
         dmSettings.dmPelsWidth = static_cast<DWORD>(screenWidth);
         dmSettings.dmPelsHeight = static_cast<DWORD>(screenHeight);
-        dmSettings.dmBitsPerPel = 32;  // 32-битный цвет (стандарт)
+        dmSettings.dmBitsPerPel = 32;
         dmSettings.dmFields = DM_BITSPERPEL | DM_PELSWIDTH | DM_PELSHEIGHT;
 
         ChangeDisplaySettings(&dmSettings, CDS_FULLSCREEN);
-        posX = posY = 0;  // Верхний левый угол
+        posX = posY = 0;
     }
     else
     {
-        // 📌 Оконный режим — фиксированный размер 800x600 по центру экрана
-        screenWidth = 800;
-        screenHeight = 600;
-        posX = (GetSystemMetrics(SM_CXSCREEN) - screenWidth) / 2;
-        posY = (GetSystemMetrics(SM_CYSCREEN) - screenHeight) / 2;
+        // Оконный режим: ограничиваем желаемый размер размером рабочего стола
+        screenWidth = 1920;
+        screenHeight = 1280;
+
+        if (screenWidth > desktopWidth)  screenWidth = desktopWidth;
+        if (screenHeight > desktopHeight) screenHeight = desktopHeight;
+
+        // Центрируем окно (но не уходим за границы экрана)
+        posX = (desktopWidth - screenWidth) / 2;
+        posY = (desktopHeight - screenHeight) / 2;
+        if (posX < 0) posX = 0;
+        if (posY < 0) posY = 0;
     }
 
-    // 📌 Создать окно
-    // 💡 Стили:
-    //    WS_EX_APPWINDOW — окно появится в панели задач
-    //    WS_CLIPSIBLINGS | WS_CLIPCHILDREN — предотвращают артефакты наложения
-    //    WS_POPUP — без рамок и заголовка (чистый холст для рендера)
+    // WS_POPUP: окно без рамки и заголовка — чистый холст для рендера
     m_hwnd = CreateWindowEx(
         WS_EX_APPWINDOW,
         m_applicationName,
@@ -309,27 +305,22 @@ void SystemClass::InitializeWindows(int& screenWidth, int& screenHeight)
         nullptr
     );
 
-    // 📌 Показать окно и активировать его
     ShowWindow(m_hwnd, SW_SHOW);
     SetForegroundWindow(m_hwnd);
     SetFocus(m_hwnd);
 
-    // 📌 Скрыть системный курсор — в играх обычно используется кастомный
-    ShowCursor(true);
+    ShowCursor(true); // системный курсор; в будущем можно заменить кастомным
 }
 
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 ShutdownWindows() — обратные действия к InitializeWindows()
-//////////////////////////////////////////////////////////////////////////////// 
+// ============================================================================
+// ShutdownWindows — обратные действия к InitializeWindows
+// ============================================================================
 void SystemClass::ShutdownWindows()
 {
-    ShowCursor(true);  // Вернуть курсор
+    ShowCursor(true);
 
     if (FULL_SCREEN)
-    {
-        // 📌 Вернуть настройки дисплея к стандартным
-        ChangeDisplaySettings(nullptr, 0);
-    }
+        ChangeDisplaySettings(nullptr, 0); // вернуть исходное разрешение дисплея
 
     DestroyWindow(m_hwnd);
     m_hwnd = nullptr;
@@ -337,18 +328,19 @@ void SystemClass::ShutdownWindows()
     UnregisterClass(m_applicationName, m_hinstance);
     m_hinstance = nullptr;
 
-    ApplicationHandle = nullptr;  // 📌 Обнулить глобальный указатель — безопасность
+    ApplicationHandle = nullptr; // обнуляем глобальный указатель
 }
 
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 WndProc — глобальная функция, вызываемая Windows напрямую
-// 💡 Это "точка входа" для всех сообщений окна. Отсюда мы маршрутизируем
-//    в объектно-ориентированный MessageHandler через глобальный указатель.
-//////////////////////////////////////////////////////////////////////////////// 
+// ============================================================================
+// WndProc — глобальная точка входа для всех сообщений Windows
+//
+// Windows требует обычную C-функцию. Мы перенаправляем вызовы через
+// глобальный указатель ApplicationHandle в метод MessageHandler.
+// ImGui получает сообщения первым, чтобы обрабатывать клики по своим окнам.
+// ============================================================================
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-   
-
+    // Даём ImGui первым обработать сообщение (мышь, клавиатура)
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
         return true;
 
@@ -356,13 +348,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
     {
     case WM_DESTROY:
     case WM_CLOSE:
-        // 📌 Пользователь закрыл окно — запросить выход из приложения
-        PostQuitMessage(0);  // Поместит WM_QUIT в очередь сообщений
+        // Пользователь закрыл окно — WM_QUIT поместится в очередь и Run() завершится
+        PostQuitMessage(0);
         return 0;
 
     default:
-        // 📌 Маршрутизация в объектную модель
-        // 💡 ApplicationHandle должен быть установлен в InitializeWindows()
         return ApplicationHandle->MessageHandler(hwnd, msg, wparam, lparam);
     }
 }

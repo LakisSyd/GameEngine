@@ -23,6 +23,8 @@ public:
 	TextureShaderClass();
 	TextureShaderClass(const TextureShaderClass&);
 	~TextureShaderClass();
+	ShaderType GetType() const override { return ShaderType::Texture; }
+
 
 	bool Initialize(ID3D11Device*, HWND);
 	void Shutdown();

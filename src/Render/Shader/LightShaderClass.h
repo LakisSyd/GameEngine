@@ -17,6 +17,9 @@ public:
     bool Initialize(ID3D11Device* device, HWND hwnd);  // ← Твоя старая сигнатура!
     void Shutdown();
 
+
+     ShaderType GetType() const override { return ShaderType::Light; }
+
     bool Render(  // ← Твоя старая сигнатура!
         ID3D11DeviceContext* deviceContext,
         int indexCount,

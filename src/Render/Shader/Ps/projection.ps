@@ -1,0 +1,33 @@
+Texture2D shaderTexture : register(t0);        // Обычная текстура
+Texture2D projectionTexture : register(t1);   
+SamplerState SampleType : register(s0);
+
+struct PixelInputType
+{
+    float4 position : SV_POSITION;
+    float2 tex : TEXCOORD0;
+    float4 viewPosition : TEXCOORD1;
+};
+
+float4 ProjectionPixelShader(PixelInputType input) : SV_TARGET
+{
+    float2 projectTexCoord;
+    float4 color;
+    
+    // 🎯 Конвертация в UV координаты (0..1)
+    projectTexCoord.x = input.viewPosition.x / input.viewPosition.w / 2.0f + 0.5f;
+    projectTexCoord.y = -input.viewPosition.y / input.viewPosition.w / 2.0f + 0.5f;
+    
+    // 🎯 Проверка: внутри ли проекции?
+    if((saturate(projectTexCoord.x) == projectTexCoord.x) && 
+       (saturate(projectTexCoord.y) == projectTexCoord.y))
+    {
+        color = projectionTexture.Sample(SampleType, projectTexCoord);
+    }
+    else
+    {
+        color = shaderTexture.Sample(SampleType, input.tex);
+    }
+    
+    return color;
+}

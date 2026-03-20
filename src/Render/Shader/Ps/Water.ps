@@ -1,0 +1,60 @@
+////////////////////////////////////////////////////////////////////////////////
+// Water.ps — по туториалу 31 (rastertek.com)
+////////////////////////////////////////////////////////////////////////////////
+
+SamplerState SampleType : register(s0);
+
+Texture2D reflectionTexture : register(t0);
+Texture2D refractionTexture : register(t1);
+Texture2D normalTexture     : register(t2);
+
+cbuffer WaterBuffer : register(b0)
+{
+    float  waterTranslation;
+    float  reflectRefractScale;
+    float2 padding;
+};
+
+struct PixelInputType
+{
+    float4 position           : SV_POSITION;
+    float2 tex                : TEXCOORD0;
+    float4 reflectionPosition : TEXCOORD1;
+    float4 refractionPosition : TEXCOORD2;
+};
+
+float4 WaterPixelShader(PixelInputType input) : SV_TARGET
+{
+    float2 reflectTexCoord;
+    float2 refractTexCoord;
+    float4 normalMap;
+    float3 normal;
+    float4 reflectionColor;
+    float4 refractionColor;
+
+    // Анимация нормал-карты — двигаем UV по Y каждый кадр
+    input.tex.y += waterTranslation;
+
+    // Проективные UV для отражения: clip-space xy/w → [0,1]
+    reflectTexCoord.x =  input.reflectionPosition.x / input.reflectionPosition.w / 2.0f + 0.5f;
+    reflectTexCoord.y = -input.reflectionPosition.y / input.reflectionPosition.w / 2.0f + 0.5f;
+
+    // Проективные UV для преломления
+    refractTexCoord.x =  input.refractionPosition.x / input.refractionPosition.w / 2.0f + 0.5f;
+    refractTexCoord.y = -input.refractionPosition.y / input.refractionPosition.w / 2.0f + 0.5f;
+
+    // Сэмплируем нормал-карту и переводим [0,1] → [-1,+1]
+    normalMap = normalTexture.Sample(SampleType, input.tex);
+    normal    = (normalMap.xyz * 2.0f) - 1.0f;
+
+    // Искажаем UV отражения и преломления нормалью (эффект ряби)
+    reflectTexCoord += normal.xy * reflectRefractScale;
+    refractTexCoord += normal.xy * reflectRefractScale;
+
+    // Сэмплируем текстуры
+    reflectionColor = reflectionTexture.Sample(SampleType, reflectTexCoord);
+    refractionColor = refractionTexture.Sample(SampleType, refractTexCoord);
+
+    // Смешиваем: 0.6 = 60% преломление + 40% отражение
+    return lerp(reflectionColor, refractionColor, 0.6f);
+}

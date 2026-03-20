@@ -40,8 +40,18 @@ public:
         }
 
         TShader* ptr = shader.get();
-        m_shaders[name] = std::move(shader); // ShaderManager владеет шейдером
+        m_shaders[name] = std::unique_ptr<ShaderBaseClass>(shader.release()); // ShaderManager владеет шейдером
         return ptr;
+    }
+
+    // ¬озвращает список имЄн всех загруженных шейдеров
+    std::vector<std::string> GetNames() const
+    {
+        std::vector<std::string> names;
+        names.reserve(m_shaders.size());
+        for (const auto& [name, shader] : m_shaders)
+            names.push_back(name);
+        return names;
     }
 
     // ¬озвращает шейдер с приведением к нужному типу

@@ -1,1 +1,2 @@
-C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Vs\light.vs(24,10-33): error X1507: failed to open source file: '../../fog_common.hlsli'
+C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Vs\pbr.vs(70,9-26): warning X3550: array reference cannot be used as an l-value; not natively addressable, forcing loop to unroll
+C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Vs\pbr.vs(64,5-63): error X4000: variable 'output' used without having been completely initialized

@@ -26,13 +26,13 @@ bool ColorShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
 
 	int error;
 
-	error = wcscpy_s(vsFilename, 128, L"color.vs");
+	error = wcscpy_s(vsFilename, 128, L"src/Render/Shader/Vs/color.vs");
 
 	if (error != 0) {
 		MessageBox(hwnd, L"color.vs not found", L"ERROR", MB_OK);
 	}
 
-	error = wcscpy_s(psFilename, 128, L"color.ps");
+	error = wcscpy_s(psFilename, 128, L"src/Render/Shader/Ps/color.ps");
 
 	if (error != 0) {
 		MessageBox(hwnd, L"color.ps not found", L"ERROR", MB_OK);

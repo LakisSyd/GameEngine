@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <vector>
+#include <memory>
 #include "D3DClass.h"
 #include "cameraclass.h"
 #include "InputClass.h"
@@ -24,18 +25,20 @@
 #include <BitmapClass.h>
 #include "ShaderManager.h"
 #include "FogShaderClass.h"
+#include "FileSystem.h"
+#include <clipplaneshaderclass.h>
+#include "ReflectionShaderClass.h"
+#include <colorshaderclass.h>
+#include "WaterShaderClass.h"
+#include "GlassShaderClass.h"
+#include "../../ProjectionShaderClass.h"
+#include "../../PBRShaderClass.h"
 
-class EditorUI;
-class MaterialClass;
-class NormalMapShaderClass;
-
-// Global graphics settings
-const bool FULL_SCREEN = false;
-const bool VSYNC_ENABLED = true;
+const bool  FULL_SCREEN = false;
+const bool  VSYNC_ENABLED = true;
 const float SCREEN_DEPTH = 1000.0f;
 const float SCREEN_NEAR = 0.3f;
 
-// Picking radii
 const float LIGHT_SPHERE_RADIUS = 0.3f;
 const float OBJECT_SPHERE_RADIUS = 1.5f;
 const float SPRITE_BASE_RADIUS_FACTOR = 0.5f;
@@ -48,106 +51,108 @@ public:
 
     bool Initialize(int screenWidth, int screenHeight, HWND hwnd);
     void Shutdown();
-    bool Frame();
-
-    // Теперь принимает не‑владеющий указатель — Application не владеет InputClass
+    bool Frame(float dt);
+    void SpawnObjectFromRequest(const EditorUI::SpawnRequest& req);
     void SetInput(InputClass* input) { m_input = input; }
 
 private:
-    // Rendering groups
+    // ── Методы рендеринга ────────────────────────────────────────────────────
     void Render3DObjects(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
     void RenderLightSources(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
     void RenderWorldSprites(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
-    void RenderImGuizmo(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix);  // 🔥 НОВЫЙ
 
-    // Helpers
-    void SetupLights(XMFLOAT4 colors[], XMFLOAT4 positions[]);
-    XMMATRIX BuildSpriteMatrix(float x, float y, float z, float w, float h) const;
+    // ── Вспомогательные методы ───────────────────────────────────────────────
+    void     SetupLights(XMFLOAT4 colors[], XMFLOAT4 positions[]);
 
-    // Input handling
-    void UpdateInputState();
-    void HandleCameraMovement();
+    // ── Обработка ввода ──────────────────────────────────────────────────────
+    void HandleCameraMovement(float dt);
     void HandleDragDrop();
 
-
-    // Drag-and-drop helpers
+    // ── Вспомогательные методы drag-and-drop ─────────────────────────────────
     void StartDraggingLight(int index, const CameraClass::Ray& pickRay);
     void StartDraggingSprite(int index, const CameraClass::Ray& pickRay, const XMFLOAT3& spritePos);
     void StartDraggingObject(int index, const CameraClass::Ray& pickRay, const XMFLOAT3& objPos);
     void UpdateDraggedPosition(const CameraClass::Ray& ray);
     void StopDragging();
 
+    XMMATRIX BuildReflectionMatrix(CameraClass* camera, float reflectY);
+
+    void Render3DObjectsExcluding(ID3D11DeviceContext* context,
+        const XMMATRIX& view,
+        const XMMATRIX& proj,
+        int excludeIndex);
+
 private:
-    // Core subsystems
+    // ── Ядро Direct3D ────────────────────────────────────────────────────────
     std::unique_ptr<D3DClass> m_direct3D;
 
+    // ── Камера и ввод ───────────────────────────────────────────────────────
     std::unique_ptr<CameraClass> m_camera;
-    // НЕ владеющий указатель на InputClass — SystemClass остаётся владельцем
     InputClass* m_input = nullptr;
 
+    // ── Render-to-Texture ───────────────────────────────────────────────────
+    RenderTextureClass* m_renderTexture = nullptr;
+    RenderTextureClass* m_reflectionTexture = nullptr;
+    RenderTextureClass* m_refractionTexture = nullptr;
+    BitmapClass* m_renderQuad = nullptr;
 
-    ///TEST
-    RenderTextureClass* m_renderTexture = nullptr; // Целевая текстура
-    BitmapClass* m_renderQuad = nullptr; 
-    
+    // ── Базовые модели ─────────────────────────────────────────────────────
+    AssimpModelClass* m_mainModel = nullptr;
+    AssimpModelClass* m_lightSphereModel = nullptr;
 
-    // Models
-    AssimpModelClass* m_mainModel;
-    AssimpModelClass* m_lightSphereModel;
-    AssimpModelClass* m_floorModel;
-    AssimpModelClass* m_wallModel;
-
-    // Scene management
-    SceneManager m_sceneManager;
+    // ── Сцена ────────────────────────────────────────────────────────────────
+    SceneManager            m_sceneManager;
     std::vector<GameObject> m_lightSpheres;
 
+    // ── Шейдеры (указатели принадлежат ShaderManager) ───────────────────────
+    TextureShaderClass* m_textureShader = nullptr;
+    LightShaderClass* m_lightShader = nullptr;
+    MultiTextureShaderClass* m_multiTextureShader = nullptr;
+    LightMapShaderClass* m_lightMapShader = nullptr;
+    NormalMapShaderClass* m_normalMapShader = nullptr;
+    FogShaderClass* m_fogShader = nullptr;
+    ClipPlaneShaderClass* m_ClipPlaneShader = nullptr;
+    ColorShaderClass* m_ColorShader = nullptr;
+    WaterShaderClass* m_WaterShader = nullptr;
+    GlassShaderClass* m_glassShader = nullptr;
+    ReflectionShaderClass* m_reflectionShader = nullptr;
+    projectionShaderClass* m_projectionShader = nullptr;
+    PBRShaderClass* m_pbrShader = nullptr;
+
+    // ── Размеры экрана ───────────────────────────────────────────────────────
     int m_screenWidth = 0;
     int m_screenHeight = 0;
 
-    // Input state (cached each frame)
-    bool m_isLeftDown;
-    bool m_isRightDown;
-    bool m_isMouseCaptured;
-    int m_mouseX, m_mouseY;
+    // ── Матрицы кадра ────────────────────────────────────────────────────────
     XMMATRIX m_viewMatrix;
     XMMATRIX m_projMatrix;
-    int m_clickStartX, m_clickStartY;
-    bool m_potentialDrag;
-    const int m_dragThreshold = 5;
 
-    // Drag-and-drop state
-    bool m_isDragging;
-    int m_draggedObjectIndex;
-    int m_draggedLightIndex;
-    int m_draggedSpriteIndex;
-    float m_dragDistance;
-    XMFLOAT3 m_dragOffset;
+    // ── Состояние активного перетаскивания ───────────────────────────────────
+    bool     m_isDragging = false;
+    int      m_draggedObjectIndex = -1;
+    int      m_draggedLightIndex = -1;
+    int      m_draggedSpriteIndex = -1;
+    float    m_dragDistance = 0.0f;
+    XMFLOAT3 m_dragOffset = { 0, 0, 0 };
 
+    PickingSystem::PickResult m_pendingPickResult;
 
+    // ── Подсистемы ───────────────────────────────────────────────────────────
+    PickingSystem m_pickingSystem;
+    InputManager  m_inputManager;
 
-    PickingSystem m_pickingSystem;    // ← Выбор объектов
-    InputManager m_inputManager;      // ← Обработка ввода
-
-    // UI
+    // ── Редактор ─────────────────────────────────────────────────────────────
     EditorUI m_editorUI;
 
-    //Material
+    // ── Материал по умолчанию ────────────────────────────────────────────────
+    MaterialClass* m_defaultMaterial = nullptr;
 
-    MaterialClass* m_defaultMaterial;
+    // Фоллбек-текстура для defaultMaterial (stone.tga)
+    // MaterialClass не владеет текстурами, поэтому освобождаем отдельно.
+    TextureClass* m_defaultTexture = nullptr;
 
-    //Fog
-
-	Settings::FogSettings m_fogSettings;
-    
-
-    // Shaders — теперь НЕ хранятся здесь, только кэшированные указатели для удобства
-    TextureShaderClass*       m_textureShader   = nullptr; // ← просто кэш из ShaderManager
-    LightShaderClass*         m_lightShader     = nullptr;
-    MultiTextureShaderClass*  m_multiTextureShader = nullptr;
-    LightMapShaderClass*      m_lightMapShader  = nullptr;
-    NormalMapShaderClass*     m_normalMapShader = nullptr;
-	FogShaderClass*           m_fogShader = nullptr;
+    // ── Файловая система ─────────────────────────────────────────────────────
+    std::unique_ptr<FileSystem> m_gameFs;
 };
 
-// Utility function for ray-sphere intersection
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);

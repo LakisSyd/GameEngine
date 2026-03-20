@@ -2,14 +2,24 @@
 #include <vector>
 #include <array>
 #include <memory>
+#include <unordered_map>
 #include <DirectXMath.h>
-#include "gameobject.h"
+
+// ============================================================================
+// НЕДЕЛЯ 4: gameobject.h нужен только для light-сфер (SetupLightSpheres).
+// GetObject(int) удалён — EditorUI и PickingSystem перешли на Entity.
+// m_legacyObjects удалён.
+// ============================================================================
+#include "gameobject.h"       // только для light-сфер (SetupLightSpheres / RenderLightSpheres)
 #include "assimpmodelclass.h"
 #include "lightshaderclass.h"
 #include "WorldSpriteClass.h"
+#include "clipplaneshaderclass.h"
 #include "MaterialClass.h"
 #include "Json/json.hpp"
 #include "GameSettings.h"
+#include "ECSRegistry .h"
+#include "RenderSystem.h"
 
 using namespace DirectX;
 using json = nlohmann::json;
@@ -21,121 +31,199 @@ using json = nlohmann::json;
 class SceneManager
 {
 public:
-    // 🔹 Данные источника света (совместимы с шейдером)
-    struct LightSource {
-        XMFLOAT4 position;  // xyz = позиция, w = 1.0
-        XMFLOAT4 color;     // rgb = цвет, a = интенсивность
-        bool active;
-        int attachedToObjectIndex;  // 🔹 Если >= 0 — свет следует за объектом
-        XMFLOAT3 offset;            // Смещение относительно объекта
+    struct LightSource
+    {
+        XMFLOAT4 position;
+        XMFLOAT4 color;
+        bool     active;
+        int      attachedToObjectIndex;
+        XMFLOAT3 offset;
 
         LightSource()
-            : position(0, 0, 0, 1), color(0, 0, 0, 1), active(false),
-            attachedToObjectIndex(-1), offset(0, 0, 0) {
+            : position(0, 0, 0, 1), color(0, 0, 0, 1), active(false)
+            , attachedToObjectIndex(-1), offset(0, 0, 0) {
         }
     };
 
     SceneManager();
     ~SceneManager();
 
-    // === Управление объектами ===
-    int SpawnObject(AssimpModelClass* model, float x, float y, float z);
-    bool RemoveObject(int index);
-    void Clear();
-    GameObject* GetObject(int index);
-    size_t GetObjectCount() const { return m_objects.size(); }
+    // =========================================================================
+    // Управление объектами
+    // =========================================================================
+    Entity SpawnObject(AssimpModelClass* model, float x, float y, float z);
+    bool   RemoveObject(Entity entity);
+    void   Clear();
 
+    void SetRefractionSRV(ID3D11ShaderResourceView* srv) { m_refractionSRV = srv; }
 
-    // ================  СОХРАНЕНИЕ И ЗАГРУЗКА СЦЕНЫ ======
+    // ── ECS-доступ ────────────────────────────────────────────────────────────
+    TransformComponent* GetObjectTransform(Entity entity)
+    {
+        return m_registry.GetComponent<TransformComponent>(entity);
+    }
 
+    MeshRendererComponent* GetObjectMesh(Entity entity)
+    {
+        return m_registry.GetComponent<MeshRendererComponent>(entity);
+    }
+
+    void SetObjectMaterial(Entity entity, MaterialClass* mat)
+    {
+        if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
+            mesh->material = mat;
+    }
+
+    bool IsObjectActive(Entity entity)
+    {
+        return m_registry.HasComponent<ActiveComponent>(entity);
+    }
+
+    // Количество объектов (MeshRenderer + Active)
+    size_t GetObjectCount() const
+    {
+        return const_cast<ECSRegistry&>(m_registry)
+            .GetComponents<MeshRendererComponent>().GetCount();
+    }
+
+    // =========================================================================
+    // Сохранение / Загрузка
+    // =========================================================================
     bool SaveScene(const std::string& filename);
-    bool LoadScene(const std::string& filename, ID3D11Device* device, ID3D11DeviceContext* deviceContext);
+    bool LoadScene(const std::string& filename,
+        ID3D11Device* device, ID3D11DeviceContext* deviceContext);
 
-
-    
-
-    // === Управление светом 🔹 ===
+    // =========================================================================
+    // Свет
+    // =========================================================================
     void SetLight(int index, const XMFLOAT3& pos, const XMFLOAT4& color, bool active = true);
     void AttachLightToObject(int lightIndex, int objectIndex, const XMFLOAT3& offset = { 0,0,0 });
     void DetachLight(int lightIndex);
-    void UpdateLights();  // 🔹 Вызывать перед рендером!
+    void UpdateLights();
 
-    // ===== Управление спрайтами =====
+    const XMFLOAT4& GetLightColor(int i) const { return m_lights[i].color; }
+    const XMFLOAT4& GetLightPosition(int i) const { return m_lights[i].position; }
+    bool            IsLightActive(int i) const { return m_lights[i].active; }
 
-    int SpawnSprite(ID3D11Device* device, ID3D11DeviceContext* deviceContext, const char* textureName,
+    // Convenience setters for individual light properties (used by EditorUI)
+    void SetLightPosition(int i, const XMFLOAT3& pos)
+    {
+        if (i < 0 || i >= NUM_LIGHTS) return;
+        m_lights[i].position = XMFLOAT4(pos.x, pos.y, pos.z, 1.0f);
+    }
+    void SetLightColor(int i, const XMFLOAT4& color)
+    {
+        if (i < 0 || i >= NUM_LIGHTS) return;
+        m_lights[i].color = color;
+    }
+    void SetLightActive(int i, bool active)
+    {
+        if (i < 0 || i >= NUM_LIGHTS) return;
+        m_lights[i].active = active;
+    }
+
+    // =========================================================================
+    // Спрайты
+    // =========================================================================
+    int               SpawnSprite(ID3D11Device* device, ID3D11DeviceContext* deviceContext,
+        const char* textureName,
         float x, float y, float z, float width, float height);
-    bool RemoveSprite(int index);
+    bool              RemoveSprite(int index);
     WorldSpriteClass* GetSprite(int index);
-    void RenderSprites(ID3D11DeviceContext* context, XMMATRIX view, XMMATRIX projection, TextureShaderClass* shader);
-    AssimpModelClass* GetOrCreateModel(const std::string& path,
-        ID3D11Device* device, ID3D11DeviceContext* deviceContext,
-        const std::string& texturePath = "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\texture\\stone.tga");
-    int GetSpriteCount() {
-        return static_cast<int>(m_sprites.size());
-    
-}
+    int               GetSpriteCount() { return static_cast<int>(m_sprites.size()); }
+    void              RenderSprites(ID3D11DeviceContext* context,
+        XMMATRIX view, XMMATRIX projection,
+        TextureShaderClass* shader);
 
-    // === Обновление и рендеринг ===
+    // =========================================================================
+    // Кэш моделей
+    // =========================================================================
+    AssimpModelClass* GetOrCreateModel(
+        const std::string& path,
+        ID3D11Device* device, ID3D11DeviceContext* deviceContext,
+        const std::string& texturePath =
+        "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\texture\\stone.tga");
+
+    // Set shader on an object's material.
+    // device is required to create a material if the object doesn't have one yet.
+    void SetObjectShader(Entity entity, ShaderBaseClass* shader, ID3D11Device* device = nullptr);
+
+    void SetObjectTexture(Entity entity, int slot, const std::string& path, ID3D11Device* device, ID3D11DeviceContext* context);
+
+
+
+    // =========================================================================
+    // Обновление и рендер
+    // =========================================================================
     void UpdateAll(float deltaTime);
 
-    // 🔥 ИЗМЕНЕНО: LightShaderClass* → MaterialClass*
-    void RenderAll(
+    void RenderAllECS(
         ID3D11DeviceContext* context,
-        ID3D11Device* device,
-        XMMATRIX viewMatrix,
-        XMMATRIX projectionMatrix,
-        MaterialClass* material,
-        XMFLOAT4 lightColors[],
-        XMFLOAT4 lightPositions[],
-        int selectedObjectIndex,
-        const Settings::FogSettings& fog);  // ← ДОБАВИТЬ
-    const XMFLOAT4& GetLightColor(int index) const { return m_lights[index].color; }
-    const XMFLOAT4& GetLightPosition(int index) const { return m_lights[index].position; }
-    bool IsLightActive(int index) const { return m_lights[index].active; }
+        const XMMATRIX& viewMatrix,
+        const XMMATRIX& projectionMatrix,
+        MaterialClass* defaultMaterial,
+        XMFLOAT4        lightColors[],
+        XMFLOAT4        lightPositions[],
+        const Settings::FogSettings& fog,
+        Entity selectedEntity = INVALID_ENTITY, XMFLOAT3 cameraPos = { 0.0f, 0.0f, 0.0f });
 
+    void RenderAllECSExcluding(
+        ID3D11DeviceContext* context,
+        const XMMATRIX& viewMatrix,
+        const XMMATRIX& projectionMatrix,
+        MaterialClass* defaultMaterial,
+        XMFLOAT4        lightColors[],
+        XMFLOAT4        lightPositions[],
+        const Settings::FogSettings& fog,
+        Entity excludeEntity = INVALID_ENTITY);
+
+    // =========================================================================
+    // Light-сферы (только для редактора, не часть ECS)
+    // =========================================================================
+    void SetupLightSpheres(std::vector<GameObject>& spheres, AssimpModelClass* model);
+    void RenderLightSpheres(std::vector<GameObject>& spheres,
+        ID3D11DeviceContext* context,
+        XMMATRIX view, XMMATRIX projection,
+        TextureShaderClass* shader);
+
+    // =========================================================================
+    // Настройки
+    // =========================================================================
     void SetDefaultMaterial(MaterialClass* mat) { m_defaultMaterial = mat; }
     MaterialClass* GetDefaultMaterial() const { return m_defaultMaterial; }
     void SetFallbackModel(AssimpModelClass* model) { m_mainModelFallback = model; }
-
-
-    // === Визуализация источников света ===
-    void SetupLightSpheres(std::vector<GameObject>& spheres, AssimpModelClass* model);
-    void RenderLightSpheres(
-        std::vector<GameObject>& spheres,
-        ID3D11DeviceContext* context,
-        XMMATRIX view,
-        XMMATRIX projection,
-        TextureShaderClass* shader
-    );
+    ECSRegistry& GetECSRegistry() { return m_registry; }
 
     void SetFog(const Settings::FogSettings& fog) { m_fogSettings = fog; m_fogSettings.enabled = true; }
-	Settings::FogSettings& GetFogSettings() { return m_fogSettings; }
-   
+    Settings::FogSettings& GetFogSettings() { return m_fogSettings; }
+
+    // Convenience fog accessors (used by EditorUI)
+    XMFLOAT3 GetFogColor() const { return m_fogSettings.color; }
+    float    GetFogStart() const { return m_fogSettings.FOG_START; }
+    float    GetFogEnd()   const { return m_fogSettings.FOG_END; }
+    void SetFogColor(const XMFLOAT3& color) { m_fogSettings.color = color; m_fogSettings.enabled = true; }
+    void SetFogStart(float start) { m_fogSettings.FOG_START = start; m_fogSettings.enabled = true; }
+    void SetFogEnd(float end) { m_fogSettings.FOG_END = end; m_fogSettings.enabled = true; }
+
+
 
 private:
-    std::vector<GameObject> m_objects;
-    std::array<LightSource, NUM_LIGHTS> m_lights; 
-    std::vector<std::unique_ptr<WorldSpriteClass>> m_sprites;
+    ECSRegistry m_registry;
 
+    std::array<LightSource, NUM_LIGHTS>            m_lights;
+    std::vector<std::unique_ptr<WorldSpriteClass>>  m_sprites;
     std::unordered_map<std::string, AssimpModelClass*> m_modelCache;
-    AssimpModelClass* m_mainModelFallback;
 
+    AssimpModelClass* m_mainModelFallback = nullptr;
+    MaterialClass* m_defaultMaterial = nullptr;
+    Settings::FogSettings m_fogSettings;
 
-    MaterialClass* m_defaultMaterial; 
+    json   SerializeObject(Entity entity, int id);
+    Entity DeserializeObject(const json& j, ID3D11Device* device,
+        ID3D11DeviceContext* deviceContext);
+    json   SerializeLight(const LightSource& light, int index);
+    void   DeserializeLight(const json& j, LightSource& light);
+    json   SerializeMaterial(const MaterialClass* mat);
 
-	Settings::FogSettings m_fogSettings;
-
-
-    // === Вспомогательные методы для сериализации ===
-
-    // Объекты
-    json SerializeObject(const GameObject& obj, int id);
-    GameObject DeserializeObject(const json& j, ID3D11Device* device, ID3D11DeviceContext* deviceContext);
-
-    // Свет
-    json SerializeLight(const LightSource& light, int index);
-    void DeserializeLight(const json& j, LightSource& light);
-
-    // Материалы (опционально, если хочешь сохранять и их)
-    json SerializeMaterial(const MaterialClass* mat);
+    ID3D11ShaderResourceView* m_refractionSRV = nullptr;
 };

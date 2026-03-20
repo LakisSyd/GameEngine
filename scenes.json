@@ -1,0 +1,66 @@
+{
+    "objects": [
+        {
+            "id": 0,
+            "model_path": "assets/model/sphere.obj",
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "id": 1,
+            "model_path": "assets/model/sphere.obj",
+            "position": {
+                "x": 3.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "id": 2,
+            "model_path": "assets/model/plane.obj",
+            "position": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        }
+    ],
+    "scene_name": "MyLevel",
+    "version": 1
+}
