@@ -1,65 +1,41 @@
 ﻿#pragma once
 #include <DirectXMath.h>
 #include "assimpmodelclass.h"
-#include "materialclass.h"  // ← БЫЛО: #include "lightshaderclass.h" и "textureshaderclass.h"
-#include "GameSettings.h"
 class TextureShaderClass;
 using namespace DirectX;
 
-#ifndef NUM_LIGHTS
-#define NUM_LIGHTS 4
-#endif
-
+// ============================================================================
+// GameObject — легковесная обёртка для визуальных индикаторов (light-сферы).
+// НЕ является частью ECS. Вся игровая логика — в ECS (TransformComponent и т.д.)
+// ============================================================================
 class GameObject
 {
-private:
-    AssimpModelClass* m_model;
-    MaterialClass* m_material;  // ← НОВОЕ: вместо прямого указателя на шейдер
-    XMFLOAT3 m_position;
-    XMFLOAT3 m_rotation;
-    XMFLOAT3 m_scale;
-    float m_boundingRadius;
-
 public:
     GameObject();
     ~GameObject();
 
     void Initialize(AssimpModelClass* model, float x, float y, float z);
-    void Update(float deltaTime);
 
-    void Render(
-        ID3D11DeviceContext* deviceContext,
-        ID3D11Device* device,
-        XMMATRIX viewMatrix,
-        XMMATRIX projectionMatrix,
-        MaterialClass* material,
-        XMFLOAT4 lightColors[],
-        XMFLOAT4 lightPositions[],
-        const Settings::FogSettings& fog,
-        bool selected = false
-		
-    );
-
-    // 🔥 RenderSimple: оставляем старую сигнатуру для спрайтов!
+    // Упрощённый рендер с TextureShader (для сфер-индикаторов света)
     void RenderSimple(ID3D11DeviceContext* context,
         XMMATRIX view,
         XMMATRIX proj,
-        TextureShaderClass* shader);  // ← Оставляем TextureShaderClass*
-
-    void SetScale(float x, float y, float z);
-    float GetBoundingRadius() const { return m_boundingRadius; }
-    void SetBoundingRadius(float radius) { m_boundingRadius = radius; }
+        TextureShaderClass* shader);
 
     XMMATRIX GetWorldMatrix();
 
-    // 🔥 Render: теперь принимает MaterialClass* и массивы света
-  
-    // 🔥 Геттеры/сеттеры для материала
-    void SetMaterial(MaterialClass* material) { m_material = material; }
-    MaterialClass* GetMaterial() const { return m_material; }
-
+    // ── Сеттеры / геттеры ────────────────────────────────────────────────────
     void SetPosition(float x, float y, float z);
-    void Rotate(float x, float y, float z);
-    void SetRotation(float x, float y, float z);
+    void SetPosition(XMFLOAT3 pos);
+    void SetScale(float x, float y, float z);
+    void SetScale(XMFLOAT3 s);
+
     XMFLOAT3 GetPosition() const { return m_position; }
+    XMFLOAT3 GetScale()    const { return m_scale; }
+
+private:
+    AssimpModelClass* m_model = nullptr;
+    XMFLOAT3 m_position = { 0, 0, 0 };
+    XMFLOAT3 m_rotation = { 0, 0, 0 };
+    XMFLOAT3 m_scale = { 1, 1, 1 };
 };

@@ -1,0 +1,41 @@
+SamplerState SampleType : register(s0);
+
+Texture2D colorTexture      : register(t0); // цвет поверхности
+Texture2D normalTexture     : register(t1); // normal map для искажения
+Texture2D refractionTexture : register(t2); // сцена за стеклом
+
+cbuffer GlassBuffer : register(b0)
+{
+    float  refractionScale;
+    float3 padding;
+};
+
+struct PixelInputType
+{
+    float4 position           : SV_POSITION;
+    float2 tex                : TEXCOORD0;
+    float4 refractionPosition : TEXCOORD1;
+};
+
+float4 GlassPixelShader(PixelInputType input) : SV_TARGET
+{
+    // 1. Проецируем clip-space координаты в UV (0..1)
+    float2 refractTexCoord;
+    refractTexCoord.x =  input.refractionPosition.x / input.refractionPosition.w * 0.5f + 0.5f;
+    refractTexCoord.y = -input.refractionPosition.y / input.refractionPosition.w * 0.5f + 0.5f;
+
+    // 2. Читаем normal map, декодируем из [0,1] в [-1,+1]
+    float4 normalMap = normalTexture.Sample(SampleType, input.tex);
+    float2 normal    = (normalMap.xy * 2.0f) - 1.0f;
+
+    // 3. Смещаем UV рефракции на величину normal * scale
+    //    clamp чтобы не выйти за границы текстуры
+    refractTexCoord = clamp(refractTexCoord + normal * refractionScale, 0.001f, 0.999f);
+
+    // 4. Сэмплируем сцену за стеклом и цвет поверхности
+    float4 refractionColor = refractionTexture.Sample(SampleType, refractTexCoord);
+    float4 textureColor    = colorTexture.Sample(SampleType, input.tex);
+
+    // 5. Смешиваем: 0.0 = полностью refraction, 1.0 = полностью color
+    return lerp(refractionColor, textureColor, 0.5f);
+}

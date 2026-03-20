@@ -58,6 +58,9 @@
     <Filter Include="Render\RenderToTexture">
       <UniqueIdentifier>{76bb6648-870d-481d-a7d7-eee8958a5471}</UniqueIdentifier>
     </Filter>
+    <Filter Include="ECS">
+      <UniqueIdentifier>{acee98c7-e229-46d5-bf21-6a60fd80ce35}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Core\ApplicationClass.cpp">
@@ -165,6 +168,24 @@
     <ClCompile Include="src\Render\Shader\FogShaderClass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
+    <ClCompile Include="src\Render\Shader\clipplaneshaderclass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\GlassShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\ReflectionShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\WaterShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="PBRShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="ProjectionShaderClass.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\HelpFunc\helper.h">
@@ -266,6 +287,48 @@
     <ClInclude Include="src\Render\Shader\FogShaderClass.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
+    <ClInclude Include="src\ECS\ECSRegistry .h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\ECSTypes.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\RenderMesh.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\RenderSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\TransformSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\Components\ComponentManager.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\Components\Components.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\Components\IComponentPull.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\clipplaneshaderclass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\GlassShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\ReflectionShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\WaterShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="PBRShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="ProjectionShaderClass.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\Render\Shader\Vs\Lightmap.vs">
@@ -305,5 +368,11 @@
       <Filter>Файлы ресурсов</Filter>
     </None>
     <None Include="src\Render\Shader\fog_common.hlsli" />
+    <None Include="src\Render\Shader\Ps\pbr.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Vs\pbr.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
   </ItemGroup>
 </Project>

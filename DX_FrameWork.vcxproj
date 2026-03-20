@@ -26,6 +26,8 @@
     <ClCompile Include="lib\imgui-master\imgui_draw.cpp" />
     <ClCompile Include="lib\imgui-master\imgui_tables.cpp" />
     <ClCompile Include="lib\imgui-master\imgui_widgets.cpp" />
+    <ClCompile Include="ProjectionShaderClass.cpp" />
+    <ClCompile Include="PBRShaderClass.cpp" />
     <ClCompile Include="src\Config\PickingSystem.cpp" />
     <ClCompile Include="src\Core\ApplicationClass.cpp" />
     <ClCompile Include="src\Core\main.cpp" />
@@ -42,13 +44,17 @@
     <ClCompile Include="src\Render\Model\modelclass.cpp" />
     <ClCompile Include="src\Render\Model\ModelManager.cpp" />
     <ClCompile Include="src\Render\Shader\BaseShader.cpp" />
+    <ClCompile Include="src\Render\Shader\clipplaneshaderclass.cpp" />
     <ClCompile Include="src\Render\Shader\colorshaderclass.cpp" />
     <ClCompile Include="src\Render\Shader\FogShaderClass.cpp" />
+    <ClCompile Include="src\Render\Shader\GlassShaderClass.cpp" />
     <ClCompile Include="src\Render\Shader\LightMapShaderClass.cpp" />
     <ClCompile Include="src\Render\Shader\LightShaderClass.cpp" />
     <ClCompile Include="src\Render\Shader\Multitextureshaderclass.cpp" />
     <ClCompile Include="src\Render\Shader\NormalMapShaderClass.cpp" />
+    <ClCompile Include="src\Render\Shader\ReflectionShaderClass.cpp" />
     <ClCompile Include="src\Render\Shader\Textureshaderclass.cpp" />
+    <ClCompile Include="src\Render\Shader\WaterShaderClass.cpp" />
     <ClCompile Include="src\Render\Texture\RenderTextureClass.cpp" />
     <ClCompile Include="src\Render\Texture\Textureclass.cpp" />
     <ClCompile Include="src\Scene\gameobject.cpp" />
@@ -59,10 +65,20 @@
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h" />
     <ClInclude Include="lib\imgui-master\ImGuizmo.h" />
+    <ClInclude Include="ProjectionShaderClass.h" />
+    <ClInclude Include="PBRShaderClass.h" />
     <ClInclude Include="src\Config\GameSettings.h" />
     <ClInclude Include="src\Config\PickingSystem.h" />
     <ClInclude Include="src\Core\ApplicationClass.h" />
     <ClInclude Include="src\Core\SystemClass.h" />
+    <ClInclude Include="src\ECS\Components\ComponentManager.h" />
+    <ClInclude Include="src\ECS\Components\Components.h" />
+    <ClInclude Include="src\ECS\Components\IComponentPull.h" />
+    <ClInclude Include="src\ECS\ECSRegistry .h" />
+    <ClInclude Include="src\ECS\ECSTypes.h" />
+    <ClInclude Include="src\ECS\System\RenderMesh.h" />
+    <ClInclude Include="src\ECS\System\RenderSystem.h" />
+    <ClInclude Include="src\ECS\System\TransformSystem.h" />
     <ClInclude Include="src\Editor\EditorUI.h" />
     <ClInclude Include="src\HelpFunc\helper.h" />
     <ClInclude Include="src\Input\InputClass.h" />
@@ -76,14 +92,18 @@
     <ClInclude Include="src\Render\Model\modelclass.h" />
     <ClInclude Include="src\Render\Model\ModelManager.h" />
     <ClInclude Include="src\Render\Shader\BaseShader.h" />
+    <ClInclude Include="src\Render\Shader\clipplaneshaderclass.h" />
     <ClInclude Include="src\Render\Shader\colorshaderclass.h" />
     <ClInclude Include="src\Render\Shader\FogShaderClass.h" />
+    <ClInclude Include="src\Render\Shader\GlassShaderClass.h" />
     <ClInclude Include="src\Render\Shader\LightMapShaderClass.h" />
     <ClInclude Include="src\Render\Shader\LightShaderClass.h" />
     <ClInclude Include="src\Render\Shader\Multitextureshaderclass.h" />
     <ClInclude Include="src\Render\Shader\NormalMapShaderClass.h" />
+    <ClInclude Include="src\Render\Shader\ReflectionShaderClass.h" />
     <ClInclude Include="src\Render\Shader\ShaderManager.h" />
     <ClInclude Include="src\Render\Shader\Textureshaderclass.h" />
+    <ClInclude Include="src\Render\Shader\WaterShaderClass.h" />
     <ClInclude Include="src\Render\Texture\RenderTextureClass.h" />
     <ClInclude Include="src\Render\Texture\Textureclass.h" />
     <ClInclude Include="src\Scene\gameobject.h" />
@@ -98,12 +118,14 @@
     <None Include="src\Render\Shader\Ps\light.ps" />
     <None Include="src\Render\Shader\Ps\Lightmap.ps" />
     <None Include="src\Render\Shader\Ps\Normalmap.ps" />
+    <None Include="src\Render\Shader\Ps\pbr.ps" />
     <None Include="src\Render\Shader\texture.ps" />
     <None Include="src\Render\Shader\texture.vs" />
     <None Include="src\Render\Shader\Vs\fog.vs" />
     <None Include="src\Render\Shader\Vs\light.vs" />
     <None Include="src\Render\Shader\Vs\Lightmap.vs" />
     <None Include="src\Render\Shader\Vs\Normalmap.vs" />
+    <None Include="src\Render\Shader\Vs\pbr.vs" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -189,7 +211,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Config;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Material;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\assimp;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\imgui-master;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene\Light;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Texture;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Model;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Camera;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\BitMap;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Input;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\HelpFunc;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Editor;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\System;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\Components;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Config;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Material;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\assimp;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\imgui-master;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene\Light;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Texture;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Model;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Camera;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\BitMap;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Input;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\HelpFunc;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Editor;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>

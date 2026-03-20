@@ -20,12 +20,11 @@ bool MaterialClass::Initialize(ID3D11Device* device, const std::wstring& name)
 {
     m_name = name;
     m_shader = nullptr;
-    m_textures.resize(1, nullptr);  // 🔥 Теперь SetMainTexture() будет работать!
+    m_textures.resize(2, nullptr);  // ← было 1, теперь 2: слот t0 и t1 всегда готовы
     m_diffuseColor = XMFLOAT3(1.0f, 1.0f, 1.0f);
     m_specularPower = 20.0f;
     return true;
 }
-
 void MaterialClass::Shutdown()
 {
     // ⚠️ НЕ освобождаем m_shader и m_textures!
@@ -38,24 +37,39 @@ void MaterialClass::Bind(ID3D11DeviceContext* context)
 {
     if (!m_shader) return;
 
-    // Активируем шейдер (VS, PS, input layout, sampler и т.д.)
     m_shader->BindShader(context);
 
-    // Привязываем текстуры в слоты t0..t3 (или меньше)
-    ID3D11ShaderResourceView* nullSRV = nullptr;
-    for (size_t i = 0; i < m_textures.size() && i < 4; ++i)
+    // Отладка: проверяем, есть ли текстура
+    if (m_textures.size() > 0 && m_textures[0])
     {
-        ID3D11ShaderResourceView* srv = nullptr;
-        if (m_textures[i]) srv = m_textures[i]->GetTexture();
-        // Если texture отсутствует — привязываем null (чтобы не оставить старый SRV)
-        context->PSSetShaderResources(static_cast<UINT>(i), 1, srv ? &srv : &nullSRV);
+        ID3D11ShaderResourceView* srv = m_textures[0]->GetTexture();
+        if (!srv)
+        {
+            OutputDebugStringA("ERROR: Texture SRV is NULL!\n");
+        }
+        else
+        {
+            context->PSSetShaderResources(0, 1, &srv);
+        }
+    }
+    else
+    {
+        OutputDebugStringA("WARNING: No texture assigned to slot 0!\n");
+        ID3D11ShaderResourceView* nullSRV = nullptr;
+        context->PSSetShaderResources(0, 1, &nullSRV);
     }
 }
-
 
 void MaterialClass::Unbind(ID3D11DeviceContext* context)
 {
     // Опционально: очистить привязки, если нужно
     ID3D11ShaderResourceView* nullSRV = nullptr;
     context->PSSetShaderResources(0, 1, &nullSRV);
+}
+
+void MaterialClass::SetTexture(size_t index, TextureClass* texture)
+{
+    if (index >= m_textures.size())
+        m_textures.resize(index + 1, nullptr);
+    m_textures[index] = texture;
 }

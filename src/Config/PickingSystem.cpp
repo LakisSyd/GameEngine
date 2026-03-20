@@ -54,11 +54,12 @@ PickingSystem::PickResult PickingSystem::PickAt(
     );
 
 
-   
 
-    // 1. Проверяем сферы света (приоритет 1)
-    for (size_t i = 0; i < lightSpheres.size(); ++i) {
-        if (RayIntersectsSphere(ray, lightSpheres[i].GetPosition(), Settings::LIGHT_SPHERE_RADIUS)) {
+    // 1. Источники света (приоритет 1) — остаются на int index
+    for (size_t i = 0; i < lightSpheres.size(); ++i)
+    {
+        if (RayIntersectsSphere(ray, lightSpheres[i].GetPosition(), Settings::LIGHT_SPHERE_RADIUS))
+        {
             result.type = PickedType::Light;
             result.index = static_cast<int>(i);
             result.worldPosition = lightSpheres[i].GetPosition();
@@ -66,13 +67,15 @@ PickingSystem::PickResult PickingSystem::PickAt(
         }
     }
 
-    // 2. Проверяем спрайты (приоритет 2)
-    for (size_t i = 0; i < scene.GetSpriteCount(); ++i) {
+    // 2. Спрайты (приоритет 2) — остаются на int index
+    for (size_t i = 0; i < scene.GetSpriteCount(); ++i)
+    {
         auto* sprite = scene.GetSprite(static_cast<int>(i));
         if (!sprite) continue;
 
         float radius = CalculateSpriteRadius(sprite);
-        if (RayIntersectsSphere(ray, sprite->GetPosition(), radius)) {
+        if (RayIntersectsSphere(ray, sprite->GetPosition(), radius))
+        {
             result.type = PickedType::Sprite;
             result.index = static_cast<int>(i);
             result.worldPosition = sprite->GetPosition();
@@ -80,15 +83,25 @@ PickingSystem::PickResult PickingSystem::PickAt(
         }
     }
 
-    // 3. Проверяем объекты (приоритет 3)
-    for (size_t i = 0; i < scene.GetObjectCount(); ++i) {
-        auto* obj = scene.GetObject(static_cast<int>(i));
-        if (!obj) continue;
+    // 3. Объекты (приоритет 3)
+    // НЕДЕЛЯ 4: итерируем ECS напрямую — не вызываем GetObject(int)
+    // result.index = Entity приведённый к int (для EditorUI / ApplicationClass)
+    auto& registry = scene.GetECSRegistry();
+    auto& meshPool = registry.GetComponents<MeshRendererComponent>();
 
-        if (RayIntersectsSphere(ray, obj->GetPosition(), Settings::OBJECT_PICK_RADIUS)) {
+    for (auto& [entity, mesh] : meshPool)
+    {
+        // Только активные объекты участвуют в picking
+        if (!scene.IsObjectActive(entity)) continue;
+
+        auto* transform = scene.GetObjectTransform(entity);
+        if (!transform) continue;
+
+        if (RayIntersectsSphere(ray, transform->position, Settings::OBJECT_PICK_RADIUS))
+        {
             result.type = PickedType::Object;
-            result.index = static_cast<int>(i);
-            result.worldPosition = obj->GetPosition();
+            result.index = static_cast<int>(entity); // Entity → int для legacy
+            result.worldPosition = transform->position;
             return result;
         }
     }

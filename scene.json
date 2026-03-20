@@ -1,0 +1,106 @@
+{
+    "objects": [
+        {
+            "id": 0,
+            "model_path": "assets/model/plane.obj",
+            "position": {
+                "x": -0.3611764907836914,
+                "y": 0.8148860931396484,
+                "z": 1.129197597503662
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "id": 1,
+            "model_path": "assets/model/sphere.obj",
+            "position": {
+                "x": -2.51640248298645,
+                "y": -0.6814463138580322,
+                "z": -1.5447769165039063
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "id": 2,
+            "model_path": "assets/model/sphere.obj",
+            "position": {
+                "x": 3.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "id": 3,
+            "model_path": "assets/model/sphere.obj",
+            "position": {
+                "x": -2.174408435821533,
+                "y": -0.6476337909698486,
+                "z": -3.3453402519226074
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "id": 4,
+            "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\man.glb",
+            "position": {
+                "x": 11.54623031616211,
+                "y": 2.7239959239959717,
+                "z": 0.8654439449310303
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        }
+    ],
+    "scene_name": "MyLevel",
+    "version": 1
+}

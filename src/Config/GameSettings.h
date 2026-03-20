@@ -7,7 +7,7 @@ namespace Settings {
     // === Ввод / Камера ===
     constexpr float CAMERA_SENSITIVITY = 0.15f;
     constexpr float CAMERA_TURN_SPEED = 1.0f;
-    constexpr float INPUT_MOVE_SPEED = 0.1f;
+    constexpr float INPUT_MOVE_SPEED = 10.1f;
     constexpr float INPUT_MOVE_SPEED_SHIFT = 0.2f;
     constexpr float INPUT_MOVE_SPEED_CTRL = 0.05f;
     constexpr int DRAG_THRESHOLD_PX = 5;

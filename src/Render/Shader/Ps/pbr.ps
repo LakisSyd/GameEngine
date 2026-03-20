@@ -1,0 +1,129 @@
+// ============================================================
+// pbr.ps — Пиксельный шейдер PBR (Cook-Torrance BRDF)
+// ============================================================
+#define NUM_LIGHTS 4
+#define PI 3.14159265359f
+
+Texture2D albedoMap    : register(t0);
+Texture2D normalMap    : register(t1);
+Texture2D metalnessMap : register(t2);
+Texture2D roughnessMap : register(t3);
+SamplerState SampleType : register(s0);
+
+cbuffer LightColorBuffer : register(b0)
+{
+    float4 diffuseColor[NUM_LIGHTS];
+};
+
+cbuffer LightPositionBuffer : register(b1)
+{
+    float4 lightPosition[NUM_LIGHTS];
+};
+
+#include "src/Render/Shader/Vs/fog_common.hlsli"
+
+cbuffer PBRParamsBuffer : register(b3)
+{
+    float3 cameraPos;
+    float  padding;
+};
+
+cbuffer SelectedBuffer : register(b4)
+{
+    float selectedFactor;
+    float3 selectedPadding;
+};
+
+struct PixelInputType
+{
+    float4 position              : SV_POSITION;
+    float2 tex                   : TEXCOORD0;
+    float3 normal                : NORMAL;
+    float3 tangent               : TANGENT;
+    float3 binormal              : BINORMAL;
+    float3 worldPos              : TEXCOORD5;
+    float3 lightVec[NUM_LIGHTS]  : TEXCOORD6;
+    float  fogFactor             : FOG;
+};
+
+float DistributionGGX(float3 N, float3 H, float roughness)
+{
+    float a      = roughness * roughness;
+    float a2     = a * a;
+    float NdotH  = max(dot(N, H), 0.0f);
+    float denom  = (NdotH * NdotH * (a2 - 1.0f) + 1.0f);
+    return a2 / (PI * denom * denom);
+}
+
+float3 FresnelSchlick(float cosTheta, float3 F0)
+{
+    return F0 + (1.0f - F0) * pow(saturate(1.0f - cosTheta), 5.0f);
+}
+
+float GeometrySchlickGGX(float NdotV, float roughness)
+{
+    float r = roughness + 1.0f;
+    float k = (r * r) / 8.0f;
+    return NdotV / (NdotV * (1.0f - k) + k);
+}
+
+float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
+{
+    float NdotV = max(dot(N, V), 0.0f);
+    float NdotL = max(dot(N, L), 0.0f);
+    return GeometrySchlickGGX(NdotV, roughness)
+         * GeometrySchlickGGX(NdotL, roughness);
+}
+
+float4 PBRPixelShader(PixelInputType input) : SV_TARGET
+{
+    float3 albedo    = albedoMap   .Sample(SampleType, input.tex).rgb;
+    float  metalness = metalnessMap.Sample(SampleType, input.tex).r;
+    float  roughness = max(roughnessMap.Sample(SampleType, input.tex).r, 0.04f);
+
+    float3 N = normalize(input.normal);
+
+    // Normal map
+    float3 ns = normalMap.Sample(SampleType, input.tex).xyz;
+    if (length(ns - float3(0.5f, 0.5f, 1.0f)) > 0.05f)
+    {
+        ns = ns * 2.0f - 1.0f;
+        float3 T = normalize(input.tangent);
+        float3 B = normalize(input.binormal);
+        float3x3 TBN = float3x3(T, B, N);
+        N = normalize(mul(ns, TBN));
+    }
+
+    // ✅ ОСВЕЩЕНИЕ как в Light shader
+    float3 Lo = float3(0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < NUM_LIGHTS; i++)
+    {
+        if (diffuseColor[i].w < 0.001f) continue;
+
+        float3 L = input.lightVec[i];
+        float intensity = saturate(dot(N, L));
+        float3 lightColor = diffuseColor[i].rgb * diffuseColor[i].w;
+        
+        Lo += lightColor * intensity;
+    }
+
+    // ❌ УБРАЛ ambient — теперь спина будет тёмной!
+    // float3 ambient = float3(0.03f, 0.03f, 0.03f) * albedo;
+    float3 ambient = float3(0.0f, 0.0f, 0.0f); // ✅ Полностью выключил
+    
+    float3 color = ambient + Lo * albedo;
+
+    // Tone mapping и gamma
+    color = color / (color + float3(1.0f, 1.0f, 1.0f));
+    color = pow(color, 1.0f / 2.2f);
+
+    float4 finalColor = float4(color, 1.0f);
+
+    if (selectedFactor > 1.5f)
+    {
+        float edge = 0.5f - saturate(dot(N, float3(0, 0, 1)));
+        finalColor.rgb = lerp(finalColor.rgb, float3(0.0f, 0.85f, 0.3f), edge * 0.7f);
+    }
+
+    return ApplyFog(finalColor, input.fogFactor);
+}

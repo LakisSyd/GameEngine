@@ -1,10 +1,22 @@
-﻿#include "SceneManager.h"
+﻿// ============================================================================
+// SceneManager.cpp
+//
+// НЕДЕЛЯ 4: GetObject(int) и m_legacyObjects удалены.
+//           EditorUI и PickingSystem работают через Entity + ECS.
+// ============================================================================
 
+#include "SceneManager.h"
+#include "FileSystem.h"
+// ============================================================================
+// Конструктор
+// ============================================================================
 SceneManager::SceneManager()
-    : m_defaultMaterial(nullptr)  // ← Добавили
+    : m_defaultMaterial(nullptr)
+    , m_mainModelFallback(nullptr)
 {
-    m_objects.reserve(64);
-    for (auto& light : m_lights) {
+    // Гасим все источники света — включать будем явно через SetLight()
+    for (auto& light : m_lights)
+    {
         light.active = false;
         light.color = XMFLOAT4(0, 0, 0, 1);
     }
@@ -15,144 +27,232 @@ SceneManager::~SceneManager()
     Clear();
 }
 
-// === Спавн объекта ===
-int SceneManager::SpawnObject(AssimpModelClass* model, float x, float y, float z)
+// ============================================================================
+// SpawnObject — создать объект в сцене
+//
+// НЕДЕЛЯ 3: создаёт ТОЛЬКО ECS-компоненты. Никакого GameObject в векторе.
+// m_legacyObjects заполняется «на лету» в GetObject() при первом обращении.
+//
+// Возвращает Entity — используй его как «ключ» к объекту.
+// ============================================================================
+Entity SceneManager::SpawnObject(AssimpModelClass* model, float x, float y, float z)
 {
-    GameObject newObj;
-    newObj.Initialize(model, x, y, z);
-    m_objects.push_back(newObj);
-    return static_cast<int>(m_objects.size()) - 1;
+    Entity e = m_registry.CreateEntity();
+
+    // ── Компоненты объекта в ECS ──────────────────────────────────────────────
+    m_registry.AddComponent<TransformComponent>(e,
+        TransformComponent{ {x, y, z}, {0, 0, 0}, {1, 1, 1} });
+
+    m_registry.AddComponent<MeshRendererComponent>(e,
+        MeshRendererComponent{ model, nullptr });
+
+    // ActiveComponent — тег: объект существует и должен рендериться
+    // RemoveObject() удалит этот компонент → RenderSystem его пропустит
+    m_registry.AddComponent<ActiveComponent>(e, {});
+
+    return e;
 }
 
-// === Удаление объекта ===
-bool SceneManager::RemoveObject(int index)
+// ============================================================================
+// RemoveObject — деактивировать и полностью удалить сущность
+// НЕДЕЛЯ 4: теперь вызываем DestroyEntity — EditorUI хранит Entity, не int index.
+// ============================================================================
+bool SceneManager::RemoveObject(Entity entity)
 {
-    if (index < 0 || index >= static_cast<int>(m_objects.size()))
-        return false;
+    if (!m_registry.HasComponent<TransformComponent>(entity))
+        return false; // сущность не существует
 
-    // Если объект удалён, отвязываем от него свет
-    for (auto& light : m_lights) {
-        if (light.attachedToObjectIndex == index) {
-            light.attachedToObjectIndex = -1;
-        }
-    }
+    // Убираем тег активности — RenderSystem пропустит эту сущность
+    m_registry.RemoveComponent<ActiveComponent>(entity);
 
-    m_objects.erase(m_objects.begin() + index);
     return true;
 }
 
+// ============================================================================
+// Clear — очистить всю сцену
+// ============================================================================
 void SceneManager::Clear()
 {
-    m_objects.clear();
+    // Неделя 3: очищаем ECS реестр через пересоздание
+    // (полный сброс — все Entity и все компоненты)
+    m_registry = ECSRegistry{};
 }
 
-GameObject* SceneManager::GetObject(int index)
+// ============================================================================
+// UpdateAll — обновить сцену за кадр
+//
+// НЕДЕЛЯ 3: TransformSystem УДАЛЁН.
+// Данные трансформации живут ТОЛЬКО в TransformComponent.
+// TransformComponent::GetWorldMatrix() используется напрямую в RenderSystem.
+//
+// Здесь можно добавить другие системы: физику, анимации, скрипты.
+// ============================================================================
+void SceneManager::UpdateAll(float deltaTime)
 {
-    if (index < 0 || index >= static_cast<int>(m_objects.size()))
-        return nullptr;
-    return &m_objects[index];
+    // Неделя 4: здесь будет UpdateSystem::Update(m_registry, deltaTime)
+    // Пока — пусто, т.к. у нас нет логики обновления компонентов
+    (void)deltaTime;
 }
 
-bool SceneManager::SaveScene(const std::string& filename)
+// ============================================================================
+// RenderAllECS — рендер всех активных объектов через RenderSystem
+//
+// НЕДЕЛЯ 3: заменяет старый RenderAll() через m_objects.
+//
+// RenderSystem::Render итерирует ECS:
+//   1. Берёт все MeshRendererComponent
+//   2. Проверяет ActiveComponent (тег)
+//   3. Берёт TransformComponent → GetWorldMatrix()
+//   4. Вызывает RenderMesh()
+//
+// Свет копируется из m_lights в переданные массивы ЗДЕСЬ — до вызова RenderSystem.
+// ============================================================================
+void SceneManager::RenderAllECS(
+    ID3D11DeviceContext* context,
+    const XMMATRIX& viewMatrix,
+    const XMMATRIX& projectionMatrix,
+    MaterialClass* defaultMaterial,
+    XMFLOAT4             lightColors[],
+    XMFLOAT4             lightPositions[],
+    const Settings::FogSettings& fog,
+    Entity               selectedEntity,
+    XMFLOAT3             cameraPos)
 {
-    json scene;
-
-    // 1. Метаданные
-    scene["scene_name"] = "MyLevel";
-    scene["version"] = 1;
-
-    // 2. Массив объектов
-    scene["objects"] = json::array();
-
-    // 3. Сериализация КАЖДОГО объекта (передаём ID явно)
-    for (size_t i = 0; i < m_objects.size(); ++i)
+    // ── Шаг 1: заполняем слоты из LightComponent (ECS-светильники) ───────────
+    // Сначала обнуляем
+    for (int i = 0; i < NUM_LIGHTS; ++i)
     {
-        json objJson = SerializeObject(m_objects[i], static_cast<int>(i));
-        scene["objects"].push_back(objJson);  // ← Добавляем ОДИН объект в массив
+        lightColors[i] = XMFLOAT4(0, 0, 0, 0);
+        lightPositions[i] = XMFLOAT4(0, 0, 0, 0);
     }
 
-    // 4. Запись в файл
-    std::ofstream file(filename);
-    if (!file.is_open()) return false;
+    int slot = 0;
 
-    file << scene.dump(4);
-    return true;
+    // ECS-светильники (LightComponent на обычных объектах)
+    auto& lightPool = m_registry.GetComponents<LightComponent>();
+    for (auto& [entity, light] : lightPool)
+    {
+        if (slot >= NUM_LIGHTS) break;
+        if (!light.enabled) continue;
+        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
+
+        auto* transform = m_registry.GetComponent<TransformComponent>(entity);
+        if (!transform) continue;
+
+        lightColors[slot] = light.color;
+        lightPositions[slot] = XMFLOAT4(
+            transform->position.x,
+            transform->position.y,
+            transform->position.z,
+            1.0f);
+        ++slot;
+    }
+
+    // ── Шаг 2: оставшиеся слоты заполняем из legacy m_lights[] ──────────────
+    // Это позволяет эдитору (SetLight) и ECS-компонентам работать вместе
+    for (int i = 0; i < NUM_LIGHTS && slot < NUM_LIGHTS; ++i)
+    {
+        if (!m_lights[i].active) continue;
+
+        lightColors[slot] = m_lights[i].color;
+        lightPositions[slot] = m_lights[i].position;
+        ++slot;
+    }
+
+    // ── Шаг 3: рендерим сцену ────────────────────────────────────────────────
+    RenderSystem::Render(
+        m_registry,
+        context,
+        viewMatrix, projectionMatrix,
+        defaultMaterial,
+        lightColors, lightPositions,
+        fog,
+        selectedEntity,
+        cameraPos);
 }
-
-bool SceneManager::LoadScene(const std::string& filename,
-    ID3D11Device* device,
-    ID3D11DeviceContext* deviceContext)  // ✅ ДОБАВЛЕНО
+// ============================================================================
+// RenderAllECSExcluding — рендер всех объектов кроме одного
+//
+// НЕДЕЛЯ 3: заменяет Render3DObjectsExcluding() в ApplicationClass.
+// Используется для reflection pass: пластина-зеркало исключается
+// чтобы она не отражала саму себя (рекурсия).
+/// TODO: проверить работоспособность с новой архитектурой
+// ============================================================================
+void SceneManager::RenderAllECSExcluding(
+    ID3D11DeviceContext* context,
+    const XMMATRIX& viewMatrix,
+    const XMMATRIX& projectionMatrix,
+    MaterialClass* defaultMaterial,
+    XMFLOAT4             lightColors[],
+    XMFLOAT4             lightPositions[],
+    const Settings::FogSettings& fog,
+    Entity               excludeEntity)
 {
-    OutputDebugStringA(("🔍 LoadScene: Trying to open: " + filename + "\n").c_str());
-
-    if (filename.empty()) {
-        OutputDebugStringA("❌ LoadScene: filename is empty!\n");
-        return false;
+    // Копируем данные о свете
+    for (int i = 0; i < NUM_LIGHTS; ++i)
+    {
+        lightColors[i] = m_lights[i].color;
+        lightPositions[i] = m_lights[i].position;
     }
 
-    std::ifstream file(filename);
-    if (!file.is_open()) {
-        OutputDebugStringA(("❌ LoadScene: Failed to open file: " + filename + "\n").c_str());
-        char cwd[MAX_PATH];
-        if (GetCurrentDirectoryA(MAX_PATH, cwd)) {
-            OutputDebugStringA(("📁 Current directory: " + std::string(cwd) + "\n").c_str());
-        }
-        return false;
+    // Итерируем вручную чтобы пропустить excludeEntity
+    auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
+
+    for (auto& [entity, mesh] : meshPool)
+    {
+        // Пропускаем исключённую сущность (reflection объект)
+        if (entity == excludeEntity) continue;
+
+        // Пропускаем неактивные
+        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
+
+        auto* transform = m_registry.GetComponent<TransformComponent>(entity);
+        if (!transform || !mesh.model) continue;
+
+        auto* mat = mesh.material ? mesh.material : defaultMaterial;
+        if (!mat) continue;
+
+        XMMATRIX world = transform->GetWorldMatrix();
+        RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
+            mat, lightColors, lightPositions, fog, false);
     }
-    OutputDebugStringA("✅ LoadScene: File opened successfully\n");
-
-    json j;
-    try {
-        file >> j;
-        OutputDebugStringA(("✅ LoadScene: JSON parsed, objects count: " +
-            std::to_string(j["objects"].size()) + "\n").c_str());
-    }
-    catch (const json::exception& e) {
-        OutputDebugStringA(("❌ LoadScene: JSON parse error: " + std::string(e.what()) + "\n").c_str());
-        file.close();
-        return false;
-    }
-    file.close();
-
-    OutputDebugStringA("🧹 LoadScene: Clearing old scene...\n");
-    Clear();
-
-    if (j.contains("objects") && j["objects"].is_array()) {
-        OutputDebugStringA(("📦 LoadScene: Loading " + std::to_string(j["objects"].size()) + " objects\n").c_str());
-
-        for (const auto& objJson : j["objects"]) {
-            OutputDebugStringA("🔄 LoadScene: Deserializing one object...\n");
-            GameObject obj = DeserializeObject(objJson, device, deviceContext);  // ✅ ПЕРЕДАЁМ
-            m_objects.push_back(obj);
-        }
-        OutputDebugStringA(("✅ LoadScene: Loaded " + std::to_string(m_objects.size()) + " objects\n").c_str());
-    }
-
-    if (j.contains("lights") && j["lights"].is_array()) {
-        OutputDebugStringA(("💡 LoadScene: Loading " + std::to_string(j["lights"].size()) + " lights\n").c_str());
-        for (const auto& lightJson : j["lights"]) {
-            int index = lightJson.value("index", -1);
-            if (index >= 0 && index < NUM_LIGHTS) {
-                DeserializeLight(lightJson, m_lights[index]);
-            }
-        }
-    }
-
-    OutputDebugStringA("🎉 LoadScene: FINISHED SUCCESSFULLY\n");
-    return true;
 }
 
-// === 🔹 НАСТРОЙКА ИСТОЧНИКА СВЕТА ===
+// ============================================================================
+// UpdateLights — пересчитать позиции привязанных источников света
+//
+// НЕДЕЛЯ 3: читает позицию из TransformComponent напрямую (не из GameObject)
+// ============================================================================
+void SceneManager::UpdateLights()
+{
+    for (auto& light : m_lights)
+    {
+        if (!light.active || light.attachedToObjectIndex < 0) continue;
+
+        // Читаем позицию объекта из ECS (не из m_objects!)
+        Entity e = static_cast<Entity>(light.attachedToObjectIndex);
+        auto* transform = m_registry.GetComponent<TransformComponent>(e);
+        if (!transform) continue;
+
+        light.position = XMFLOAT4(
+            transform->position.x + light.offset.x,
+            transform->position.y + light.offset.y,
+            transform->position.z + light.offset.z,
+            1.0f);
+    }
+}
+
+// ============================================================================
+// SetLight / AttachLightToObject / DetachLight
+// ============================================================================
 void SceneManager::SetLight(int index, const XMFLOAT3& pos, const XMFLOAT4& color, bool active)
 {
     if (index < 0 || index >= NUM_LIGHTS) return;
-
     m_lights[index].position = XMFLOAT4(pos.x, pos.y, pos.z, 1.0f);
     m_lights[index].color = color;
     m_lights[index].active = active;
 }
 
-// === 🔹 ПРИВЯЗКА СВЕТА К ОБЪЕКТУ ===
 void SceneManager::AttachLightToObject(int lightIndex, int objectIndex, const XMFLOAT3& offset)
 {
     if (lightIndex < 0 || lightIndex >= NUM_LIGHTS) return;
@@ -166,91 +266,54 @@ void SceneManager::DetachLight(int lightIndex)
     m_lights[lightIndex].attachedToObjectIndex = -1;
 }
 
-// === 🔹 ОБНОВЛЕНИЕ ПОЗИЦИЙ СВЕТА (перед рендером!) ===
-void SceneManager::UpdateLights()
-{
-    for (auto& light : m_lights)
-    {
-        if (light.active && light.attachedToObjectIndex >= 0)
-        {
-            GameObject* obj = GetObject(light.attachedToObjectIndex);
-            if (obj)
-            {
-                XMFLOAT3 objPos = obj->GetPosition();
-                light.position = XMFLOAT4(
-                    objPos.x + light.offset.x,
-                    objPos.y + light.offset.y,
-                    objPos.z + light.offset.z,
-                    1.0f
-                );
-            }
-        }
-    }
-}
-
-int SceneManager::SpawnSprite(ID3D11Device* device, ID3D11DeviceContext* deviceContext, const char* textureName, float x, float y, float z, float width, float height)
+// ============================================================================
+// SpawnSprite
+// ============================================================================
+int SceneManager::SpawnSprite(
+    ID3D11Device* device, ID3D11DeviceContext* deviceContext,
+    const char* textureName,
+    float x, float y, float z, float width, float height)
 {
     auto sprite = std::make_unique<WorldSpriteClass>();
-
     if (!sprite->Initialize(device, deviceContext, textureName, width, height))
     {
-        OutputDebugStringA("FILED TO INITIALIZE WORLDSPRITE");
+        OutputDebugStringA("SpawnSprite: FAILED TO INITIALIZE WORLDSPRITE\n");
         return -1;
     }
     sprite->SetPosition(x, y, z);
     m_sprites.push_back(std::move(sprite));
-
-    return static_cast<int>(m_sprites.size());
+    return static_cast<int>(m_sprites.size() - 1);
 }
 
-// === Обновление всех объектов ===
-void SceneManager::UpdateAll(float deltaTime)
+bool SceneManager::RemoveSprite(int index)
 {
-    for (auto& obj : m_objects)
-    {
-        obj.Update(deltaTime);
-    }
+    if (index < 0 || index >= static_cast<int>(m_sprites.size())) return false;
+    m_sprites.erase(m_sprites.begin() + index);
+    return true;
 }
 
-void SceneManager::RenderAll(
+WorldSpriteClass* SceneManager::GetSprite(int index)
+{
+    if (index < 0 || index >= static_cast<int>(m_sprites.size())) return nullptr;
+    return m_sprites[index].get();
+}
+
+void SceneManager::RenderSprites(
     ID3D11DeviceContext* context,
-    ID3D11Device* device,
-    XMMATRIX viewMatrix,
-    XMMATRIX projectionMatrix,
-    MaterialClass* material,
-    XMFLOAT4 lightColors[],
-    XMFLOAT4 lightPositions[],
-    int selectedObjectIndex,
-    const Settings::FogSettings& fog)
+    XMMATRIX view, XMMATRIX projection, TextureShaderClass* shader)
 {
-    for (int i = 0; i < NUM_LIGHTS; ++i) {
-        lightColors[i] = m_lights[i].color;
-        lightPositions[i] = m_lights[i].position;
-    }
-
-    int index = 0;
-    for (auto& obj : m_objects)
-    {
-        auto* objMaterial = obj.GetMaterial();
-        auto* renderMaterial = objMaterial ? objMaterial : material;
-
-        // ✅ Правильный порядок: fog ПЕРЕД selected
-        obj.Render(context, device, viewMatrix, projectionMatrix,
-            renderMaterial,
-            lightColors, lightPositions,
-            fog,                           // ← сначала fog
-            index == selectedObjectIndex); // ← потом selected
-        index++;
-    }
+    for (auto& sprite : m_sprites)
+        sprite->Render(context, view, projection, shader);
 }
 
-
-// === 🔹 Настройка сфер-индикаторов света ===
+// ============================================================================
+// SetupLightSpheres / RenderLightSpheres
+// Light-сферы — только визуальные индикаторы редактора, не часть ECS.
+// ============================================================================
 void SceneManager::SetupLightSpheres(std::vector<GameObject>& spheres, AssimpModelClass* model)
 {
     spheres.clear();
     spheres.reserve(NUM_LIGHTS);
-
     for (int i = 0; i < NUM_LIGHTS; ++i)
     {
         GameObject sphere;
@@ -260,181 +323,313 @@ void SceneManager::SetupLightSpheres(std::vector<GameObject>& spheres, AssimpMod
     }
 }
 
-// === 🔹 Рендер сфер-индикаторов ===
 void SceneManager::RenderLightSpheres(
     std::vector<GameObject>& spheres,
     ID3D11DeviceContext* context,
-    XMMATRIX view,
-    XMMATRIX projection,
-    TextureShaderClass* shader)
+    XMMATRIX view, XMMATRIX projection, TextureShaderClass* shader)
 {
     for (size_t i = 0; i < spheres.size() && i < NUM_LIGHTS; ++i)
     {
         if (!m_lights[i].active) continue;
-
-        // Синхронизируем позицию сферы с источником света
-        spheres[i].SetPosition(
-            m_lights[i].position.x,
-            m_lights[i].position.y,
-            m_lights[i].position.z
-        );
-
+        spheres[i].SetPosition(m_lights[i].position.x, m_lights[i].position.y, m_lights[i].position.z);
         spheres[i].RenderSimple(context, view, projection, shader);
     }
 }
 
-json SceneManager::SerializeObject(const GameObject& obj, int id)
+// ============================================================================
+// SaveScene — сериализация
+//
+// НЕДЕЛЯ 3: читаем данные из ECS (TransformComponent, MeshRendererComponent)
+// ============================================================================
+bool SceneManager::SaveScene(const std::string& filename)
 {
-    json objJson;
+    json scene;
+    scene["scene_name"] = "MyLevel";
+    scene["version"] = 1;
+    scene["objects"] = json::array();
 
-    // Простые поля
-    objJson["id"] = id;
-    objJson["model_path"] = "sphere.obj";  // Заглушка: в будущем бери из модели
-
-    objJson["texture_path"] = "stone.tga";  // или получите из obj.GetModel()->GetTexturePath()
-
-    // 🔥 Правильная сериализация позиции (ОБЪЕКТ, а не массив!)
-    XMFLOAT3 pos = obj.GetPosition();
-    objJson["position"] = {
-        {"x", pos.x},
-        {"y", pos.y},
-        {"z", pos.z}
-    };
-
-    // Остальные поля (заглушки для начала)
-    objJson["rotation"] = { {"x", 0.0f}, {"y", 0.0f}, {"z", 0.0f} };
-    objJson["scale"] = { {"x", 1.0f}, {"y", 1.0f}, {"z", 1.0f} };
-
-    return objJson;  // ← Возвращаем ОДИН объект, а не массив!
-}
-
-GameObject SceneManager::DeserializeObject(const json& j,
-    ID3D11Device* device,
-    ID3D11DeviceContext* deviceContext)
-{
-    GameObject obj;
-
-    std::string modelPath = j.value("model_path", "sphere.obj");
-    std::string texturePath = j.value("texture_path", "stone.tga");
-
-    AssimpModelClass* model = GetOrCreateModel(modelPath, device, deviceContext, texturePath);
-
-    if (!model) {
-        OutputDebugStringA("⚠️  DeserializeObject: model is nullptr, using fallback\n");
-        model = m_mainModelFallback;
-        if (!model) return GameObject();
+    // Итерируем по всем сущностям с MeshRendererComponent
+    auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
+    int id = 0;
+    for (auto& [entity, mesh] : meshPool)
+    {
+        // Сохраняем только активные объекты
+        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
+        scene["objects"].push_back(SerializeObject(entity, id++));
     }
 
-    float x = 0.0f, y = 0.0f, z = 0.0f;
-    if (j.contains("position")) {
+    std::ofstream file(filename);
+    if (!file.is_open()) return false;
+    file << scene.dump(4);
+    return true;
+}
+
+// ============================================================================
+// SerializeObject — упаковать ECS-сущность в JSON
+//
+// НЕДЕЛЯ 3: читает из TransformComponent, не из GameObject
+// ============================================================================
+json SceneManager::SerializeObject(Entity entity, int id)
+{
+    json objJson;
+    objJson["id"] = id;
+
+    // Читаем реальный путь модели из кэша, а не хардкод
+    std::string modelPath = "assets/model/sphere.obj";
+    std::string texturePath = "assets/texture/stone.tga";
+
+    if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
+    {
+        // Ищем путь модели в кэше по указателю
+        for (auto& [path, cachedModel] : m_modelCache)
+        {
+            if (cachedModel == mesh->model)
+            {
+                modelPath = path;
+                break;
+            }
+        }
+    }
+
+    objJson["model_path"] = modelPath;
+    objJson["texture_path"] = texturePath;
+
+    // Читаем трансформацию из ECS
+    if (auto* t = m_registry.GetComponent<TransformComponent>(entity))
+    {
+        objJson["position"] = { {"x", t->position.x}, {"y", t->position.y}, {"z", t->position.z} };
+        objJson["rotation"] = { {"x", t->rotation.x}, {"y", t->rotation.y}, {"z", t->rotation.z} };
+        objJson["scale"] = { {"x", t->scale.x},    {"y", t->scale.y},    {"z", t->scale.z} };
+    }
+
+    return objJson;
+}
+// ============================================================================
+// LoadScene — десериализация
+// ============================================================================
+bool SceneManager::LoadScene(const std::string& filename,
+    ID3D11Device* device, ID3D11DeviceContext* deviceContext)
+{
+    OutputDebugStringA(("LoadScene: " + filename + "\n").c_str());
+
+    if (filename.empty()) return false;
+
+    std::ifstream file(filename);
+    if (!file.is_open())
+    {
+        OutputDebugStringA(("LoadScene: cannot open: " + filename + "\n").c_str());
+        return false;
+    }
+
+    json j;
+    try { file >> j; }
+    catch (const json::exception& e)
+    {
+        OutputDebugStringA(("LoadScene: JSON error: " + std::string(e.what()) + "\n").c_str());
+        return false;
+    }
+    file.close();
+
+    Clear();
+
+    if (j.contains("objects") && j["objects"].is_array())
+    {
+        for (const auto& objJson : j["objects"])
+            DeserializeObject(objJson, device, deviceContext);
+    }
+
+    if (j.contains("lights") && j["lights"].is_array())
+    {
+        for (const auto& lightJson : j["lights"])
+        {
+            int index = lightJson.value("index", -1);
+            if (index >= 0 && index < NUM_LIGHTS)
+                DeserializeLight(lightJson, m_lights[index]);
+        }
+    }
+
+    OutputDebugStringA("LoadScene: OK\n");
+    return true;
+}
+
+// ============================================================================
+// DeserializeObject — создать ECS-сущность из JSON
+//
+// НЕДЕЛЯ 3: возвращает Entity вместо GameObject
+Entity SceneManager::DeserializeObject(const json& j,
+    ID3D11Device* device, ID3D11DeviceContext* deviceContext)
+{
+    std::string modelPath = j.value("model_path", "assets/model/sphere.obj");
+    std::string texturePath = j.value("texture_path", "assets/texture/stone.tga");
+
+    AssimpModelClass* model = GetOrCreateModel(modelPath, device, deviceContext, texturePath);
+    if (!model) model = m_mainModelFallback;
+    if (!model) return INVALID_ENTITY;
+
+    float x = 0, y = 0, z = 0;
+    if (j.contains("position"))
+    {
         x = j["position"].value("x", 0.0f);
         y = j["position"].value("y", 0.0f);
         z = j["position"].value("z", 0.0f);
     }
 
-    obj.Initialize(model, x, y, z);
+    Entity e = SpawnObject(model, x, y, z);
 
-    if (j.contains("rotation")) {
-        obj.SetRotation(
-            j["rotation"].value("x", 0.0f),
-            j["rotation"].value("y", 0.0f),
-            j["rotation"].value("z", 0.0f)
-        );
-    }
-    if (j.contains("scale")) {
-        obj.SetScale(
-            j["scale"].value("x", 1.0f),
-            j["scale"].value("y", 1.0f),
-            j["scale"].value("z", 1.0f)
-        );
-    }
-
-    return obj;
-}
-
-json SceneManager::SerializeLight(const LightSource& light, int index)
-{
-    return json();
-}
-
-void SceneManager::DeserializeLight(const json& j, LightSource& light)
-{
-}
-
-json SceneManager::SerializeMaterial(const MaterialClass* mat)
-{
-    return json();
-}
-
-
-bool SceneManager::RemoveSprite(int index)
-{
-    if (index < 0 || index >= static_cast<int>(m_sprites.size()))
-        return false;
-    m_sprites.erase(m_sprites.begin() + index);
-    return true;
-}
-
-WorldSpriteClass* SceneManager::GetSprite(int index)
-{
-    if (index < 0 || index >= static_cast<int>(m_sprites.size()))
-        return nullptr;
-    return m_sprites[index].get();
-}
-
-void SceneManager::RenderSprites(
-    ID3D11DeviceContext* context,
-    XMMATRIX view,
-    XMMATRIX projection,
-    TextureShaderClass* shader)
-{
-    for (auto& sprite : m_sprites)
+    if (auto* t = m_registry.GetComponent<TransformComponent>(e))
     {
-        sprite->Render(context, view, projection, shader);
-        // Если спрайт должен использовать свою внутреннюю позицию,
-        // не передаём customWorldMatrix (оставляем nullptr).
-        // При необходимости можно передать кастомную матрицу через отдельный метод.
+        if (j.contains("rotation"))
+        {
+            t->rotation.x = j["rotation"].value("x", 0.0f);
+            t->rotation.y = j["rotation"].value("y", 0.0f);
+            t->rotation.z = j["rotation"].value("z", 0.0f);
+        }
+        if (j.contains("scale"))
+        {
+            t->scale.x = j["scale"].value("x", 1.0f);
+            t->scale.y = j["scale"].value("y", 1.0f);
+            t->scale.z = j["scale"].value("z", 1.0f);
+        }
     }
+
+    // Назначаем defaultMaterial сразу — объект не будет рендериться с nullptr
+    if (m_defaultMaterial)
+    {
+        if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(e))
+            mesh->material = m_defaultMaterial;
+    }
+
+    return e;
 }
+json SceneManager::SerializeLight(const LightSource& light, int index) { return json(); }
+void SceneManager::DeserializeLight(const json& j, LightSource& light) {}
+json SceneManager::SerializeMaterial(const MaterialClass* mat) { return json(); }
 
-
-
-AssimpModelClass * SceneManager::GetOrCreateModel(
-    const std::string & path,
-    ID3D11Device * device,
-    ID3D11DeviceContext * deviceContext,
-    const std::string & texturePath)
+// ============================================================================
+// GetOrCreateModel — кэш моделей
+// ============================================================================
+AssimpModelClass* SceneManager::GetOrCreateModel(
+    const std::string& path,
+    ID3D11Device* device, ID3D11DeviceContext* deviceContext,
+    const std::string& texturePath)
 {
-    if (path.empty()) {
-        OutputDebugStringA("❌ GetOrCreateModel: empty path!\n");
-        return m_mainModelFallback;
-    }
+    if (path.empty()) return m_mainModelFallback;
 
     auto it = m_modelCache.find(path);
-    if (it != m_modelCache.end() && it->second != nullptr) {
-        return it->second;
-    }
+    if (it != m_modelCache.end() && it->second) return it->second;
 
     AssimpModelClass* model = new AssimpModelClass();
 
-    if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        OutputDebugStringA(("⚠️  GetOrCreateModel: File not found: " + path + "\n").c_str());
+    if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+    {
+        OutputDebugStringA(("GetOrCreateModel: not found: " + path + "\n").c_str());
         delete model;
         return m_mainModelFallback;
     }
 
-    const char* texPath = nullptr;
-    if (!texturePath.empty()) {
-        texPath = texturePath.c_str();
-    }
+    // Для GLB texturePath будет пустым — передаём nullptr,
+    // чтобы AssimpModelClass не грузил fallback текстуру поверх вшитых
+    const std::string ext = fs::path(path).extension().string();
+    const bool isGLB = (ext == ".glb" || ext == ".gltf");
+    const char* texPath = (!isGLB && !texturePath.empty()) ? texturePath.c_str() : nullptr;
 
-    // 🔥 ПЕРЕДАЁМ deviceContext ВМЕСТО nullptr!
-    if (model->Initialize(device, deviceContext, path.c_str(), texPath)) {
+    if (model->Initialize(device, deviceContext, path.c_str(), texPath))
+    {
         m_modelCache[path] = model;
         return model;
     }
 
-    OutputDebugStringA(("❌ GetOrCreateModel: Initialize failed for: " + path + "\n").c_str());
     delete model;
     return m_mainModelFallback;
+}
+
+
+void SceneManager::SetObjectShader(Entity entity, ShaderBaseClass* shader, ID3D11Device* device)
+{
+    auto* mesh = m_registry.GetComponents<MeshRendererComponent>().Get(entity);
+    if (!mesh) return;
+
+    if (!mesh->material)
+    {
+        if (!device) return;
+
+        auto* mat = new MaterialClass();
+        mat->Initialize(device, L"RuntimeMaterial");
+        if (m_defaultMaterial && m_defaultMaterial->GetMainTexture())
+            mat->SetMainTexture(m_defaultMaterial->GetMainTexture());
+        mesh->material = mat;
+    }
+
+    mesh->material->SetShader(shader);
+
+    // Если для light-шейдера нет основной текстуры — подставляем default, чтобы не было "бежевого" результата.
+    if (shader && shader->GetType() == ShaderType::Light)
+    {
+        if (!mesh->material->GetMainTexture() && m_defaultMaterial && m_defaultMaterial->GetMainTexture())
+        {
+            mesh->material->SetMainTexture(m_defaultMaterial->GetMainTexture());
+            OutputDebugStringA("SetObjectShader: Light shader had no main texture — assigned default main texture.\n");
+        }
+    }
+
+    // Glass-шейдер требует refractionSRV + normalTexture (slot 1)
+    // Если они не назначены — подключаем автоматически
+   
+
+    
+}
+
+void SceneManager::SetObjectTexture(Entity entity, int slot,
+    const std::string& path,
+    ID3D11Device* device,
+    ID3D11DeviceContext* context)
+{
+    auto* mesh = m_registry.GetComponents<MeshRendererComponent>().Get(entity);
+    if (!mesh) return;
+    if (!device || !context) return;
+
+    // 1. Создаём материал, если нет
+    if (!mesh->material)
+    {
+        auto* mat = new MaterialClass();
+        mat->Initialize(device, L"RuntimeMaterial");
+        if (m_defaultMaterial && m_defaultMaterial->GetShader())
+            mat->SetShader(m_defaultMaterial->GetShader());
+        mesh->material = mat;
+    }
+
+    // Позволяем очищать слот пустым путём
+    if (path.empty())
+    {
+        mesh->material->SetTexture(slot, nullptr);
+        OutputDebugStringA(("SetObjectTexture: Cleared texture slot " + std::to_string(slot) + "\n").c_str());
+        return;
+    }
+
+    // Проверка наличия файла
+    if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+    {
+        OutputDebugStringA(("SetObjectTexture: File not found: " + path + "\n").c_str());
+        return;
+    }
+
+    // 2. Загружаем текстуру (используем TextureClass, как в SpawnObjectFromRequest)
+    TextureClass* loadedTexture = new TextureClass();
+    if (!loadedTexture->Initialize(device, context, path.c_str()))
+    {
+        OutputDebugStringA(("SetObjectTexture: TextureClass::Initialize FAILED for: " + path + "\n").c_str());
+        delete loadedTexture;
+        return;
+    }
+
+    // 3. Назначаем текстуру в нужный слот материала
+    mesh->material->SetTexture(slot, loadedTexture);
+
+    // 4. Если это главная текстура (slot 0) и шейдер ещё не назначен — можно подтянуть дефолтный шейдер
+    if (slot == 0 && !mesh->material->GetShader() && m_defaultMaterial)
+    {
+        mesh->material->SetShader(m_defaultMaterial->GetShader());
+    }
+
+    OutputDebugStringA(("SetObjectTexture: Assigned texture to slot " + std::to_string(slot) + " -> " + path + "\n").c_str());
 }
