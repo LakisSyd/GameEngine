@@ -1,48 +1,22 @@
-﻿//=============================================================================
-// ApplicationClass.cpp - Упрощённая и документированная версия
-// ✨ Рефакторинг: добавлены комментарии, небольшая структуризация, вызов
-// UpdateInputState() в Frame() для синхронизации состояния мыши.
-//=============================================================================
+﻿#include "applicationclass.h"
+#include <algorithm>
+#include "FileSystem.h"
 
-#include "applicationclass.h"   // Добавлен include для NormalMapShaderClass
+// ============================================================================
+// Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
+// ============================================================================
+ApplicationClass::ApplicationClass() = default;
 
-
-ApplicationClass::ApplicationClass()
-    :
-
-    m_textureShader(nullptr)
-    , m_lightShader(nullptr)
-	, m_multiTextureShader(nullptr)
-	, m_lightMapShader(nullptr)
-    , m_mainModel(nullptr)
-    , m_lightSphereModel(nullptr)
-    , m_isLeftDown(false)
-    , m_isRightDown(false)
-    , m_isMouseCaptured(false)
-    , m_mouseX(0), m_mouseY(0)
-    , m_isDragging(false)
-    , m_draggedObjectIndex(-1)
-    , m_draggedLightIndex(-1)
-    , m_draggedSpriteIndex(-1)
-    , m_dragDistance(0.0f)
-    , m_dragOffset{ 0,0,0 }
-    , m_clickStartX(0), m_clickStartY(0)
-    , m_potentialDrag(false)
-    , m_defaultMaterial(nullptr)
-    , m_normalMapShader(nullptr)
-	, m_fogShader(nullptr)
-	
-{
-}
-
+// ============================================================================
+// Initialize
+// ============================================================================
 bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 {
-    // Сохраняем размеры окна
     m_screenWidth = screenWidth;
     m_screenHeight = screenHeight;
 
+    // ── Direct3D ─────────────────────────────────────────────────────────────
     m_direct3D = std::make_unique<D3DClass>();
-
     if (!m_direct3D) return false;
 
     if (!m_direct3D->Initialize(screenWidth, screenHeight, VSYNC_ENABLED, hwnd,
@@ -52,37 +26,32 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
-    // Инициализация UI (ImGui + Editor)
-    if (!m_editorUI.Initialize(hwnd, m_direct3D->GetDevice(), m_direct3D->GetDeviceContext()))
-    {
+    // ── Файловая система ─────────────────────────────────────────────────────
+    m_gameFs = std::make_unique<FileSystem>(fs::current_path() / "assets");
+    m_gameFs->ScanFileSystem();
+
+    // ── EditorUI ─────────────────────────────────────────────────────────────
+    if (!m_editorUI.Initialize(hwnd, m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), m_gameFs.get()))
         return false;
-    }
 
-    // NOTE:
-    // InputClass НЕ создаётся здесь — SystemClass владеет Input и передаёт указатель через SetInput().
-    // Если Application должен уметь работать автономно, можно добавить защиту от nullptr в методах.
-    // (m_input будет установлен SystemClass::Initialize после вызова Application::Initialize)
-
-    // Камера
+    // ── Камера ───────────────────────────────────────────────────────────────
     m_camera = std::make_unique<CameraClass>();
     if (!m_camera) return false;
     m_camera->SetPosition(0.0f, 2.0f, -10.0f);
     m_camera->SetRotation(0.0f, 0.0f, 0.0f);
 
-    // Загрузка моделей
+    // ── Fallback модель (для SpawnObject без указания модели) ─────────────────
     m_mainModel = new AssimpModelClass;
-    if (!m_mainModel) return false;
     if (!m_mainModel->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
         "assets/model/sphere.obj", "assets/texture/stone.tga"))
     {
         MessageBox(hwnd, L"Failed to load main model", L"Error", MB_OK);
         return false;
     }
+    m_sceneManager.SetFallbackModel(m_mainModel);
 
-    m_sceneManager.SetFallbackModel(m_mainModel);  // запасная модель для менеджера сцен
-
+    // ── Модель для сфер-индикаторов света ────────────────────────────────────
     m_lightSphereModel = new AssimpModelClass;
-    if (!m_lightSphereModel) return false;
     if (!m_lightSphereModel->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
         "assets/model/sphere.obj", "assets/texture/stone.tga"))
     {
@@ -90,130 +59,129 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
-    // ════════════════════════════════════
-   // Загрузка шейдеров через ShaderManager
-   // ════════════════════════════════════
+    // ── Загрузка всех шейдеров ───────────────────────────────────────────────
     auto& sm = ShaderManager::Get();
-
     m_textureShader = sm.Load<TextureShaderClass>("texture", m_direct3D->GetDevice(), hwnd);
-    m_lightShader = sm.Load<LightShaderClass>("light", m_direct3D->GetDevice(), hwnd);
+
     m_multiTextureShader = sm.Load<MultiTextureShaderClass>("multitex", m_direct3D->GetDevice(), hwnd);
     m_lightMapShader = sm.Load<LightMapShaderClass>("lightmap", m_direct3D->GetDevice(), hwnd);
     m_normalMapShader = sm.Load<NormalMapShaderClass>("normalmap", m_direct3D->GetDevice(), hwnd);
-	m_fogShader = sm.Load<FogShaderClass>("fog", m_direct3D->GetDevice(), hwnd);
-    if (!m_textureShader || !m_lightShader ||
+    m_fogShader = sm.Load<FogShaderClass>("fog", m_direct3D->GetDevice(), hwnd);
+    m_ClipPlaneShader = sm.Load<ClipPlaneShaderClass>("clip", m_direct3D->GetDevice(), hwnd);
+    m_ColorShader = sm.Load<ColorShaderClass>("color", m_direct3D->GetDevice(), hwnd);
+    m_WaterShader = sm.Load<WaterShaderClass>("water", m_direct3D->GetDevice(), hwnd);
+    m_reflectionShader = sm.Load<ReflectionShaderClass>("reflection", m_direct3D->GetDevice(), hwnd);
+    m_glassShader = sm.Load<GlassShaderClass>("glass", m_direct3D->GetDevice(), hwnd);
+    m_projectionShader = sm.Load<projectionShaderClass>("projection", m_direct3D->GetDevice(), hwnd);
+    m_lightShader = sm.Load<LightShaderClass>("light", m_direct3D->GetDevice(), hwnd);
+    m_pbrShader = sm.Load<PBRShaderClass>("pbr", m_direct3D->GetDevice(), hwnd);
+
+
+
+
+    if (!m_textureShader || !m_lightShader || !m_pbrShader ||
         !m_multiTextureShader || !m_lightMapShader || !m_normalMapShader)
     {
-        return false; // ошибка уже показана через MessageBox внутри Load()
+        OutputDebugStringA("One or more critical shaders failed to load. Initialize() abort.\n");
+        return false;
+    }
+    // ── Render-to-texture для отражения и преломления ─────────────────────────
+    m_reflectionTexture = new RenderTextureClass;
+    if (!m_reflectionTexture->Initialize(m_direct3D->GetDevice(), 512, 512, SCREEN_DEPTH, SCREEN_NEAR, 1))
+    {
+        MessageBox(hwnd, L"Failed to initialize ReflectionTexture", L"Error", MB_OK);
+        return false;
     }
 
-    // Материалы
-    m_defaultMaterial = new MaterialClass();
-    m_defaultMaterial->Initialize(m_direct3D->GetDevice(), L"DefaultLighted");
-    m_defaultMaterial->SetShader(m_lightShader);
-
-    auto* blueMat = new MaterialClass();
-    blueMat->Initialize(m_direct3D->GetDevice(), L"Blue");
-    blueMat->SetShader(m_lightShader);
-    blueMat->SetDiffuseColor(XMFLOAT3(0.2f, 0.4f, 1.0f));
-
-    // Текстура по умолчанию (назначаем на материал)
-    TextureClass* defaultTexture = new TextureClass();
-    if (defaultTexture->Initialize(m_direct3D->GetDevice(),
-        m_direct3D->GetDeviceContext(),
-        "assets/texture/stone.tga"))
+    m_refractionTexture = new RenderTextureClass;
+    if (!m_refractionTexture->Initialize(m_direct3D->GetDevice(), 512, 512, SCREEN_DEPTH, SCREEN_NEAR, 1))
     {
-        m_defaultMaterial->SetMainTexture(defaultTexture);
+        MessageBox(hwnd, L"Failed to initialize RefractionTexture", L"Error", MB_OK);
+        return false;
+    }
+
+    m_sceneManager.SetRefractionSRV(m_refractionTexture->GetShaderResourceView());
+
+
+
+
+
+
+
+
+    m_editorUI.RefreshShaderList();
+
+    // ── Сферы-индикаторы для источников света ────────────────────────────────
+    m_sceneManager.SetupLightSpheres(m_lightSpheres, m_lightSphereModel);
+
+    // ── Один источник света по умолчанию ─────────────────────────────────────
+    m_sceneManager.SetLight(0, XMFLOAT3(-1.0f, 2.0f, -1.0f), XMFLOAT4(1.0f, 1.0f, 0.9f, 1.0f), true);
+
+
+    // ── Default material для всех объектов без ручного назначения ─────────
+    // Раньше было: создавали Material, но не инициализировали/не назначали.
+    // Из-за этого у объектов shader оставался nullptr, и модель "не видна",
+    // пока не сменишь shader в UI (SetObjectShader создаёт material).
+    m_defaultMaterial = new MaterialClass();
+    if (!m_defaultMaterial->Initialize(m_direct3D->GetDevice(), L"DefaultMaterial"))
+    {
+        OutputDebugStringA("Failed to initialize m_defaultMaterial\n");
+        return false;
+    }
+
+    // Т.к. для .glb текстуры embedded, ShaderType::Texture тоже будет брать fallback
+    // из model->GetMeshParts() (см. RenderMesh.h).
+    m_defaultMaterial->SetShader(m_textureShader);
+
+    // Базовая текстура-заглушка (если у модели нет embedded albedo).
+    {
+        m_defaultTexture = new TextureClass();
+        if (m_defaultTexture->Initialize(
+            m_direct3D->GetDevice(),
+            m_direct3D->GetDeviceContext(),
+            "assets/texture/stone.tga"))
+        {
+            m_defaultMaterial->SetMainTexture(m_defaultTexture);
+        }
+        else
+        {
+            delete m_defaultTexture;
+            m_defaultTexture = nullptr;
+        }
     }
 
     m_sceneManager.SetDefaultMaterial(m_defaultMaterial);
 
-    // Примитивный спрайт в мире
-    int spriteIndex = m_sceneManager.SpawnSprite(
-        m_direct3D->GetDevice(),
-        m_direct3D->GetDeviceContext(),
-        "assets/texture/arrow.tga",
-        5.0f, 1.5f, -3.0f,
-        0.3f, 0.3f
-    );
 
-    // Пара объектов для примера
-    m_sceneManager.SpawnObject(m_mainModel, 0.0f, 0.0f, 0.0f);
-    m_sceneManager.SpawnObject(m_mainModel, 3.0f, 0.0f, 0.0f);
 
-    // Настройка света
-    m_sceneManager.SetLight(0, XMFLOAT3(-1.0f, 2.0f, -1.0f),
-        XMFLOAT4(1.0f, 1.0f, 0.9f, 1.0f), true);
 
-    m_sceneManager.SetLight(1, XMFLOAT3(0, 0, 0), XMFLOAT4(1.0f, 0.8f, 0.4f, 1.0f), true);
-    m_sceneManager.AttachLightToObject(1, 0, XMFLOAT3(0, 1.0f, 0));
-
-    m_sceneManager.SetupLightSpheres(m_lightSpheres, m_lightSphereModel);
-    // Пара объектов для примера — сохраняем индексы и назначаем материал
-    int idx0 = m_sceneManager.SpawnObject(m_mainModel, 10.0f, 0.0f, 0.0f);
-    int idx1 = m_sceneManager.SpawnObject(m_mainModel, 5.0f, 0.0f, 0.0f);
-
-    auto* mat = new MaterialClass();
-    mat->Initialize(m_direct3D->GetDevice(), L"StoneWithDirt");
-    // назначаем мульти-шейдер (убедитесь, что m_multiTextureShader инициализирован)
-    mat->SetShader(m_fogShader);
-
-    TextureClass* stone = new TextureClass();
-    bool okStone = stone->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/stone.tga");
-    if (okStone) mat->AddTexture(stone);
-    else OutputDebugStringA("ERROR: stone texture failed to initialize\n");
-
-    TextureClass* dirt = new TextureClass();
-    bool okDirt = dirt->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/uv.tga");
-    if (okDirt) mat->AddTexture(dirt);
-    else OutputDebugStringA("ERROR: dirt texture failed to initialize\n");
-
-    // Печатаем указатели SRV — быстрое подтверждение, что GetTexture() не nullptr
-    {
-        char buf[256];
-        sprintf_s(buf, "DEBUG: stone SRV=%p, dirt SRV=%p, okStone=%d, okDirt=%d\n",
-            (void*)(stone->GetTexture()), (void*)(dirt->GetTexture()), okStone ? 1 : 0, okDirt ? 1 : 0);
-        OutputDebugStringA(buf);
-    }
-
-    // Назначаем материал объекту (убедитесь, что берёте правильный объект)
-    GameObject* obj0 = m_sceneManager.GetObject(idx0); // если у вас другое имя — используйте m_sceneManager
-    GameObject* obj1 = m_sceneManager.GetObject(idx1);
-    if (obj0) {
-        obj0->SetMaterial(mat);
-        OutputDebugStringA("DEBUG: Application: assigned MultiTexture material to obj0\n");
-    }
-    if (obj1) {
-        obj1->SetMaterial(mat);
-        OutputDebugStringA("DEBUG: Application: assigned MultiTexture material to obj1\n");
-    }
-
-   // Render - to - texture
-        m_renderTexture = new RenderTextureClass;
-    if (!m_renderTexture->Initialize(m_direct3D->GetDevice(),
-        512, 512, SCREEN_DEPTH, SCREEN_NEAR, 1))
+    // ── Render-to-texture для Scene Preview ──────────────────────────────────
+    m_renderTexture = new RenderTextureClass;
+    if (!m_renderTexture->Initialize(m_direct3D->GetDevice(), 512, 512, SCREEN_DEPTH, SCREEN_NEAR, 1))
     {
         MessageBox(hwnd, L"Failed to initialize RenderTexture", L"Error", MB_OK);
         return false;
     }
 
-    // Квадрат для отображения текстуры (позиция в пикселях)
     m_renderQuad = new BitmapClass;
-	if (!m_renderQuad->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), screenHeight, screenWidth,
-         256, 256))
+    if (!m_renderQuad->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
+        screenHeight, screenWidth, 256, 256))
     {
         MessageBox(hwnd, L"Failed to initialize RenderQuad", L"Error", MB_OK);
         return false;
     }
-    m_renderQuad->SetRenderLocation(10, 10); // верхний левый угол
+    m_renderQuad->SetRenderLocation(10, 10);
 
-   
+  
+
     return true;
 }
 
+// ============================================================================
+// Shutdown
+// ============================================================================
 void ApplicationClass::Shutdown()
 {
-    // Очистка ресурсов в обратном порядке создания
     if (m_lightSphereModel)
     {
         m_lightSphereModel->Shutdown();
@@ -223,6 +191,48 @@ void ApplicationClass::Shutdown()
 
     ShaderManager::Get().Shutdown();
 
+    if (m_defaultMaterial)
+    {
+        m_defaultMaterial->Shutdown();
+        delete m_defaultMaterial;
+        m_defaultMaterial = nullptr;
+    }
+
+    if (m_defaultTexture)
+    {
+        m_defaultTexture->Shutdown();
+        delete m_defaultTexture;
+        m_defaultTexture = nullptr;
+    }
+
+    if (m_reflectionTexture)
+    {
+        m_reflectionTexture->Shutdown();
+        delete m_reflectionTexture;
+        m_reflectionTexture = nullptr;
+    }
+
+    if (m_refractionTexture)
+    {
+        m_refractionTexture->Shutdown();
+        delete m_refractionTexture;
+        m_refractionTexture = nullptr;
+    }
+
+    if (m_renderTexture)
+    {
+        m_renderTexture->Shutdown();
+        delete m_renderTexture;
+        m_renderTexture = nullptr;
+    }
+
+    if (m_renderQuad)
+    {
+        m_renderQuad->Shutdown();
+        delete m_renderQuad;
+        m_renderQuad = nullptr;
+    }
+
     if (m_mainModel)
     {
         m_mainModel->Shutdown();
@@ -230,30 +240,37 @@ void ApplicationClass::Shutdown()
         m_mainModel = nullptr;
     }
 
-
-    if (m_direct3D) {
+    if (m_direct3D)
         m_direct3D->Shutdown();
-    }
 
     m_editorUI.Shutdown();
-
-
 }
 
-
-//=============================================================================
-// Frame() - основной цикл кадра
-// - обновление ввода
-// - обработка камеры / перемещения
-// - рендер 3D + UI
-// - обработка drag & drop
-//=============================================================================
-bool ApplicationClass::Frame()
+// ============================================================================
+// Frame
+// ============================================================================
+bool ApplicationClass::Frame(float dt)
 {
     m_inputManager.Update(m_input);
-    ImGuiIO& io = ImGui::GetIO();
+    HandleCameraMovement(dt);
+    m_sceneManager.UpdateAll(dt);
 
-    HandleCameraMovement();
+    // ── Анимация воды: обновляем UV-смещение для всех Water-объектов ──────────
+    {
+        auto& meshPool = m_sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
+        for (auto& [entity, mesh] : meshPool)
+        {
+            if (!m_sceneManager.IsObjectActive(entity) || !mesh.material) continue;
+            auto* shader = mesh.material->GetShader();
+            if (!shader || shader->GetType() != ShaderType::Water) continue;
+
+            float t = mesh.material->GetWaterTranslation();
+            t += dt * 0.001f;
+            if (t > 1.0f) t -= 1.0f;
+            mesh.material->SetWaterTranslation(t);
+        }
+    }
+
     m_sceneManager.UpdateLights();
 
     m_camera->Render();
@@ -262,130 +279,243 @@ bool ApplicationClass::Frame()
 
     ID3D11DeviceContext* context = m_direct3D->GetDeviceContext();
 
-    // ── ПРОХОД 1: рендер в текстуру ─────────────────────────────────────────
+    // ── Обновляем reflection/refraction данные для Water и Reflection объектов ─
+    XMMATRIX reflectionMatrix = BuildReflectionMatrix(m_camera.get(), 0.0f);
+    {
+        auto& meshPool = m_sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
+        for (auto& [entity, mesh] : meshPool)
+        {
+            if (!m_sceneManager.IsObjectActive(entity) || !mesh.material) continue;
+            auto* shader = mesh.material->GetShader();
+            if (!shader) continue;
+
+            if (shader->GetType() == ShaderType::Water)
+            {
+                mesh.material->SetReflectionMatrix(reflectionMatrix);
+                mesh.material->SetReflectionSRV(m_reflectionTexture->GetShaderResourceView());
+                mesh.material->SetRefractionSRV(m_refractionTexture->GetShaderResourceView());
+            }
+            else if (shader->GetType() == ShaderType::Reflection)
+            {
+                mesh.material->SetReflectionMatrix(reflectionMatrix);
+                mesh.material->SetReflectionSRV(m_reflectionTexture->GetShaderResourceView());
+                mesh.material->SetReflectivity(0.5f);
+            }
+        }
+    }
+
+    // ── Pass 0: рендер ОТРАЖЕНИЯ → m_reflectionTexture ───────────────────────
+    m_reflectionTexture->SetRenderTarget(context);
+    m_reflectionTexture->ClearRenderTarget(context, 0.0f, 0.0f, 0.0f, 1.0f);
+    Render3DObjectsExcluding(context, reflectionMatrix, m_projMatrix, -1);
+    m_direct3D->SetBackBufferRenderTarget();
+    m_direct3D->ResetViewport();
+    {
+        ID3D11ShaderResourceView* nullSRVs[8] = {};
+        context->PSSetShaderResources(0, 8, nullSRVs);
+    }
+
+    // ── Pass 1: рендер ПРЕЛОМЛЕНИЯ → m_refractionTexture ─────────────────────
+    m_refractionTexture->SetRenderTarget(context);
+    m_refractionTexture->ClearRenderTarget(context, 0.0f, 0.0f, 0.0f, 1.0f);
+    {
+        auto& meshPool = m_sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
+        XMFLOAT4 lightColors[NUM_LIGHTS];
+        XMFLOAT4 lightPositions[NUM_LIGHTS];
+        SetupLights(lightColors, lightPositions);
+
+        for (auto& [entity, mesh] : meshPool)
+        {
+            if (!m_sceneManager.IsObjectActive(entity)) continue;
+
+            auto* transform = m_sceneManager.GetObjectTransform(entity);
+            if (!transform || !mesh.model) continue;
+
+            auto* mat = mesh.material ? mesh.material : m_defaultMaterial;
+            if (!mat) continue;
+
+            // Пропускаем Glass/Water — они используют refraction-текстуру
+            auto* shader = mat->GetShader();
+            if (shader)
+            {
+                ShaderType st = shader->GetType();
+                if (st == ShaderType::Glass || st == ShaderType::Water)
+                    continue;
+            }
+
+            XMMATRIX world = transform->GetWorldMatrix();
+            RenderMesh(context, mesh.model, world, m_viewMatrix, m_projMatrix,
+                mat, lightColors, lightPositions,
+                m_sceneManager.GetFogSettings(), false);
+        }
+    }
+    m_direct3D->SetBackBufferRenderTarget();
+    m_direct3D->ResetViewport();
+    {
+        ID3D11ShaderResourceView* nullSRVs[8] = {};
+        context->PSSetShaderResources(0, 8, nullSRVs);
+    }
+
+    // ── Pass 2: preview в RenderTexture (для EditorUI) ────────────────────────
     m_renderTexture->SetRenderTarget(context);
     m_renderTexture->ClearRenderTarget(context,
-        m_fogSettings.color.x,
-        m_fogSettings.color.y,
-        m_fogSettings.color.z, 1.0f);
-
+        m_sceneManager.GetFogSettings().color.x,
+        m_sceneManager.GetFogSettings().color.y,
+        m_sceneManager.GetFogSettings().color.z, 1.0f);
     XMMATRIX rtProj;
     m_renderTexture->GetProjectionMatrix(rtProj);
     Render3DObjects(context, m_viewMatrix, rtProj);
+    m_editorUI.SetScenePreviewTexture(m_renderTexture->GetShaderResourceView());
+    {
+        ID3D11ShaderResourceView* nullSRVs[8] = {};
+        context->PSSetShaderResources(0, 8, nullSRVs);
+    }
 
-    // ── ПРОХОД 2: рендер на экран ────────────────────────────────────────────
+    // ── Pass 3: финальный рендер на экран ─────────────────────────────────────
     m_direct3D->SetBackBufferRenderTarget();
     m_direct3D->ResetViewport();
 
-    // ✅ Фон = цвет тумана ТОЛЬКО если туман включён, иначе чёрный
-    if (m_fogSettings.enabled)
-    {
+    if (m_sceneManager.GetFogSettings().enabled)
         m_direct3D->BeginScene(
-            m_fogSettings.color.x,
-            m_fogSettings.color.y,
-            m_fogSettings.color.z, 1.0f);
-    }
+            m_sceneManager.GetFogSettings().color.x,
+            m_sceneManager.GetFogSettings().color.y,
+            m_sceneManager.GetFogSettings().color.z, 1.0f);
     else
-    {
         m_direct3D->BeginScene(0.0f, 0.0f, 0.0f, 1.0f);
-    }
 
     Render3DObjects(context, m_viewMatrix, m_projMatrix);
     RenderLightSources(context, m_viewMatrix, m_projMatrix);
     RenderWorldSprites(context, m_viewMatrix, m_projMatrix);
 
-    XMMATRIX world, ortho;
-    m_direct3D->GetWorldMatrix(world);
-    m_direct3D->GetOrthoMatrix(ortho);
-
-    m_editorUI.NewFrame();
-    RenderImGuizmo(m_viewMatrix, m_projMatrix);
-
-    ImGui::Begin("Scene Preview");
-    ImGui::Image(
-        (ImTextureID)m_renderTexture->GetShaderResourceView(),
-        ImVec2(256, 256)
-    );
-    ImGui::End();
-
-    // ── Fog UI панель ────────────────────────────────────────────────────────
-    ImGui::Begin("Fog Settings");
-    ImGui::Checkbox("Enable Fog", &m_fogSettings.enabled);
-    ImGui::SliderFloat("Fog Start", &m_fogSettings.FOG_START, 0.0f, 50.0f);
-    ImGui::SliderFloat("Fog End",   &m_fogSettings.FOG_END,   1.0f, 200.0f);
-    ImGui::ColorEdit3("Fog Color",  &m_fogSettings.color.x);
-    ImGui::End();
-
-    bool imguiWantsMouse = io.WantCaptureMouse || ImGuizmo::IsOver() || ImGuizmo::IsUsing();
+    bool imguiWantsMouse = m_editorUI.WantCaptureMouse()
+        || ImGuizmo::IsOver()
+        || ImGuizmo::IsUsing();
     if (!imguiWantsMouse)
         HandleDragDrop();
 
     m_editorUI.Update(m_sceneManager);
-    m_editorUI.Render();
 
+    // ── Обработка запросов от EditorUI ───────────────────────────────────────
+    {
+        auto spawnReq = m_editorUI.ConsumeSpawnRequest();
+        if (spawnReq.pending) SpawnObjectFromRequest(spawnReq);
+    }
+    {
+        auto saveReq = m_editorUI.ConsumeSaveRequest();
+        if (saveReq.pending)
+        {
+            if (m_sceneManager.SaveScene(saveReq.path))
+                OutputDebugStringA(("Scene saved to " + saveReq.path + "\n").c_str());
+            else
+                OutputDebugStringA(("Failed to save scene to " + saveReq.path + "\n").c_str());
+        }
+    }
+    {
+        auto loadReq = m_editorUI.ConsumeLoadRequest();
+        if (loadReq.pending)
+        {
+            m_sceneManager.LoadScene(loadReq.path,
+                m_direct3D->GetDevice(), m_direct3D->GetDeviceContext());
+            OutputDebugStringA(("Scene loaded from: " + loadReq.path + "\n").c_str());
+        }
+    }
+
+    m_editorUI.Render();
     m_direct3D->EndScene();
     return true;
 }
 
-
-//-----------------------------------------------------------------------------
-// RenderImGuizmo()
-// Описание: рендер и обработка ImGuizmo для редактируемого объекта.
-// Примечания: матрицы передаются и используются БЕЗ транспонирования.
-//-----------------------------------------------------------------------------
-void ApplicationClass::RenderImGuizmo(const XMMATRIX& viewMatrix, const XMMATRIX& projMatrix)
+// ============================================================================
+// SpawnObjectFromRequest
+// ============================================================================
+// ============================================================================
+// SpawnObjectFromRequest
+// ============================================================================
+void ApplicationClass::SpawnObjectFromRequest(const EditorUI::SpawnRequest& req)
 {
-    // 1) Если нет выбранного объекта — выходим
-    int selectedIndex = m_editorUI.GetSelectedIndex();
-    if (selectedIndex < 0) return;
+    OutputDebugStringA(("Spawning: " + req.modelPath + "\n").c_str());
+    ID3D11Device* device = m_direct3D->GetDevice();
+    ID3D11DeviceContext* context = m_direct3D->GetDeviceContext();
 
-    GameObject* obj = m_sceneManager.GetObject(selectedIndex);
-    if (!obj) return;
+    AssimpModelClass* model = m_sceneManager.GetOrCreateModel(
+        req.modelPath, device, context, req.texturePath);
 
-    // 2) Получаем модельную матрицу объекта
-    XMMATRIX modelMatrix = obj->GetWorldMatrix();
-
-    // Храним матрицы в формате float4x4 (ImGuizmo ожидает float[4][4])
-    XMFLOAT4X4 viewFloat, projFloat, modelFloat;
-    XMStoreFloat4x4(&viewFloat, viewMatrix);    // NO transpose
-    XMStoreFloat4x4(&projFloat, projMatrix);    // NO transpose
-    XMStoreFloat4x4(&modelFloat, modelMatrix);  // NO transpose
-
-    // 3) Настраиваем ImGuizmo под реальное окно (DisplaySize)
-    ImGuiIO& io = ImGui::GetIO();
-    float width = io.DisplaySize.x;
-    float height = io.DisplaySize.y;
-
-    ImGuizmo::SetDrawlist(ImGui::GetForegroundDrawList());
-    ImGuizmo::SetRect(0.0f, 0.0f, width, height);
-    ImGuizmo::SetGizmoSizeClipSpace(0.3f);
-
-    // 4) Вызываем Manipulate и обрабатываем результат
-    bool manipulated = ImGuizmo::Manipulate(
-        &viewFloat.m[0][0],
-        &projFloat.m[0][0],
-        ImGuizmo::OPERATION::TRANSLATE,
-        ImGuizmo::WORLD,
-        &modelFloat.m[0][0]
-    );
-
-    // 5) Если была модификация — применяем новую позицию к объекту
-    if (manipulated)
+    if (!model)
     {
-        XMMATRIX updatedMatrix = XMLoadFloat4x4(&modelFloat); // NO transpose
-        XMFLOAT3 newPos;
-        XMStoreFloat3(&newPos, updatedMatrix.r[3]); // четвертый столбец — позиция
-
-        obj->SetPosition(newPos.x, newPos.y, newPos.z);
-        OutputDebugStringA(("✏️ Gizmo moved: " +
-            std::to_string(newPos.x) + ", " +
-            std::to_string(newPos.y) + "\n").c_str());
+        OutputDebugStringA("SpawnObjectFromRequest: model FAILED\n");
+        return;
     }
+
+    auto* mat = new MaterialClass();
+    mat->Initialize(device, L"SpawnedMaterial ");
+
+    // --- ПРАВИЛЬНАЯ ЛОГИКА ОПРЕДЕЛЕНИЯ ТИПА МОДЕЛИ ---
+    std::string modelPathLower = req.modelPath;
+    std::transform(modelPathLower.begin(), modelPathLower.end(), modelPathLower.begin(), ::tolower);
+
+    ShaderBaseClass* initShader = nullptr;
+
+    // Для GLB/GLTF — всегда PBR
+    if (modelPathLower.ends_with(".glb") || modelPathLower.ends_with(".gltf"))
+    {
+        initShader = m_pbrShader;
+        OutputDebugStringA(("Auto-assigning PBR shader for GLB/GLTF: " + req.modelPath + "\n").c_str());
+    }
+    else
+    {
+        // Для .obj и других — LightShader (для освещения)
+        initShader = m_lightShader;
+        OutputDebugStringA(("Auto-assigning Light shader for: " + req.modelPath + "\n").c_str());
+    }
+
+    if (!initShader)
+    {
+        OutputDebugStringA("SpawnObjectFromRequest: initial shader is NULL!\n");
+        delete mat;
+        return;
+    }
+
+    mat->SetShader(initShader);
+
+    // --- ЗАГРУЗКА ВНЕШНЕЙ ТЕКСТУРЫ (если указана) ---
+    if (!req.texturePath.empty())
+    {
+        TextureClass* tex = new TextureClass();
+        if (tex->Initialize(device, context, req.texturePath.c_str()))
+        {
+            mat->SetMainTexture(tex);
+            OutputDebugStringA(("Assigned external texture: " + req.texturePath + "\n").c_str());
+        }
+        else
+        {
+            delete tex;
+            // Если загрузка не удалась — используем дефолтную текстуру (stone.tga)
+            if (m_defaultTexture)
+            {
+                mat->SetMainTexture(m_defaultTexture);
+                OutputDebugStringA("Assigned default texture (stone.tga)\n");
+            }
+        }
+    }
+    // Если req.texturePath.empty() — мы НЕ назначаем MainTexture.
+    // Но это нормально: для LightShader в RenderMesh.h будет использоваться material->GetMainTexture(),
+    // а у m_defaultMaterial установлена на stone.tga (см. Initialize в ApplicationClass.cpp).
+
+    Entity newEntity = m_sceneManager.SpawnObject(model, req.posX, req.posY, req.posZ);
+    m_sceneManager.SetObjectMaterial(newEntity, mat);
+
+    m_editorUI.SetSelection(EditorUI::SelectedType::Object, newEntity);
+
+    char buf[256];
+    sprintf_s(buf, "Spawned entity=%u at (%.1f, %.1f, %.1f)\n",
+        newEntity, req.posX, req.posY, req.posZ);
+    OutputDebugStringA(buf);
 }
 
-//-----------------------------------------------------------------------------
-// Рендеринг сценических объектов, источников света и спрайтов
-//-----------------------------------------------------------------------------
+// (остальной код файла остается без изменений)
+// ============================================================================
+// Render3DObjects
+// ============================================================================
 void ApplicationClass::Render3DObjects(
     ID3D11DeviceContext* context,
     const XMMATRIX& view,
@@ -394,21 +524,65 @@ void ApplicationClass::Render3DObjects(
     m_direct3D->TurnZBufferOn();
     m_direct3D->TurnAlphaBlendingOff();
 
-    // ✅ Обновляем FogBuffer во ВСЕХ шейдерах один раз перед рендером сцены
     ShaderManager::Get().ForEach([&](ShaderBaseClass* shader) {
-        shader->UpdateFog(context, m_fogSettings);
-    });
+        shader->UpdateFog(context, m_sceneManager.GetFogSettings());
+        });
 
     XMFLOAT4 lightColors[NUM_LIGHTS];
     XMFLOAT4 lightPositions[NUM_LIGHTS];
     SetupLights(lightColors, lightPositions);
 
-    int selectedIndex = m_editorUI.GetSelectedIndex();
-    m_sceneManager.RenderAll(context, m_direct3D->GetDevice(), view, projection,
-        m_defaultMaterial, lightColors, lightPositions, selectedIndex,
-        m_fogSettings);
+    Entity selectedEntity = (m_editorUI.GetSelectedType() == EditorUI::SelectedType::Object)
+        ? m_editorUI.GetSelectedEntity() : INVALID_ENTITY;
+
+    XMFLOAT3 camPos = m_camera->GetPosition(); // ← берём реальную позицию
+
+    m_sceneManager.RenderAllECS(
+        context, view, projection,
+        m_defaultMaterial,
+        lightColors, lightPositions,
+        m_sceneManager.GetFogSettings(),
+        selectedEntity,
+        camPos);   // ← передаём
+
+
+    // Пример: в конце Render3DObjects перед обычным сценовым рендером
+
+}
+// ============================================================================
+// Render3DObjectsExcluding
+// ============================================================================
+void ApplicationClass::Render3DObjectsExcluding(
+    ID3D11DeviceContext* context,
+    const XMMATRIX& view,
+    const XMMATRIX& projection,
+    int excludeIndex)
+{
+    m_direct3D->TurnZBufferOn();
+    m_direct3D->TurnAlphaBlendingOff();
+
+    ShaderManager::Get().ForEach([&](ShaderBaseClass* shader) {
+        shader->UpdateFog(context, m_sceneManager.GetFogSettings());
+        });
+
+    XMFLOAT4 lightColors[NUM_LIGHTS];
+    XMFLOAT4 lightPositions[NUM_LIGHTS];
+    SetupLights(lightColors, lightPositions);
+
+    Entity excludeEntity = (excludeIndex >= 0)
+        ? static_cast<Entity>(excludeIndex) : INVALID_ENTITY;
+
+    m_sceneManager.RenderAllECSExcluding(
+        context, view, projection,
+        m_defaultMaterial,
+        lightColors, lightPositions,
+        m_sceneManager.GetFogSettings(),
+        excludeEntity);
 }
 
+// ============================================================================
+// RenderLightSources
+// ============================================================================
 void ApplicationClass::RenderLightSources(
     ID3D11DeviceContext* context,
     const XMMATRIX& view,
@@ -420,23 +594,19 @@ void ApplicationClass::RenderLightSources(
 
     for (size_t i = 0; i < m_lightSpheres.size() && i < NUM_LIGHTS; ++i)
     {
-        // Пропускаем неактивные источники света
         if (lightPositions[i].w <= 0.0f ||
             (lightColors[i].x == 0 && lightColors[i].y == 0 && lightColors[i].z == 0))
-        {
             continue;
-        }
 
         m_lightSpheres[i].SetPosition(
-            lightPositions[i].x,
-            lightPositions[i].y,
-            lightPositions[i].z
-        );
-
+            lightPositions[i].x, lightPositions[i].y, lightPositions[i].z);
         m_lightSpheres[i].RenderSimple(context, view, projection, m_textureShader);
     }
 }
 
+// ============================================================================
+// RenderWorldSprites
+// ============================================================================
 void ApplicationClass::RenderWorldSprites(
     ID3D11DeviceContext* context,
     const XMMATRIX& view,
@@ -447,9 +617,9 @@ void ApplicationClass::RenderWorldSprites(
     m_direct3D->TurnAlphaBlendingOff();
 }
 
-//-----------------------------------------------------------------------------
-// Вспомогательные функции: свет, матрицы, пересечение луч-сфера
-//-----------------------------------------------------------------------------
+// ============================================================================
+// SetupLights
+// ============================================================================
 void ApplicationClass::SetupLights(XMFLOAT4 colors[], XMFLOAT4 positions[])
 {
     for (int i = 0; i < NUM_LIGHTS; ++i)
@@ -459,221 +629,173 @@ void ApplicationClass::SetupLights(XMFLOAT4 colors[], XMFLOAT4 positions[])
     }
 }
 
-XMMATRIX ApplicationClass::BuildSpriteMatrix(
-    float x, float y, float z,
-    float width, float height) const
+// ============================================================================
+// RayIntersectsSphere
+// ============================================================================
+bool RayIntersectsSphere(const CameraClass::Ray& ray,
+    const XMFLOAT3& sphereCenter, float sphereRadius)
 {
-    XMMATRIX scale = XMMatrixScaling(width, height, 1.0f);
-    XMMATRIX translate = XMMatrixTranslation(x, y, z);
-    return scale * translate;
-}
-
-bool RayIntersectsSphere(
-    const CameraClass::Ray& ray,
-    const XMFLOAT3& sphereCenter,
-    float sphereRadius)
-{
-    XMVECTOR L = XMVectorSubtract(
-        XMLoadFloat3(&sphereCenter),
-        XMLoadFloat3(&ray.origin)
-    );
-
+    XMVECTOR L = XMLoadFloat3(&sphereCenter) - XMLoadFloat3(&ray.origin);
     float t = XMVectorGetX(XMVector3Dot(L, XMLoadFloat3(&ray.direction)));
     if (t < 0.0f) return false;
 
-    XMVECTOR closestPoint = XMVectorAdd(
-        XMLoadFloat3(&ray.origin),
-        XMVectorScale(XMLoadFloat3(&ray.direction), t)
-    );
-
-    float distance = XMVectorGetX(
-        XMVector3Length(
-            XMVectorSubtract(closestPoint, XMLoadFloat3(&sphereCenter))
-        )
-    );
-
-    return distance <= sphereRadius;
+    XMVECTOR closest = XMLoadFloat3(&ray.origin) +
+        XMVectorScale(XMLoadFloat3(&ray.direction), t);
+    float dist = XMVectorGetX(XMVector3Length(closest - XMLoadFloat3(&sphereCenter)));
+    return dist <= sphereRadius;
 }
 
-//=============================================================================
-// Обработка ввода и Drag&Drop
-//=============================================================================
-void ApplicationClass::UpdateInputState()
+// ============================================================================
+// HandleCameraMovement
+// ============================================================================
+void ApplicationClass::HandleCameraMovement(float dt)
 {
-    // Синхронизируем локальные флаги из низкоуровневого ввода
-    m_isLeftDown = m_input->IsLeftButtonDown();
-    m_isRightDown = m_input->IsRightButtonDown();
-    m_isMouseCaptured = m_input->IsMouseCaptured();
-   /* m_isLeftDown = m_inputManager.IsLeftDown();*/
+    dt = min(dt, 0.05f);
 
-    if (!m_isMouseCaptured)
-    {
-        m_input->GetMousePosition(m_mouseX, m_mouseY);
-    }
+    bool rightDown = m_inputManager.IsCameraMode();
 
-    static bool wasLeftDown = false;
-
-    // Только при новом нажатии фиксируем координаты начала клика
-    if (m_isLeftDown && !wasLeftDown)
-    {
-        m_clickStartX = m_mouseX;
-        m_clickStartY = m_mouseY;
-        m_potentialDrag = true;
-        OutputDebugStringA("🖱️ Left mouse button DOWN\n");
-    }
-
-    wasLeftDown = m_isLeftDown;
-}
-
-void ApplicationClass::HandleCameraMovement()
-{
-    // ===== 1) ЗАХВАТ / ОСВОБОЖДЕНИЕ МЫШИ — ЧЕРЕЗ InputManager =====
-    bool rightDown = m_inputManager.IsCameraMode();  // 🔥 Из InputManager, не m_input!
-
-    if (rightDown && !m_inputManager.IsMouseCaptured(m_input)) {
+    if (rightDown && !m_inputManager.IsMouseCaptured(m_input) && !m_editorUI.WantCaptureMouse())
         m_inputManager.SetMouseCapture(m_input, true);
-    }
-    else if (!rightDown && m_inputManager.IsMouseCaptured(m_input)) {
+    else if (!rightDown && m_inputManager.IsMouseCaptured(m_input))
         m_inputManager.SetMouseCapture(m_input, false);
-    }
 
-    // ===== 2) ВРАЩЕНИЕ КАМЕРЫ — ТОЛЬКО ЕСЛИ ЗАХВАЧЕНА МЫШЬ =====
-    if (m_inputManager.IsMouseCaptured(m_input)) {
+    if (m_inputManager.IsMouseCaptured(m_input))
+    {
         int deltaX, deltaY;
-        m_input->GetMouseDelta(deltaX, deltaY);  // Сырой InputClass для дельты
+        m_input->GetMouseDelta(deltaX, deltaY);
         m_inputManager.ResetMouseDelta(m_input);
 
-        float rotX = m_camera->GetRotation().x;
-        float rotY = m_camera->GetRotation().y;
-
-        const float sensitivity = Settings::CAMERA_SENSITIVITY;
-        rotY += deltaX * sensitivity;
-        rotX += deltaY * sensitivity;
+        float rotX = m_camera->GetRotation().x + deltaY * Settings::CAMERA_SENSITIVITY;
+        float rotY = m_camera->GetRotation().y + deltaX * Settings::CAMERA_SENSITIVITY;
         rotX = clamp(rotX, -89.0f, 89.0f);
-
         m_camera->SetRotation(rotX, rotY, m_camera->GetRotation().z);
     }
 
-    // ===== 3) ПЕРЕМЕЩЕНИЕ КАМЕРЫ — ВСЕГДА =====
     {
         float posX = m_camera->GetPosition().x;
         float posY = m_camera->GetPosition().y;
         float posZ = m_camera->GetPosition().z;
 
         float speed = Settings::INPUT_MOVE_SPEED;
-        if (m_inputManager.IsKeyDown(m_input, VK_SHIFT))    speed *= 2.0f;
-        if (m_inputManager.IsKeyDown(m_input, VK_CONTROL))  speed *= 0.5f;
+        if (m_inputManager.IsKeyDown(m_input, VK_SHIFT))   speed *= 2.0f;
+        if (m_inputManager.IsKeyDown(m_input, VK_CONTROL)) speed *= 0.5f;
 
         float yawRad = XMConvertToRadians(m_camera->GetRotation().y);
-        float sinYaw = sinf(yawRad);
-        float cosYaw = cosf(yawRad);
+        float sinYaw = sinf(yawRad), cosYaw = cosf(yawRad);
 
-        if (m_inputManager.IsKeyDown(m_input, 'W')) { posX += sinYaw * speed; posZ += cosYaw * speed; }
-        if (m_inputManager.IsKeyDown(m_input, 'L')) { m_sceneManager.LoadScene("f.json", m_direct3D->GetDevice(), m_direct3D->GetDeviceContext()); }
-        if (m_inputManager.IsKeyDown(m_input, 'S')) { posX -= sinYaw * speed; posZ -= cosYaw * speed; }
-        if (m_inputManager.IsKeyDown(m_input, 'A')) { posX -= cosYaw * speed; posZ += sinYaw * speed; }
-        if (m_inputManager.IsKeyDown(m_input, 'D')) { posX += cosYaw * speed; posZ -= sinYaw * speed; }
-        if (m_inputManager.IsKeyDown(m_input, 'R')) { posY += speed; }
-        if (m_inputManager.IsKeyDown(m_input, 'F')) { posY -= speed; }
+        if (m_inputManager.IsKeyDown(m_input, 'W')) { posX += sinYaw * speed * dt; posZ += cosYaw * speed * dt; }
+        if (m_inputManager.IsKeyDown(m_input, 'S')) { posX -= sinYaw * speed * dt; posZ -= cosYaw * speed * dt; }
+        if (m_inputManager.IsKeyDown(m_input, 'A')) { posX -= cosYaw * speed * dt; posZ += sinYaw * speed * dt; }
+        if (m_inputManager.IsKeyDown(m_input, 'D')) { posX += cosYaw * speed * dt; posZ -= sinYaw * speed * dt; }
+        if (m_inputManager.IsKeyDown(m_input, 'R')) posY += speed * dt;
+        if (m_inputManager.IsKeyDown(m_input, 'F')) posY -= speed * dt;
 
         m_camera->SetPosition(posX, posY, posZ);
     }
 }
 
+// ============================================================================
+// HandleDragDrop
+// ============================================================================
 void ApplicationClass::HandleDragDrop()
 {
-    ImGuiIO& io = ImGui::GetIO();
-    if (io.WantCaptureMouse || ImGuizmo::IsOver()) return;
-
-    // 1) Если уже dragging — обновляем позицию
     if (m_inputManager.IsDragging() && m_inputManager.IsLeftDown())
     {
         CameraClass::Ray ray = m_camera->CreatePickingRay(
-            m_inputManager.GetMouseX(),
-            m_inputManager.GetMouseY(),
-            m_screenWidth, m_screenHeight,
-            m_viewMatrix, m_projMatrix
-        );
+            m_inputManager.GetMouseX(), m_inputManager.GetMouseY(),
+            m_screenWidth, m_screenHeight, m_viewMatrix, m_projMatrix);
 
-        UpdateDraggedPosition(ray);
+        if (!m_isDragging && m_pendingPickResult.IsValid())
+        {
+            switch (m_pendingPickResult.type)
+            {
+            case PickingSystem::PickedType::Light:
+                StartDraggingLight(m_pendingPickResult.index, ray);
+                break;
+            case PickingSystem::PickedType::Object:
+                if (auto* t = m_sceneManager.GetObjectTransform(
+                    static_cast<Entity>(m_pendingPickResult.index)))
+                    StartDraggingObject(m_pendingPickResult.index, ray, t->position);
+                break;
+            case PickingSystem::PickedType::Sprite:
+                if (auto* spr = m_sceneManager.GetSprite(m_pendingPickResult.index))
+                    StartDraggingSprite(m_pendingPickResult.index, ray, spr->GetPosition());
+                break;
+            }
+        }
+
+        if (m_isDragging)
+            UpdateDraggedPosition(ray);
+
         return;
     }
 
-    // 2) Быстрый клик — выбор объекта
-    if (!m_inputManager.IsDragging() && !m_inputManager.IsCameraMode())
+    if (!m_inputManager.IsDragging() && !m_inputManager.IsLeftDown() && m_isDragging)
     {
-        auto result = m_pickingSystem.PickAt(
-            m_inputManager.GetMouseX(),
-            m_inputManager.GetMouseY(),
-            *m_camera,
-            m_viewMatrix,
-            m_projMatrix,
-            m_sceneManager,
-            m_lightSpheres,
-            m_screenWidth,
-            m_screenHeight
-        );
+        StopDragging();
+        m_pendingPickResult = {};
+        return;
+    }
 
-        if (result.IsValid())
+    if (m_inputManager.IsCameraMode())
+        return;
+
+    if (m_inputManager.IsLeftDown() && !m_isDragging)
+    {
+        m_pendingPickResult = m_pickingSystem.PickAt(
+            m_inputManager.GetMouseX(), m_inputManager.GetMouseY(),
+            *m_camera, m_viewMatrix, m_projMatrix,
+            m_sceneManager, m_lightSpheres,
+            m_screenWidth, m_screenHeight);
+
+        if (m_pendingPickResult.IsValid())
         {
-            EditorUI::SelectedType uiType = EditorUI::SelectedType::None;
-            switch (result.type) {
-            case PickingSystem::PickedType::Object: uiType = EditorUI::SelectedType::Object; break;
-            case PickingSystem::PickedType::Light:  uiType = EditorUI::SelectedType::Light; break;
-            case PickingSystem::PickedType::Sprite: uiType = EditorUI::SelectedType::Sprite; break;
-            }
-
-            m_editorUI.SetSelection(uiType, result.index);
-
-            // 🔥 НОВОЕ: Начинаем drag для ВСЕХ типов, не только света
-            CameraClass::Ray ray = m_camera->CreatePickingRay(
-                m_inputManager.GetMouseX(),
-                m_inputManager.GetMouseY(),
-                m_screenWidth, m_screenHeight,
-                m_viewMatrix, m_projMatrix
-            );
-
-            if (result.type == PickingSystem::PickedType::Light)
+            switch (m_pendingPickResult.type)
             {
-                StartDraggingLight(result.index, ray);
+            case PickingSystem::PickedType::Object:
+                m_editorUI.SetSelection(
+                    EditorUI::SelectedType::Object,
+                    static_cast<Entity>(m_pendingPickResult.index));
+                break;
+            case PickingSystem::PickedType::Light:
+                m_editorUI.SetSelection(EditorUI::SelectedType::Light,
+                    m_pendingPickResult.index);
+                break;
+            case PickingSystem::PickedType::Sprite:
+                m_editorUI.SetSelection(EditorUI::SelectedType::Sprite,
+                    m_pendingPickResult.index);
+                break;
             }
-            else if (result.type == PickingSystem::PickedType::Object)
-            {
-                GameObject* obj = m_sceneManager.GetObject(result.index);
-                if (obj)
-                {
-                    XMFLOAT3 objPos = obj->GetPosition();  // или GetWorldMatrix().r[3]
-                    StartDraggingObject(result.index, ray, objPos);
-                }
-            }
-            else if (result.type == PickingSystem::PickedType::Sprite)
-            {
-                WorldSpriteClass* sprite = m_sceneManager.GetSprite(result.index);
-                if (sprite)
-                {
-                    XMFLOAT3 spritePos = sprite->GetPosition();
-                    StartDraggingSprite(result.index, ray, spritePos);
-                }
-            }
+        }
+        else
+        {
+            m_pendingPickResult = {};
         }
     }
 }
-//-----------------------------------------------------------------------------
-// Начало перетаскивания (light / sprite / object) и обновление позиции
-//-----------------------------------------------------------------------------
+
+// ============================================================================
+// Drag helpers
+// ============================================================================
 void ApplicationClass::StartDraggingLight(int index, const CameraClass::Ray& pickRay)
 {
     m_isDragging = true;
     m_draggedLightIndex = index;
     m_draggedObjectIndex = -1;
     m_draggedSpriteIndex = -1;
-    m_dragDistance = 2.0f;
-    m_dragOffset = { 0,0,0 };
+    m_dragOffset = { 0, 0, 0 };
+
     m_sceneManager.DetachLight(index);
-    OutputDebugStringA("💡 Dragging light\n");
+
+    XMFLOAT4 lightPos4 = m_sceneManager.GetLightPosition(index);
+    XMFLOAT3 lightPos = { lightPos4.x, lightPos4.y, lightPos4.z };
+
+    XMVECTOR toLight = XMLoadFloat3(&lightPos) - XMLoadFloat3(&pickRay.origin);
+    m_dragDistance = max(1.0f, XMVectorGetX(XMVector3Length(toLight)));
 }
 
-void ApplicationClass::StartDraggingSprite(int index, const CameraClass::Ray& pickRay, const XMFLOAT3& spritePos)
+void ApplicationClass::StartDraggingSprite(int index,
+    const CameraClass::Ray& pickRay, const XMFLOAT3& spritePos)
 {
     m_isDragging = true;
     m_draggedSpriteIndex = index;
@@ -681,14 +803,12 @@ void ApplicationClass::StartDraggingSprite(int index, const CameraClass::Ray& pi
     m_draggedObjectIndex = -1;
 
     XMVECTOR toSprite = XMLoadFloat3(&spritePos) - XMLoadFloat3(&pickRay.origin);
-    m_dragDistance = XMVectorGetX(XMVector3Length(toSprite));
-    if (m_dragDistance < 1.0f) m_dragDistance = 1.0f;
-
-    m_dragOffset = { 0,0,0 };
-    OutputDebugStringA("🖼️ Dragging sprite\n");
+    m_dragDistance = max(1.0f, XMVectorGetX(XMVector3Length(toSprite)));
+    m_dragOffset = { 0, 0, 0 };
 }
 
-void ApplicationClass::StartDraggingObject(int index, const CameraClass::Ray& pickRay, const XMFLOAT3& objPos)
+void ApplicationClass::StartDraggingObject(int index,
+    const CameraClass::Ray& pickRay, const XMFLOAT3& objPos)
 {
     m_isDragging = true;
     m_draggedObjectIndex = index;
@@ -696,41 +816,33 @@ void ApplicationClass::StartDraggingObject(int index, const CameraClass::Ray& pi
     m_draggedSpriteIndex = -1;
 
     XMVECTOR toObj = XMLoadFloat3(&objPos) - XMLoadFloat3(&pickRay.origin);
-    m_dragDistance = XMVectorGetX(XMVector3Length(toObj));
-    if (m_dragDistance < 1.0f) m_dragDistance = 1.0f;
-
-    m_dragOffset = { 0,0,0 };
-    OutputDebugStringA("📦 Dragging object\n");
+    m_dragDistance = max(1.0f, XMVectorGetX(XMVector3Length(toObj)));
+    m_dragOffset = { 0, 0, 0 };
 }
 
 void ApplicationClass::UpdateDraggedPosition(const CameraClass::Ray& ray)
 {
-    // Простейшее позиционирование вдоль луча на фиксированном расстоянии
-    XMFLOAT3 newPos;
-    newPos.x = ray.origin.x + ray.direction.x * m_dragDistance;
-    newPos.y = ray.origin.y + ray.direction.y * m_dragDistance;
-    newPos.z = ray.origin.z + ray.direction.z * m_dragDistance;
-
-    newPos.x += m_dragOffset.x;
-    newPos.y += m_dragOffset.y;
-    newPos.z += m_dragOffset.z;
+    XMFLOAT3 newPos = {
+        ray.origin.x + ray.direction.x * m_dragDistance + m_dragOffset.x,
+        ray.origin.y + ray.direction.y * m_dragDistance + m_dragOffset.y,
+        ray.origin.z + ray.direction.z * m_dragDistance + m_dragOffset.z
+    };
 
     if (m_draggedLightIndex >= 0)
     {
-        m_sceneManager.SetLight(m_draggedLightIndex, newPos,
-            XMFLOAT4(1, 1, 0.9f, 1), true);
+        m_sceneManager.SetLight(m_draggedLightIndex, newPos, XMFLOAT4(1, 1, 0.9f, 1), true);
     }
     else if (m_draggedSpriteIndex >= 0)
     {
-        WorldSpriteClass* sprite = m_sceneManager.GetSprite(m_draggedSpriteIndex);
-        if (sprite) sprite->SetPosition(newPos.x, newPos.y, newPos.z);
+        if (auto* spr = m_sceneManager.GetSprite(m_draggedSpriteIndex))
+            spr->SetPosition(newPos.x, newPos.y, newPos.z);
     }
     else if (m_draggedObjectIndex >= 0)
     {
-        GameObject* obj = m_sceneManager.GetObject(m_draggedObjectIndex);
-        if (obj)
+        if (auto* t = m_sceneManager.GetObjectTransform(
+            static_cast<Entity>(m_draggedObjectIndex)))
         {
-            obj->SetPosition(newPos.x, newPos.y, newPos.z);
+            t->position = newPos;
         }
     }
 }
@@ -742,4 +854,30 @@ void ApplicationClass::StopDragging()
     m_draggedLightIndex = -1;
     m_draggedSpriteIndex = -1;
     m_dragDistance = 0.0f;
+}
+
+// ============================================================================
+// BuildReflectionMatrix
+// ============================================================================
+XMMATRIX ApplicationClass::BuildReflectionMatrix(CameraClass* camera, float reflectY)
+{
+    XMFLOAT3 pos = camera->GetPosition();
+    XMFLOAT3 rot = camera->GetRotation();
+
+    float reflectedPosY = 2.0f * reflectY - pos.y;
+    float pitch = rot.x * 0.0174532925f;
+    float yaw = rot.y * 0.0174532925f;
+
+    XMMATRIX rotMat = XMMatrixRotationRollPitchYaw(pitch, yaw, 0.0f);
+    XMVECTOR forward = XMVector3TransformCoord(XMVectorSet(0, 0, 1, 0), rotMat);
+    XMVECTOR up = XMVector3TransformCoord(XMVectorSet(0, 1, 0, 0), rotMat);
+
+    XMVECTOR reflectPlane = XMVectorSet(0.0f, 1.0f, 0.0f, -reflectY);
+    XMMATRIX reflectMat = XMMatrixReflect(reflectPlane);
+
+    XMVECTOR reflPos = XMVectorSet(pos.x, reflectedPosY, pos.z, 1.0f);
+    XMVECTOR reflForward = XMVector3TransformNormal(forward, reflectMat);
+    XMVECTOR reflUp = XMVector3TransformNormal(up, reflectMat);
+
+    return XMMatrixLookAtLH(reflPos, XMVectorAdd(reflPos, reflForward), reflUp);
 }

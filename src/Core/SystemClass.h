@@ -30,9 +30,16 @@ public:
     ~SystemClass();
 
     // 📌 Публичный интерфейс для WinMain
-    bool Initialize();   // Создать окно + подсистемы
-    void Shutdown();     // Очистить всё
-    void Run();          // Запустить главный цикл
+    // Создаёт окно, инициализирует ввод и графику.
+    // Возвращает false если хоть что-то не удалось инициализировать.
+    bool Initialize();
+
+    // Освобождает все ресурсы в безопасном порядке (графика → ввод → окно).
+    void Shutdown();
+
+    // Запускает главный цикл: обрабатывает сообщения Windows и вызывает Frame().
+    // Работает до получения WM_QUIT или пока Frame() не вернёт false.
+    void Run();
 
     // 📌 Обработчик сообщений Windows — маршрутизирует события в класс
     // 💡 Вызывается из глобальной функции WndProc (см. ниже)
@@ -40,18 +47,28 @@ public:
 
 private:
     // 📌 Внутренние методы
-    bool Frame();                    // Обработка одного кадра (логика + рендер)
-    void InitializeWindows(int& width, int& height);  // Создание окна WinAPI
-    void ShutdownWindows();          // Уничтожение окна
+    // Обрабатывает один кадр: проверяет Escape и вызывает Application::Frame().
+    bool Frame(float dt);
 
-    // 📌 Состояние приложения
-    LPCWSTR m_applicationName;  // Имя окна (для заголовка и класса окна)
-    HINSTANCE m_hinstance;      // Дескриптор экземпляра приложения (нужен для создания окна)
-    HWND m_hwnd;                // Дескриптор окна — "адрес" окна в системе
+    // Регистрирует класс окна и создаёт окно нужного размера.
+    // Записывает реальные размеры экрана в screenWidth / screenHeight.
+    void InitializeWindows(int& screenWidth, int& screenHeight);
 
-    // 📌 Подсистемы
-    std::unique_ptr<InputClass> m_Input;        // Управление клавиатурой
-    ApplicationClass* m_Application;  // Графика (будет содержать DirectX)
+    // Уничтожает окно и снимает регистрацию класса окна.
+    void ShutdownWindows();
+
+    // ── Данные окна ──────────────────────────────────────────────────────────
+    LPCWSTR   m_applicationName; // имя класса окна и заголовок (L"Engine")
+    HINSTANCE m_hinstance;       // дескриптор экземпляра приложения
+    HWND      m_hwnd;            // дескриптор окна — «адрес» окна в системе
+
+    // ── Подсистемы ──────────────────────────────────────────────────────────
+    // SystemClass владеет InputClass через unique_ptr — автоочистка
+    std::unique_ptr<InputClass> m_Input;
+
+    // ApplicationClass владеется через обычный указатель (для совместимости с legacy кодом).
+    // Освобождается вручную в Shutdown().
+    ApplicationClass* m_Application;
 };
 
 //////////////////////////////////////////////////////////////////////////////// 

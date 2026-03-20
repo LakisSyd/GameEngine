@@ -1,0 +1,33 @@
+Texture2D floorTexture    : register(t0);
+Texture2D reflectTexture  : register(t1);
+SamplerState SampleType   : register(s0);
+
+cbuffer ReflectColorBuffer : register(b0)
+{
+    float reflectivity;   // 0.0 = только текстура пола, 1.0 = только отражение
+    float3 padding;
+};
+
+struct PixelInputType
+{
+    float4 position   : SV_POSITION;
+    float2 tex        : TEXCOORD0;
+    float4 reflectPos : TEXCOORD1;
+};
+
+float4 ReflectionPixelShader(PixelInputType input) : SV_TARGET
+{
+    // UV для текстуры пола
+    float2 floorUV = input.tex;
+
+    // Проецированные UV для отражения (perspective-correct)
+    float2 reflectUV;
+    reflectUV.x =  input.reflectPos.x / input.reflectPos.w * 0.5f + 0.5f;
+    reflectUV.y = -input.reflectPos.y / input.reflectPos.w * 0.5f + 0.5f;
+
+    float4 floorColor  = floorTexture.Sample(SampleType, floorUV);
+    float4 reflColor   = reflectTexture.Sample(SampleType, reflectUV);
+
+    // Смешиваем пол + отражение
+    return lerp(floorColor, reflColor, reflectivity);
+}

@@ -1,4 +1,4 @@
-﻿#include "BaseShader.h"
+#include "BaseShader.h"
 
 ShaderBaseClass::ShaderBaseClass()
     : m_vertexShader(nullptr), m_pixelShader(nullptr)
@@ -123,33 +123,6 @@ bool ShaderBaseClass::CreateConstantBuffer(ID3D11Device* device, UINT byteWidth,
 
     HRESULT hr = device->CreateBuffer(&desc, nullptr, outBuffer);
     return SUCCEEDED(hr);
-}
-
-template<typename T>
-bool ShaderBaseClass::UpdateConstantBuffer(
-    ID3D11DeviceContext* context,
-    ID3D11Buffer* buffer,
-    const T& data,
-    UINT slot,
-    bool vertexShader)
-{
-    if (!buffer) return false;
-
-    D3D11_MAPPED_SUBRESOURCE mapped;
-    HRESULT hr = context->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (FAILED(hr)) return false;
-
-    // Копируем данные (с учётом выравнивания)
-    memcpy(mapped.pData, &data, sizeof(T));
-    context->Unmap(buffer, 0);
-
-    // Привязываем к нужной стадии шейдера
-    if (vertexShader)
-        context->VSSetConstantBuffers(slot, 1, &buffer);
-    else
-        context->PSSetConstantBuffers(slot, 1, &buffer);
-
-    return true;
 }
 
 // ✅ Создаёт FogBuffer (слот b2)

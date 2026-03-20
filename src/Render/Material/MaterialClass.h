@@ -1,10 +1,4 @@
 ﻿#pragma once
-////////////////////////////////////////////////////////////////////////////////
-// Имя файла: materialclass.h
-// 📌 КЛАСС: MaterialClass
-// 💡 Назначение: Инкапсуляция визуальных свойств объекта (шейдер + текстуры + параметры)
-////////////////////////////////////////////////////////////////////////////////
-
 #include <d3d11.h>
 #include <DirectXMath.h>
 #include <vector>
@@ -20,15 +14,12 @@ public:
     MaterialClass();
     ~MaterialClass();
 
-    // === Инициализация и очистка ===
     bool Initialize(ID3D11Device* device, const std::wstring& name);
     void Shutdown();
 
-    // === Геттеры и сеттеры ===
     void SetShader(ShaderBaseClass* shader) { m_shader = shader; }
     ShaderBaseClass* GetShader() const { return m_shader; }
 
-    // Устанавливает основную текстуру (гарантирует слот 0)
     void SetMainTexture(TextureClass* texture) {
         if (m_textures.empty()) m_textures.resize(2, nullptr);
         m_textures[0] = texture;
@@ -37,7 +28,6 @@ public:
         return (!m_textures.empty() && m_textures[0]) ? m_textures[0] : nullptr;
     }
 
-    // Добавляет текстуру: ищет первый пустой слот, иначе push_back
     void AddTexture(TextureClass* texture) {
         if (m_textures.empty()) m_textures.resize(2, nullptr);
         for (auto& t : m_textures) {
@@ -45,11 +35,13 @@ public:
         }
         m_textures.push_back(texture);
     }
-    TextureClass* GetTexture(size_t index) const {
-        return (index < m_textures.size()) ? m_textures[index] : nullptr;
+    TextureClass* GetTexture(size_t index) const
+    {
+        if (index >= m_textures.size()) return nullptr;
+        return m_textures[index];
     }
+    void SetTexture(size_t index, TextureClass* texture);
 
-    // Параметры материала
     void SetDiffuseColor(const XMFLOAT3& color) { m_diffuseColor = color; }
     XMFLOAT3 GetDiffuseColor() const { return m_diffuseColor; }
 
@@ -59,19 +51,71 @@ public:
     void SetName(const std::wstring& name) { m_name = name; }
     const std::wstring& GetName() const { return m_name; }
 
-    // === Рендеринг (вызывается из GameObject) ===
-    // Подготовка шейдера и текстур перед отрисовкой
-    void Bind(ID3D11DeviceContext* context);
+    // ── Clip Plane ───────────────────────────────────────────────────────────
+    void       SetClipPlane(const XMFLOAT4& plane) { m_clipPlane = plane; m_clipEnabled = true; }
+    XMFLOAT4   GetClipPlane() const { return m_clipPlane; }
+    void       SetClipEnabled(bool enabled) { m_clipEnabled = enabled; }
+    bool       IsClipEnabled() const { return m_clipEnabled; }
 
-    // Очистка привязок после отрисовки (опционально)
+    // ── Reflection ───────────────────────────────────────────────────────────
+    void     SetReflectionMatrix(const XMMATRIX& m) { m_reflectionMatrix = m; }
+    XMMATRIX GetReflectionMatrix() const { return m_reflectionMatrix; }
+
+    // Добавь рядом с SetReflectionMatrix:
+    void     SetProjectorProjection(const XMMATRIX& m) { m_projectorProjection = m; }
+    XMMATRIX GetProjectorProjection() const { return m_projectorProjection; }
+
+
+
+    void                      SetReflectionSRV(ID3D11ShaderResourceView* srv) { m_reflectionSRV = srv; }
+    ID3D11ShaderResourceView* GetReflectionSRV() const { return m_reflectionSRV; }
+
+    void  SetReflectivity(float r) { m_reflectivity = r; }
+    float GetReflectivity() const { return m_reflectivity; }
+
+    // ── Water ────────────────────────────────────────────────────────────────
+    // waterTranslation    — UV-смещение нормал-карты, обновляется каждый кадр:
+    //                       m_waterTranslation += deltaTime * speed; (wrap в [0,1])
+    // reflectRefractScale — сила искажения отражения/преломления рябью (0.01–0.03)
+    // refractionTint      — синеватый оттенок воды: XMFLOAT4(0, 0.3f, 0.5f, 1)
+    // refractionSRV       — RenderTexture с подводной сценой (не владеет!)
+    void  SetWaterTranslation(float t) { m_waterTranslation = t; }
+    float GetWaterTranslation()     const { return m_waterTranslation; }
+
+    void  SetReflectRefractScale(float s) { m_reflectRefractScale = s; }
+    float GetReflectRefractScale()  const { return m_reflectRefractScale; }
+
+    void     SetRefractionTint(const XMFLOAT4& tint) { m_refractionTint = tint; }
+    XMFLOAT4 GetRefractionTint()               const { return m_refractionTint; }
+
+    void                      SetRefractionSRV(ID3D11ShaderResourceView* srv) { m_refractionSRV = srv; }
+    ID3D11ShaderResourceView* GetRefractionSRV()                        const { return m_refractionSRV; }
+
+    void Bind(ID3D11DeviceContext* context);
     void Unbind(ID3D11DeviceContext* context);
 
 private:
-    std::wstring m_name;              // Имя материала (для редактора)
-    ShaderBaseClass* m_shader;        // Шейдер (может быть LightShader, TextureShader и т.д.)
-    std::vector<TextureClass*> m_textures; // Текстуры: [0] = основная, [1] = нормаль-мапа и т.д.
 
-    // Параметры, которые могут использоваться шейдерами
-    XMFLOAT3 m_diffuseColor;          // Базовый цвет {1.0f, 1.0f, 1.0f}
-    float m_specularPower;            // Сила блика {20.0f}
+    XMMATRIX m_projectorProjection = XMMatrixIdentity(); // новое поле
+    std::wstring     m_name;
+    ShaderBaseClass* m_shader = nullptr;
+    std::vector<TextureClass*> m_textures;
+
+    XMFLOAT3 m_diffuseColor = { 1, 1, 1 };
+    float    m_specularPower = 16.0f;
+
+    // ── Clip Plane ───────────────────────────────────────────────────────────
+    XMFLOAT4 m_clipPlane = { 0.0f, 1.0f, 0.0f, 0.0f };
+    bool     m_clipEnabled = false;
+
+    // ── Reflection ───────────────────────────────────────────────────────────
+    XMMATRIX                  m_reflectionMatrix = XMMatrixIdentity();
+    ID3D11ShaderResourceView* m_reflectionSRV = nullptr; // не владеет!
+    float                     m_reflectivity = 0.5f;
+
+    // ── Water ────────────────────────────────────────────────────────────────
+    float                     m_waterTranslation = 0.0f;
+    float                     m_reflectRefractScale = 0.02f;
+    XMFLOAT4                  m_refractionTint = { 0.0f, 0.3f, 0.5f, 1.0f };
+    ID3D11ShaderResourceView* m_refractionSRV = nullptr; // не владеет!
 };

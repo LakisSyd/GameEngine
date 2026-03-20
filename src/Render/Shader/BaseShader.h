@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
@@ -6,6 +6,25 @@
 #include "../../Config/GameSettings.h"
 
 using namespace DirectX;
+
+enum class ShaderType : uint8_t
+{
+    Unknown = 0,
+    Color = 1,
+    Texture = 2,
+    Light = 3,
+    LightMap = 4,
+    MultiTexture = 5,
+    NormalMap = 6,
+    Fog = 7,
+    ClipPlane = 8,
+    Reflection = 9,
+    Water = 10,
+    Glass = 11,
+    Projection = 12,
+    PBR = 13
+};
+
 
 // Простой базовый класс-помощник (НЕ абстрактный!)
 class ShaderBaseClass
@@ -15,7 +34,7 @@ public:
     virtual ~ShaderBaseClass();
     virtual bool Initialize(ID3D11Device* device, HWND hwnd) { return true; }
     virtual void Shutdown();  // Не pure virtual!
-
+    virtual ShaderType GetType() const { return ShaderType::Unknown; }
     // Помощник для привязки шейдера перед Draw
     void BindShader(ID3D11DeviceContext* context);
 
@@ -59,7 +78,24 @@ protected:
     // Хелпер для обновления буфера (Map → Write → Unmap → Bind)
     template<typename T>
     bool UpdateConstantBuffer(ID3D11DeviceContext* context, ID3D11Buffer* buffer, const T& data,
-        UINT slot, bool vertexShader = true);
+        UINT slot, bool vertexShader = true)
+    {
+        if (!buffer) return false;
+
+        D3D11_MAPPED_SUBRESOURCE mapped;
+        HRESULT hr = context->Map(buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+        if (FAILED(hr)) return false;
+
+        memcpy(mapped.pData, &data, sizeof(T));
+        context->Unmap(buffer, 0);
+
+        if (vertexShader)
+            context->VSSetConstantBuffers(slot, 1, &buffer);
+        else
+            context->PSSetConstantBuffers(slot, 1, &buffer);
+
+        return true;
+    }
 
 private:
     // Структура тумана — одинакова для всех шейдеров

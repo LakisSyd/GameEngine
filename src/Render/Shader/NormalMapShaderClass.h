@@ -36,7 +36,9 @@ public:
     NormalMapShaderClass();
     NormalMapShaderClass(const NormalMapShaderClass&);
     ~NormalMapShaderClass();
+     
 
+	ShaderType GetType() const override { return ShaderType::NormalMap; }
     // Инициализация и завершение
     bool Initialize(ID3D11Device* device, HWND hwnd);
     void ShutDown();
