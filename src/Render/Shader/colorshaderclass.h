@@ -1,46 +1,54 @@
-#pragma once
+п»ї#pragma once
 #include <d3d11.h>
 #include <d3dcompiler.h>
-#include <directxmath.h>
+#include <DirectXMath.h>
 #include <fstream>
 #include "BaseShader.h"
+
 using namespace DirectX;
 using namespace std;
 
 class ColorShaderClass : public ShaderBaseClass {
 private:
-	struct  MatrixBufferType
-	{
-		XMMATRIX world;
-		XMMATRIX view;
-		XMMATRIX projection;
-	};
+    struct MatrixBufferType
+    {
+        XMMATRIX world;
+        XMMATRIX view;
+        XMMATRIX projection;
+    };
+
+    // рџ”Ґ РРЎРџР РђР’Р›Р•РќРР•: РІС‹СЂР°РІРЅРёРІР°РЅРёРµ РґРѕ 32 Р±Р°Р№С‚ (РєСЂР°С‚РЅРѕРµ 16!)
+    struct ColorBufferType
+    {
+        XMFLOAT4 color;       // 16 Р±Р°Р№С‚
+        XMFLOAT3 padding;     // 12 Р±Р°Р№С‚
+        float padding2;       // 4 Р±Р°Р№С‚Р° = 32 Р±Р°Р№С‚Р° вњ“
+    };
 
 public:
+    ShaderType GetType() const override { return ShaderType::Color; }
+    ColorShaderClass();
+    ColorShaderClass(const ColorShaderClass&);
+    ~ColorShaderClass();
 
-	ShaderType GetType() const override { return ShaderType::Color; }
-	ColorShaderClass();
-	ColorShaderClass(const ColorShaderClass&);
-	~ColorShaderClass();
+    bool Initialize(ID3D11Device* device, HWND hwnd);
+    void ShutDown();
 
-	bool Initialize(ID3D11Device* device, HWND hwnd);
-	void ShutDown();
-
-	bool Render(ID3D11DeviceContext*, int, XMMATRIX, XMMATRIX, XMMATRIX);
-
-
-private:
-	// Вспомогательные функции для загрузки, компиляции и настройки шейдеров.
-	bool InitializeShader(ID3D11Device*, HWND, WCHAR*, WCHAR*);
-	void ShutdownShader();
-	void OutputShaderErrorMessage(ID3D10Blob*, HWND, WCHAR*);
-	bool SetShaderParameters(ID3D11DeviceContext*, XMMATRIX, XMMATRIX, XMMATRIX);
-	void RenderShader(ID3D11DeviceContext*, int);
+    bool Render(ID3D11DeviceContext*, int, XMMATRIX, XMMATRIX, XMMATRIX);
+    bool Render(ID3D11DeviceContext*, int, XMMATRIX, XMMATRIX, XMMATRIX, const XMFLOAT4& color);
 
 private:
-	ID3D11VertexShader* m_vertexShader;
-	ID3D11PixelShader* m_pixelShader;
-	ID3D11InputLayout* m_layout;
-	ID3D11Buffer* m_matrixBuffer;
+    bool InitializeShader(ID3D11Device*, HWND, WCHAR*, WCHAR*);
+    void ShutdownShader();
+    void OutputShaderErrorMessage(ID3D10Blob*, HWND, WCHAR*);
+    bool SetShaderParameters(ID3D11DeviceContext*, XMMATRIX, XMMATRIX, XMMATRIX);
+    bool SetShaderParameters(ID3D11DeviceContext*, XMMATRIX, XMMATRIX, XMMATRIX, const XMFLOAT4& color);
+    void RenderShader(ID3D11DeviceContext*, int);
+
+private:
+    ID3D11VertexShader* m_vertexShader = nullptr;
+    ID3D11PixelShader* m_pixelShader = nullptr;
+    ID3D11InputLayout* m_layout = nullptr;
+    ID3D11Buffer* m_matrixBuffer = nullptr;
+    ID3D11Buffer* m_colorBuffer = nullptr;
 };
-

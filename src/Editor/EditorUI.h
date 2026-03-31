@@ -7,6 +7,7 @@
 #include "GameSettings.h"
 #include "FileSystem.h"
 #include "ShaderManager.h"
+#include "../../PhysicsDebugRenderer.h"
 
 class EditorUI
 {
@@ -22,6 +23,21 @@ public:
     void BeginMainMenuBar(SceneManager& sceneManager);
     void Render();
 
+
+    // Для доступа к состоянию редактирования отсеков из ApplicationClass
+    bool IsEditingCompartment() const { return m_compartmentEditMode != CompartmentEditMode::None; }
+    Entity GetEditingCompartmentEntity() const { return m_editingCompartment; }
+    enum class CompartmentEditMode { None, Move, Resize };
+    CompartmentEditMode GetCompartmentEditMode() const { return m_compartmentEditMode; }
+    XMFLOAT3 GetCompartmentCenter() const { return m_compartmentCenter; }
+    XMFLOAT3 GetCompartmentSize() const { return m_compartmentSize; }
+
+    void SetCompartmentCenter(const XMFLOAT3& center) { m_compartmentCenter = center; }
+    void SetCompartmentSize(const XMFLOAT3& size) { m_compartmentSize = size; }
+    void ApplyCompartmentCacheToComponent(CompartmentComponent* comp) { UpdateCompartmentFromCache(comp); }
+
+
+
     enum class SelectedType { None, Object, Sprite, Light };
 
     Entity       GetSelectedEntity() const { return m_selectedEntity; }
@@ -33,21 +49,15 @@ public:
             ? static_cast<int>(m_selectedEntity) : m_selectedLegacyIndex;
     }
 
-    void SetSelection(SelectedType type, Entity entity)
-    {
-        m_selectedType = type;
-        m_selectedEntity = entity;
-        m_selectedLegacyIndex = (entity != INVALID_ENTITY)
-            ? static_cast<int>(entity) : -1;
-    }
-
     void SetSelection(SelectedType type, int index)
     {
         m_selectedType = type;
         m_selectedLegacyIndex = index;
-        m_selectedEntity = (type == SelectedType::Object)
-            ? static_cast<Entity>(index) : INVALID_ENTITY;
+        // Для света тоже сохраняем индекс как Entity (для совместимости)
+        m_selectedEntity = static_cast<Entity>(index);
     }
+
+
 
     void SetScenePreviewTexture(ID3D11ShaderResourceView* srv);
 
@@ -84,6 +94,10 @@ public:
         m_loadRequest.pending = false;
         return req;
     }
+    
+
+    PhysicsDebugSettings& GetPhysicsDebugSettings() { return m_debugSettings; }
+
 
     bool WantCaptureMouse() const;
     void RefreshShaderList() { m_shaderNames = ShaderManager::Get().GetNames(); }
@@ -94,6 +108,8 @@ private:
     Entity       m_selectedEntity = INVALID_ENTITY;
     int          m_selectedLegacyIndex = -1;
 
+    void RenderPhysicsDebugPanel();
+    void CreateNewCompartment(ECSRegistry& registry, Entity submarineRoot);
     ID3D11ShaderResourceView* m_scenePreviewSRV = nullptr;
 
     SpawnRequest      m_spawnRequest;
@@ -148,12 +164,25 @@ private:
     void RenderObjectProperties(SceneManager& sceneManager, Entity entity);
     void RenderComponentManager(SceneManager& sceneManager, Entity entity); // ← НОВЫЙ
     void RenderSpriteProperties(WorldSpriteClass* sprite);
-    void RenderLightProperties(SceneManager& sceneManager, int lightIndex);
+    void RenderLightPropertiesByEntity(SceneManager& sceneManager, Entity lightEntity);
 
     static void SectionHeader(const char* label);
 
     void RenderSaveDialog();
     void RenderLoadDialog();
+
+
+    void RenderPhysicsSettings(SceneManager& sceneManager);
+
+    void RenderSubmarineBuilder(SceneManager& sceneManager);
+
+    void RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEntity);
+
+    void AutoCalculatePivots(ECSRegistry& registry, Entity entity, JointConnectionComponent& jointComp);
+
+    void RenderCompartmentEditor(SceneManager& sceneManager);
+
+  
 
     // Content Browser
     void RenderContentBrowser();
@@ -176,8 +205,12 @@ private:
     Entity           m_knifeTargetEntity = INVALID_ENTITY;
     ShaderBaseClass* m_knifeOldShader = nullptr;
 
+    PhysicsDebugSettings m_debugSettings;
+
+
     FileSystem* m_fileSystem = nullptr;
     fs::path         m_currentDir;
+
     std::string      m_searchQuery;
     bool             m_viewModeGrid = true;
     const FileEntry* m_selectedEntry = nullptr;
@@ -206,4 +239,28 @@ private:
     bool        m_loadInProgress = false;
     std::string m_lastSavePath;
     HWND        m_hwnd = nullptr;
+
+    bool enableCCD;
+
+    // В классе EditorUI, в private-секцию:
+  
+
+
+    // Для визуального редактирования отсеков
+    CompartmentEditMode m_compartmentEditMode = CompartmentEditMode::None;
+    Entity m_editingCompartment = INVALID_ENTITY;
+    XMFLOAT3 m_compartmentCenter = { 0, 0, 0 };  // Кэш центра для редактора
+    XMFLOAT3 m_compartmentSize = { 2, 2, 2 };     // Кэш размера для редактора
+
+    // Вспомогательные методы
+    void StartCompartmentEdit(Entity compartment);
+    void UpdateCompartmentFromCache(CompartmentComponent* comp);
+    Entity CreateEmptySubmarine(SceneManager& sceneManager, const XMFLOAT3& position);
+    void CreateCompleteSubmarine(SceneManager& sceneManager, const XMFLOAT3& position, int numCompartments);
+    Entity AddCompartmentToSubmarine(SceneManager& sceneManager, Entity submarineRoot, const XMFLOAT3& localOffset, const XMFLOAT3& size, float mass);
+    Entity AddCompartmentWithMesh(SceneManager& sceneManager, Entity submarineRoot, const XMFLOAT3& localOffset, const XMFLOAT3& size, float mass, const char* modelPath);
+    Entity CreateSubmarineWithMesh(SceneManager& sceneManager, const XMFLOAT3& position, const char* modelPath, float hullRadius, float hullMass);
+    void UpdateBreachesOnResize(CompartmentComponent* comp, const XMFLOAT3& oldMin, const XMFLOAT3& oldMax);
+    void UpdateCacheFromCompartment(const CompartmentComponent* comp);
+    void RenderCompartmentGizmo(ECSRegistry& registry, const XMMATRIX& view, const XMMATRIX& projection);
 };

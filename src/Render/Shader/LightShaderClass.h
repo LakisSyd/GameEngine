@@ -7,6 +7,8 @@
 
 #define NUM_LIGHTS 4
 
+
+
 class LightShaderClass : public ShaderBaseClass  // Просто наследуемся, без override
 {
 public:
@@ -20,6 +22,11 @@ public:
 
      ShaderType GetType() const override { return ShaderType::Light; }
 
+     bool SetShadowMap(
+         ID3D11DeviceContext* context,
+         ID3D11ShaderResourceView* shadowMapSRV,
+         const XMMATRIX& lightViewProj);
+
     bool Render(  // ← Твоя старая сигнатура!
         ID3D11DeviceContext* deviceContext,
         int indexCount,
@@ -32,6 +39,14 @@ public:
 
     bool SetSelectedFactor(ID3D11DeviceContext* deviceContext, float factor);
 
+    bool SetDirectionalLight(ID3D11DeviceContext* deviceContext, const XMFLOAT3& direction, const XMFLOAT4& color, const XMFLOAT4& ambient, float intensity);
+    bool PrepareBeforeRender(
+        ID3D11DeviceContext* context,
+        float selectedFactor)
+    {
+        return SetSelectedFactor(context, selectedFactor);
+    }
+
 private:
     // === Твои уникальные буферы ===
     ID3D11Buffer* m_matrixBuffer;
@@ -39,6 +54,28 @@ private:
     ID3D11Buffer* m_lightPositionBuffer;
     ID3D11Buffer* m_lightColorBuffer;
     ID3D11Buffer* m_selectedBuffer;
+    ID3D11SamplerState* m_shadowSampler;
+
+	// 🔥 НОВОЕ: Структура для одного направленного света (слот b3 в пиксельном шейдере)
+
+    struct DirectionalLightBufferType
+    {
+        XMFLOAT4 direction;  // xyz - направление, w - интенсивность
+        XMFLOAT4 color;      // rgb - цвет, a - ambient strength
+        XMFLOAT4 ambient;    // Ambient color
+        float padding;
+    };
+
+    struct ShadowBufferType
+    {
+        XMMATRIX lightViewProj;
+    };
+
+    ID3D11Buffer* m_shadowBuffer;
+
+    // Добавьте к существующим членам класса:
+    ID3D11Buffer* m_directionalLightBuffer; // ← НОВОЕ
+
 
     // === Внутренние методы (твои текущие) ===
     bool InitializeShader(ID3D11Device* device, HWND hwnd, const WCHAR* vsFilename, const WCHAR* psFilename);

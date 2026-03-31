@@ -29,12 +29,26 @@ public:
         XMFLOAT3  cameraPos,
         float     selectedFactor = 1.0f);
 
+
+    bool SetDirectionalLight(
+        ID3D11DeviceContext* context,
+        const XMFLOAT3& direction,
+        const XMFLOAT4& color,
+        const XMFLOAT4& ambient,
+        float intensity);
+
     ShaderType GetType() const override { return ShaderType::PBR; }
 
     // Fallback SRV'ы (если модель не содержит PBR-карты)
     ID3D11ShaderResourceView* GetDefaultNormalSRV() const { return m_defaultNormalSRV; }
     ID3D11ShaderResourceView* GetDefaultMetalnessSRV() const { return m_defaultMetalnessSRV; }
     ID3D11ShaderResourceView* GetDefaultRoughnessSRV() const { return m_defaultRoughnessSRV; }
+   
+    bool SetShadowMap(
+        ID3D11DeviceContext* context,
+        ID3D11ShaderResourceView* shadowMapSRV,
+        const XMMATRIX& lightViewProj);
+
 
 private:
     // ── Constant buffer structs ───────────────────────────────────────────────
@@ -68,15 +82,32 @@ private:
         XMFLOAT3 padding;        // +12 → итого 16 байт ✓
     };
 
+    struct ShadowBufferType
+    {
+        XMMATRIX lightViewProj;
+    };
+
+    struct DirectionalLightBuffer  // 🔥 ДОБАВИТЬ
+    {
+        XMFLOAT4 direction;  // xyz - направление, w - интенсивность
+        XMFLOAT4 color;      // RGB цвет света
+        XMFLOAT4 ambient;    // RGB амбиент + w интенсивность амбиента
+    };
+
     // ── GPU буферы ────────────────────────────────────────────────────────────
-    ID3D11Buffer* m_matrixBuffer = nullptr; // b0 VS
-    ID3D11Buffer* m_lightPosBuffer = nullptr; // b1 VS+PS
-    ID3D11Buffer* m_lightColorBuffer = nullptr; // b0 PS
-    ID3D11Buffer* m_pbrParamsBuffer = nullptr; // b3 PS
-    ID3D11Buffer* m_selectedBuffer = nullptr; // b4 PS
+    ID3D11Buffer* m_matrixBuffer = nullptr;           // b0 VS
+    ID3D11Buffer* m_lightPosBuffer = nullptr;         // b1 VS+PS
+    ID3D11Buffer* m_lightColorBuffer = nullptr;       // b0 PS
+    ID3D11Buffer* m_pbrParamsBuffer = nullptr;        // b3 PS (камера)
+    ID3D11Buffer* m_selectedBuffer = nullptr;         // b3 PS (ИЗМЕНИТЬ на b3!)
+    ID3D11Buffer* m_directionalLightBuffer = nullptr; // b4 PS (🔥 ДОБАВИТЬ)
 
     // ── Default PBR textures (1x1) ───────────────────────────────────────────
     ID3D11ShaderResourceView* m_defaultNormalSRV = nullptr;    // RGBA(128,128,255,255)
     ID3D11ShaderResourceView* m_defaultMetalnessSRV = nullptr; // R=0
     ID3D11ShaderResourceView* m_defaultRoughnessSRV = nullptr; // R=1
+
+
+    ID3D11Buffer* m_shadowBuffer = nullptr;
+    ID3D11SamplerState* m_shadowSampler = nullptr;
 };

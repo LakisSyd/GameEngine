@@ -30,6 +30,31 @@ void LightShaderClass::Shutdown()
     ShaderBaseClass::Shutdown(); // Очистка базового класса
 }
 
+bool LightShaderClass::SetShadowMap(
+    ID3D11DeviceContext* context,
+    ID3D11ShaderResourceView* shadowMapSRV,
+    const XMMATRIX& lightViewProj)
+{
+    // 1. Привязываем shadow map к слоту t7 (выделенный глобальный слот)
+    context->PSSetShaderResources(7, 1, &shadowMapSRV);
+
+    // 2. Привязываем comparison sampler к слоту s7
+    context->PSSetSamplers(7, 1, &m_shadowSampler);
+
+    // 3. Обновляем constant buffer b5
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    HRESULT result = context->Map(m_shadowBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (FAILED(result)) return false;
+
+    ShadowBufferType* data = (ShadowBufferType*)mapped.pData;
+    data->lightViewProj = XMMatrixTranspose(lightViewProj);
+
+    context->Unmap(m_shadowBuffer, 0);
+    context->PSSetConstantBuffers(5, 1, &m_shadowBuffer);
+
+    return true;
+}
+
 
 LightShaderClass::~LightShaderClass()
 {
@@ -78,6 +103,31 @@ bool LightShaderClass::InitializeShader(
     if (!CreateConstantBuffer(device, sizeof(LightPositionBufferType), &m_lightPositionBuffer)) return false;
     if (!CreateConstantBuffer(device, sizeof(LightColorBufferType),    &m_lightColorBuffer))    return false;
     if (!CreateConstantBuffer(device, sizeof(SelectedBufferType),      &m_selectedBuffer))      return false;
+
+    if (!CreateConstantBuffer(device, sizeof(DirectionalLightBufferType), &m_directionalLightBuffer))
+    {
+        OutputDebugStringA("Failed to create directional light buffer!\n");
+        return false;
+    }
+
+    D3D11_SAMPLER_DESC shadowSamplerDesc = {};
+    shadowSamplerDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+    shadowSamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+    shadowSamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+    shadowSamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+    shadowSamplerDesc.BorderColor[0] = 1.0f; // За пределами = нет тени
+    shadowSamplerDesc.BorderColor[1] = 1.0f;
+    shadowSamplerDesc.BorderColor[2] = 1.0f;
+    shadowSamplerDesc.BorderColor[3] = 1.0f;
+    shadowSamplerDesc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+    shadowSamplerDesc.MinLOD = 0;
+    shadowSamplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    result = device->CreateSamplerState(&shadowSamplerDesc, &m_shadowSampler);
+    if (FAILED(result)) return false;
+
+    if (!CreateConstantBuffer(device, sizeof(ShadowBufferType), &m_shadowBuffer))
+        return false;
 
     // ✅ Создаём FogBuffer (слот b2) — общий для всех шейдеров
     if (!CreateFogBuffer(device))
@@ -153,6 +203,12 @@ void LightShaderClass::ShutdownShader()
     {
         m_sampleState->Release();
         m_sampleState = nullptr;
+    }
+
+    if (m_directionalLightBuffer)
+    {
+        m_directionalLightBuffer->Release();
+        m_directionalLightBuffer = nullptr;
     }
 
     if (m_layout)
@@ -278,6 +334,10 @@ bool LightShaderClass::SetShaderParameters(
 void LightShaderClass::RenderShader(ID3D11DeviceContext* deviceContext, int indexCount)
 {
     BindShader(deviceContext);  // ← Утилита базового класса!
+    if (m_directionalLightBuffer)
+    {
+        deviceContext->PSSetConstantBuffers(4, 1, &m_directionalLightBuffer);
+    }
     deviceContext->DrawIndexed(indexCount, 0, 0);
 }
 
@@ -296,6 +356,40 @@ bool LightShaderClass::SetSelectedFactor(ID3D11DeviceContext* deviceContext, flo
 
     // ✅ Перенесён на слот b3 (b2 теперь занят FogBuffer)
     deviceContext->PSSetConstantBuffers(3, 1, &m_selectedBuffer);
+
+    return true;
+}
+
+
+// 🔥 НОВОЕ: Метод для установки параметров направленного света
+
+bool LightShaderClass::SetDirectionalLight(
+    ID3D11DeviceContext* deviceContext,
+    const XMFLOAT3& direction,
+    const XMFLOAT4& color,
+    const XMFLOAT4& ambient,
+    float intensity)
+{
+    HRESULT result;
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+
+    result = deviceContext->Map(m_directionalLightBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (FAILED(result)) return false;
+
+    DirectionalLightBufferType* dataPtr = (DirectionalLightBufferType*)mappedResource.pData;
+
+    // Нормализуем направление
+    XMVECTOR dir = XMVector3Normalize(XMLoadFloat3(&direction));
+    XMStoreFloat3((XMFLOAT3*)&dataPtr->direction, dir);
+    dataPtr->direction.w = intensity;
+
+    dataPtr->color = color;
+    dataPtr->ambient = ambient;
+
+    deviceContext->Unmap(m_directionalLightBuffer, 0);
+
+    // Слот b3 для пиксельного шейдера (или выберите свободный слот)
+    deviceContext->PSSetConstantBuffers(4, 1, &m_directionalLightBuffer);
 
     return true;
 }

@@ -1,4 +1,4 @@
-#include "colorshaderclass.h"
+ï»¿#include "colorshaderclass.h"
 #include "../HelpFunc/helper.h"
 
 ColorShaderClass::ColorShaderClass()
@@ -40,10 +40,71 @@ bool ColorShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
 
 	DX_CHECK(InitializeShader(device, hwnd, vsFilename, psFilename));
 
+	D3D11_BUFFER_DESC colorBufferDesc = {};
+	colorBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
+	colorBufferDesc.ByteWidth = sizeof(ColorBufferType);
+	colorBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	colorBufferDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+	DX_CHECK(device->CreateBuffer(&colorBufferDesc, NULL, &m_colorBuffer));
+
 	return true;
 
 }
 
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ÐÐžÐ’ÐÐ¯ ÐŸÐ•Ð Ð•Ð“Ð Ð£Ð—ÐšÐ: Render Ñ uniform Ñ†Ð²ÐµÑ‚Ð¾Ð¼
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+bool ColorShaderClass::Render(
+	ID3D11DeviceContext* deviceContext,
+	int indexCount,
+	XMMATRIX worldMatrix,
+	XMMATRIX viewMatrix,
+	XMMATRIX projectMatrix,
+	const XMFLOAT4& color)
+{
+	DX_CHECK(SetShaderParameters(deviceContext, worldMatrix, viewMatrix, projectMatrix, color));
+	RenderShader(deviceContext, indexCount);
+	return true;
+}
+
+bool ColorShaderClass::SetShaderParameters(
+	ID3D11DeviceContext* deviceContext,
+	XMMATRIX worldMatrix,
+	XMMATRIX viewMatrix,
+	XMMATRIX projectionMatrix,
+	const XMFLOAT4& color)
+{
+	// ÐœÐ°Ñ‚Ñ€Ð¸Ñ†Ñ‹
+	worldMatrix = XMMatrixTranspose(worldMatrix);
+	viewMatrix = XMMatrixTranspose(viewMatrix);
+	projectionMatrix = XMMatrixTranspose(projectionMatrix);
+
+	D3D11_MAPPED_SUBRESOURCE mappedResource;
+	DX_CHECK(deviceContext->Map(m_matrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+
+	MatrixBufferType* dataPtr = (MatrixBufferType*)mappedResource.pData;
+	dataPtr->world = worldMatrix;
+	dataPtr->view = viewMatrix;
+	dataPtr->projection = projectionMatrix;
+
+	deviceContext->Unmap(m_matrixBuffer, 0);
+	deviceContext->VSSetConstantBuffers(0, 1, &m_matrixBuffer);
+
+	// Ð¦Ð²ÐµÑ‚ (ÐµÑÐ»Ð¸ Ð±ÑƒÑ„ÐµÑ€ ÑÐ¾Ð·Ð´Ð°Ð½)
+	if (m_colorBuffer)
+	{
+		DX_CHECK(deviceContext->Map(m_colorBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource));
+
+		ColorBufferType* colorPtr = (ColorBufferType*)mappedResource.pData;
+		colorPtr->color = color;
+
+		deviceContext->Unmap(m_colorBuffer, 0);
+		deviceContext->PSSetConstantBuffers(0, 1, &m_colorBuffer);
+	}
+
+	return true;
+}
 
 
 bool ColorShaderClass::Render(ID3D11DeviceContext* deviceContext, int indexCount, XMMATRIX worldMatrix, 
@@ -76,12 +137,12 @@ bool ColorShaderClass::InitializeShader(ID3D11Device* device , HWND hwnd, WCHAR*
 	{
 		if (errorMessage)
 		{
-			// Ýòà ôóíêöèÿ ó âàñ óæå íàïèñàíà, îíà ñîçäàñò ôàéë shader-error.txt
+			// Ð­Ñ‚Ð° Ñ„ÑƒÐ½ÐºÑ†Ð¸Ñ Ñƒ Ð²Ð°Ñ ÑƒÐ¶Ðµ Ð½Ð°Ð¿Ð¸ÑÐ°Ð½Ð°, Ð¾Ð½Ð° ÑÐ¾Ð·Ð´Ð°ÑÑ‚ Ñ„Ð°Ð¹Ð» shader-error.txt
 			OutputShaderErrorMessage(errorMessage, hwnd, vsFilename);
 		}
 		else
 		{
-			MessageBox(hwnd, L"Ôàéë øåéäåðà íå íàéäåí! Ïðîâåðüòå ïóòü è íàëè÷èå ôàéëà â ïàïêå Debug.", vsFilename, MB_OK);
+			MessageBox(hwnd, L"Ð¤Ð°Ð¹Ð» ÑˆÐµÐ¹Ð´ÐµÑ€Ð° Ð½Ðµ Ð½Ð°Ð¹Ð´ÐµÐ½! ÐŸÑ€Ð¾Ð²ÐµÑ€ÑŒÑ‚Ðµ Ð¿ÑƒÑ‚ÑŒ Ð¸ Ð½Ð°Ð»Ð¸Ñ‡Ð¸Ðµ Ñ„Ð°Ð¹Ð»Ð° Ð² Ð¿Ð°Ð¿ÐºÐµ Debug.", vsFilename, MB_OK);
 		}
 		return false;
 	}
@@ -95,9 +156,9 @@ bool ColorShaderClass::InitializeShader(ID3D11Device* device , HWND hwnd, WCHAR*
 	DX_CHECK(device->CreatePixelShader(pixelShaderBuffer->GetBufferPointer(), 
 		pixelShaderBuffer->GetBufferSize(), NULL, &m_pixelShader));
 
-	// Ñîçäàåì îïèñàíèå layout âõîäíûõ äàííûõ âåðøèí.
-	// Ýòî îïèñàíèå äîëæíî òî÷íî ñîâïàäàòü ñî ñòðóêòóðîé VertexType â ModelClass è â øåéäåðå.
-	// SemanticName ñâÿçûâàåò äàííûå C++ ñ ïåðåìåííûìè øåéäåðà (POSITION, COLOR).
+	// Ð¡Ð¾Ð·Ð´Ð°ÐµÐ¼ Ð¾Ð¿Ð¸ÑÐ°Ð½Ð¸Ðµ layout Ð²Ñ…Ð¾Ð´Ð½Ñ‹Ñ… Ð´Ð°Ð½Ð½Ñ‹Ñ… Ð²ÐµÑ€ÑˆÐ¸Ð½.
+	// Ð­Ñ‚Ð¾ Ð¾Ð¿Ð¸ÑÐ°Ð½Ð¸Ðµ Ð´Ð¾Ð»Ð¶Ð½Ð¾ Ñ‚Ð¾Ñ‡Ð½Ð¾ ÑÐ¾Ð²Ð¿Ð°Ð´Ð°Ñ‚ÑŒ ÑÐ¾ ÑÑ‚Ñ€ÑƒÐºÑ‚ÑƒÑ€Ð¾Ð¹ VertexType Ð² ModelClass Ð¸ Ð² ÑˆÐµÐ¹Ð´ÐµÑ€Ðµ.
+	// SemanticName ÑÐ²ÑÐ·Ñ‹Ð²Ð°ÐµÑ‚ Ð´Ð°Ð½Ð½Ñ‹Ðµ C++ Ñ Ð¿ÐµÑ€ÐµÐ¼ÐµÐ½Ð½Ñ‹Ð¼Ð¸ ÑˆÐµÐ¹Ð´ÐµÑ€Ð° (POSITION, COLOR).
 
 	polygonLayout[0].SemanticName = "POSITION";
 	polygonLayout[0].SemanticIndex = 0;
@@ -108,9 +169,9 @@ bool ColorShaderClass::InitializeShader(ID3D11Device* device , HWND hwnd, WCHAR*
 	polygonLayout[0].InstanceDataStepRate = 0;
 	polygonLayout[1].SemanticName = "COLOR";
 	polygonLayout[1].SemanticIndex = 0;
-	polygonLayout[1].Format = DXGI_FORMAT_R32G32B32A32_FLOAT; // 4 float äëÿ öâåòà (r,g,b,a)
+	polygonLayout[1].Format = DXGI_FORMAT_R32G32B32A32_FLOAT; // 4 float Ð´Ð»Ñ Ñ†Ð²ÐµÑ‚Ð° (r,g,b,a)
 	polygonLayout[1].InputSlot = 0;
-	polygonLayout[1].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT; // Àâòîìàòè÷åñêîå âûðàâíèâàíèå ïîñëå ïîçèöèè
+	polygonLayout[1].AlignedByteOffset = D3D11_APPEND_ALIGNED_ELEMENT; // ÐÐ²Ñ‚Ð¾Ð¼Ð°Ñ‚Ð¸Ñ‡ÐµÑÐºÐ¾Ðµ Ð²Ñ‹Ñ€Ð°Ð²Ð½Ð¸Ð²Ð°Ð½Ð¸Ðµ Ð¿Ð¾ÑÐ»Ðµ Ð¿Ð¾Ð·Ð¸Ñ†Ð¸Ð¸
 	polygonLayout[1].InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
 	polygonLayout[1].InstanceDataStepRate = 0;
 
@@ -124,8 +185,8 @@ bool ColorShaderClass::InitializeShader(ID3D11Device* device , HWND hwnd, WCHAR*
 	pixelShaderBuffer->Release();
 	pixelShaderBuffer = 0;
 
-	// Íàñòðàèâàåì îïèñàíèå áóôåðà êîíñòàíò (constant buffer) äëÿ ïåðåäà÷è ìàòðèö â øåéäåð.
-	// Usage = DYNAMIC, òàê êàê áóäåì îáíîâëÿòü åãî êàæäûé êàäð.
+	// ÐÐ°ÑÑ‚Ñ€Ð°Ð¸Ð²Ð°ÐµÐ¼ Ð¾Ð¿Ð¸ÑÐ°Ð½Ð¸Ðµ Ð±ÑƒÑ„ÐµÑ€Ð° ÐºÐ¾Ð½ÑÑ‚Ð°Ð½Ñ‚ (constant buffer) Ð´Ð»Ñ Ð¿ÐµÑ€ÐµÐ´Ð°Ñ‡Ð¸ Ð¼Ð°Ñ‚Ñ€Ð¸Ñ† Ð² ÑˆÐµÐ¹Ð´ÐµÑ€.
+	// Usage = DYNAMIC, Ñ‚Ð°Ðº ÐºÐ°Ðº Ð±ÑƒÐ´ÐµÐ¼ Ð¾Ð±Ð½Ð¾Ð²Ð»ÑÑ‚ÑŒ ÐµÐ³Ð¾ ÐºÐ°Ð¶Ð´Ñ‹Ð¹ ÐºÐ°Ð´Ñ€.
 	matrixBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
 	matrixBufferDesc.ByteWidth = sizeof(MatrixBufferType);
 	matrixBufferDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
@@ -138,7 +199,7 @@ bool ColorShaderClass::InitializeShader(ID3D11Device* device , HWND hwnd, WCHAR*
 	return true;
 
 }
-// ShutdownShader îñâîáîæäàåò âñå èíòåðôåéñû, ñîçäàííûå â InitializeShader.
+// ShutdownShader Ð¾ÑÐ²Ð¾Ð±Ð¾Ð¶Ð´Ð°ÐµÑ‚ Ð²ÑÐµ Ð¸Ð½Ñ‚ÐµÑ€Ñ„ÐµÐ¹ÑÑ‹, ÑÐ¾Ð·Ð´Ð°Ð½Ð½Ñ‹Ðµ Ð² InitializeShader.
 void ColorShaderClass::ShutdownShader()
 {
 	if (m_matrixBuffer)
@@ -161,10 +222,16 @@ void ColorShaderClass::ShutdownShader()
 		m_vertexShader->Release();
 		m_vertexShader = nullptr;
 	}
+
+	if (m_colorBuffer)
+	{
+		m_colorBuffer->Release();
+		m_colorBuffer = nullptr;
+	}
 	return;
 }
 
-// OutputShaderErrorMessage çàïèñûâàåò îøèáêè êîìïèëÿöèè â ôàéë è ïîêàçûâàåò ñîîáùåíèå ïîëüçîâàòåëþ.
+// OutputShaderErrorMessage Ð·Ð°Ð¿Ð¸ÑÑ‹Ð²Ð°ÐµÑ‚ Ð¾ÑˆÐ¸Ð±ÐºÐ¸ ÐºÐ¾Ð¼Ð¿Ð¸Ð»ÑÑ†Ð¸Ð¸ Ð² Ñ„Ð°Ð¹Ð» Ð¸ Ð¿Ð¾ÐºÐ°Ð·Ñ‹Ð²Ð°ÐµÑ‚ ÑÐ¾Ð¾Ð±Ñ‰ÐµÐ½Ð¸Ðµ Ð¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÐµÐ»ÑŽ.
 
 void ColorShaderClass::OutputShaderErrorMessage(ID3D10Blob* errorMessage, HWND hwnd, WCHAR* shaderFilename)
 
@@ -190,7 +257,7 @@ void ColorShaderClass::OutputShaderErrorMessage(ID3D10Blob* errorMessage, HWND h
 	return;
 }
 
-// SetShaderParameters îáíîâëÿåò ìàòðèöû â áóôåðå êîíñòàíò è ïåðåäàåò åãî â øåéäåð.
+// SetShaderParameters Ð¾Ð±Ð½Ð¾Ð²Ð»ÑÐµÑ‚ Ð¼Ð°Ñ‚Ñ€Ð¸Ñ†Ñ‹ Ð² Ð±ÑƒÑ„ÐµÑ€Ðµ ÐºÐ¾Ð½ÑÑ‚Ð°Ð½Ñ‚ Ð¸ Ð¿ÐµÑ€ÐµÐ´Ð°ÐµÑ‚ ÐµÐ³Ð¾ Ð² ÑˆÐµÐ¹Ð´ÐµÑ€.
 
 bool ColorShaderClass::SetShaderParameters(ID3D11DeviceContext* deviceContext, XMMATRIX worldMatrix, 
 	XMMATRIX viewMatrix, XMMATRIX projectionMatrix)
@@ -199,7 +266,7 @@ bool ColorShaderClass::SetShaderParameters(ID3D11DeviceContext* deviceContext, X
 	MatrixBufferType* dataPtr;
 	unsigned int bufferNumber;
 
-	// ÂÀÆÍÎ: Ïåðåä îòïðàâêîé â øåéäåð ìàòðèöû äîëæíû áûòü òðàíñïîíèðîâàíû (òðàíñïîíèðîâàíèå îáÿçàòåëüíî äëÿ DirectX 11).
+	// Ð’ÐÐ–ÐÐž: ÐŸÐµÑ€ÐµÐ´ Ð¾Ñ‚Ð¿Ñ€Ð°Ð²ÐºÐ¾Ð¹ Ð² ÑˆÐµÐ¹Ð´ÐµÑ€ Ð¼Ð°Ñ‚Ñ€Ð¸Ñ†Ñ‹ Ð´Ð¾Ð»Ð¶Ð½Ñ‹ Ð±Ñ‹Ñ‚ÑŒ Ñ‚Ñ€Ð°Ð½ÑÐ¿Ð¾Ð½Ð¸Ñ€Ð¾Ð²Ð°Ð½Ñ‹ (Ñ‚Ñ€Ð°Ð½ÑÐ¿Ð¾Ð½Ð¸Ñ€Ð¾Ð²Ð°Ð½Ð¸Ðµ Ð¾Ð±ÑÐ·Ð°Ñ‚ÐµÐ»ÑŒÐ½Ð¾ Ð´Ð»Ñ DirectX 11).
 	worldMatrix = XMMatrixTranspose(worldMatrix);
 	viewMatrix = XMMatrixTranspose(viewMatrix);
 	projectionMatrix = XMMatrixTranspose(projectionMatrix);
@@ -223,14 +290,14 @@ bool ColorShaderClass::SetShaderParameters(ID3D11DeviceContext* deviceContext, X
 
 void ColorShaderClass::RenderShader(ID3D11DeviceContext* deviceContext, int indexCount)
 {
-	// Óñòàíàâëèâàåì layout ââîäà.
+	// Ð£ÑÑ‚Ð°Ð½Ð°Ð²Ð»Ð¸Ð²Ð°ÐµÐ¼ layout Ð²Ð²Ð¾Ð´Ð°.
 	deviceContext->IASetInputLayout(m_layout);
 
-	// Óñòàíàâëèâàåì àêòèâíûå øåéäåðû.
+	// Ð£ÑÑ‚Ð°Ð½Ð°Ð²Ð»Ð¸Ð²Ð°ÐµÐ¼ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ðµ ÑˆÐµÐ¹Ð´ÐµÑ€Ñ‹.
 	deviceContext->VSSetShader(m_vertexShader, NULL, 0);
 	deviceContext->PSSetShader(m_pixelShader, NULL, 0);
 
-	// Ðåíäåðèì òðåóãîëüíèêè ÷åðåç èíäåêñíûé áóôåð.
+	// Ð ÐµÐ½Ð´ÐµÑ€Ð¸Ð¼ Ñ‚Ñ€ÐµÑƒÐ³Ð¾Ð»ÑŒÐ½Ð¸ÐºÐ¸ Ñ‡ÐµÑ€ÐµÐ· Ð¸Ð½Ð´ÐµÐºÑÐ½Ñ‹Ð¹ Ð±ÑƒÑ„ÐµÑ€.
 	deviceContext->DrawIndexed(indexCount, 0, 0);
 
 }

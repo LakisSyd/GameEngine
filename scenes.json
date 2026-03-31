@@ -2,11 +2,19 @@
     "objects": [
         {
             "id": 0,
+            "is_light": true,
+            "light_color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "light_enabled": true,
             "model_path": "assets/model/sphere.obj",
             "position": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
+                "x": 5.38284158706665,
+                "y": -0.556016206741333,
+                "z": -10.169373512268066
             },
             "rotation": {
                 "x": 0.0,
@@ -14,9 +22,9 @@
                 "z": 0.0
             },
             "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
+                "x": 0.30000001192092896,
+                "y": 0.30000001192092896,
+                "z": 0.30000001192092896
             },
             "texture_path": "assets/texture/stone.tga"
         },
@@ -24,9 +32,9 @@
             "id": 1,
             "model_path": "assets/model/sphere.obj",
             "position": {
-                "x": 3.0,
-                "y": 0.0,
-                "z": 0.0
+                "x": 0.4835038185119629,
+                "y": -0.006265878677368164,
+                "z": -3.811997413635254
             },
             "rotation": {
                 "x": 0.0,
@@ -38,15 +46,16 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shader_type": 10,
             "texture_path": "assets/texture/stone.tga"
         },
         {
             "id": 2,
-            "model_path": "assets/model/plane.obj",
+            "model_path": "assets/model/sphere.obj",
             "position": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
+                "x": 5.450413227081299,
+                "y": -0.4195382595062256,
+                "z": -2.791706085205078
             },
             "rotation": {
                 "x": 0.0,
@@ -58,6 +67,7 @@
                 "y": 1.0,
                 "z": 1.0
             },
+            "shader_type": 3,
             "texture_path": "assets/texture/stone.tga"
         }
     ],

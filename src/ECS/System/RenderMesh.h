@@ -15,8 +15,8 @@
 #include <colorshaderclass.h>
 #include "WaterShaderClass.h"
 #include "GlassShaderClass.h"
-#include "../../ProjectionShaderClass.h"
-#include "../../PBRShaderClass.h"
+#include "ProjectionShaderClass.h"
+#include "PBRShaderClass.h"
 using namespace DirectX;
 
 #ifndef NUM_LIGHTS
@@ -235,6 +235,39 @@ inline void RenderMesh(
             context->PSSetShaderResources(0, 4, nullSRVs);
         }
 
+        break;
+    }
+    case ShaderType::Projection:
+    {
+        auto* s = static_cast<projectionShaderClass*>(shader);
+        // Получаем текстуру проекции из материала (можно использовать слот 2)
+        ID3D11ShaderResourceView* projectionTex = nullptr;
+        if (auto* tex = material->GetTexture(2))  // или другой слот
+            projectionTex = tex->GetTexture();
+
+        // Основная текстура (albedo) обычно в слоте 0 или 1
+        ID3D11ShaderResourceView* colorTex = nullptr;
+        if (auto* tex = material->GetTexture(0))
+            colorTex = tex->GetTexture();
+
+        // Параметры освещения можно взять из переданных массивов (например, первый источник)
+        XMFLOAT4 ambient = { 0.1f, 0.1f, 0.1f, 1.0f };
+        XMFLOAT4 diffuse = lightColors[0];   // используем первый свет
+        XMFLOAT3 lightDir = { 0.0f, -1.0f, 0.0f }; // направление света, нужно хранить в системе
+
+        // Матрицы второй камеры (проектора) — должны быть заданы в материале или глобально
+        XMMATRIX view2 = material->GetProjectionView2();   // нужно добавить методы в MaterialClass
+        XMMATRIX proj2 = material->GetProjectionProj2();
+
+        s->Render(context, model->GetIndexCount(),
+            world, view, projection,
+            view2, proj2,
+            colorTex, projectionTex,
+            ambient, diffuse, lightDir);
+
+        // Очищаем шейдерные ресурсы (по аналогии с другими шейдерами)
+        ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
+        context->PSSetShaderResources(0, 2, nullSRVs);
         break;
     }
     case ShaderType::Texture:

@@ -8,6 +8,11 @@ Texture2D albedoMap    : register(t0);
 Texture2D normalMap    : register(t1);
 Texture2D metalnessMap : register(t2);
 Texture2D roughnessMap : register(t3);
+
+// 🔥 FIX: Добавляем shadow map (те же слоты, что у light.ps)
+Texture2D shadowMap : register(t7);
+SamplerComparisonState shadowSampler : register(s7);
+
 SamplerState SampleType : register(s0);
 
 cbuffer LightColorBuffer : register(b0)
@@ -22,16 +27,31 @@ cbuffer LightPositionBuffer : register(b1)
 
 #include "src/Render/Shader/Vs/fog_common.hlsli"
 
-cbuffer PBRParamsBuffer : register(b3)
-{
-    float3 cameraPos;
-    float  padding;
-};
-
-cbuffer SelectedBuffer : register(b4)
+// 🔥 FIX: b3 = SelectedBuffer (как у light.ps, единый стандарт)
+cbuffer SelectedBuffer : register(b3)
 {
     float selectedFactor;
     float3 selectedPadding;
+};
+
+cbuffer DirectionalLightBuffer : register(b4)
+{
+    float4 dirLightDirection;
+    float4 dirLightColor;
+    float4 dirLightAmbient;
+};
+
+// 🔥 FIX: b5 = ShadowBuffer (как у light.ps, единый стандарт)
+cbuffer ShadowBuffer : register(b5)
+{
+    matrix lightViewProj;
+};
+
+// 🔥 FIX: PBRParamsBuffer перенесён на b6 (не конфликтует ни с чем)
+cbuffer PBRParamsBuffer : register(b6)
+{
+    float3 cameraPos;
+    float  padding;
 };
 
 struct PixelInputType
@@ -46,6 +66,42 @@ struct PixelInputType
     float  fogFactor             : FOG;
 };
 
+// ════════════════════════════════════════════════════════════
+// 🌑 РАСЧЁТ ТЕНЕЙ (скопирован из light.ps)
+// ════════════════════════════════════════════════════════════
+float CalculateShadow(float3 worldPos)
+{
+    float4 lightSpacePos = mul(float4(worldPos, 1.0f), lightViewProj);
+    lightSpacePos.xyz /= lightSpacePos.w;
+
+    float2 shadowUV;
+    shadowUV.x =  lightSpacePos.x * 0.5f + 0.5f;
+    shadowUV.y = -lightSpacePos.y * 0.5f + 0.5f;
+
+    if (shadowUV.x < 0.0f || shadowUV.x > 1.0f ||
+        shadowUV.y < 0.0f || shadowUV.y > 1.0f)
+        return 1.0f;
+
+    float currentDepth = lightSpacePos.z;
+    if (currentDepth > 1.0f) return 1.0f;
+
+    float shadow = 0.0f;
+    float texelSize = 1.0f / 2048.0f;
+    float bias = 0.01f;  // 🔥 УВЕЛИЧИЛИ с 0.005f до 0.01f (или даже 0.015f)
+    
+    [unroll]
+    for (int x = -1; x <= 1; x++)
+    {
+        [unroll]
+        for (int y = -1; y <= 1; y++)
+        {
+            float2 offset = float2(x, y) * texelSize;
+            shadow += shadowMap.SampleCmp(shadowSampler,
+                          shadowUV + offset, currentDepth - bias);
+        }
+    }
+    return shadow / 9.0f;
+}
 float DistributionGGX(float3 N, float3 H, float roughness)
 {
     float a      = roughness * roughness;
@@ -94,35 +150,48 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
         N = normalize(mul(ns, TBN));
     }
 
-    // ✅ ОСВЕЩЕНИЕ как в Light shader
-    float3 Lo = float3(0.0f, 0.0f, 0.0f);
+
+  float shadowFactor = CalculateShadow(input.worldPos);
+    
+    // 🔥 FIX: Если нормаль смотрит в сторону от света — полная тень
+    float3 dirLightDir = normalize(-dirLightDirection.xyz);
+    float NdotL = saturate(dot(N, dirLightDir));
+    
+    // Если поверхность смотрит в сторону от света, уменьшаем её влияние
+    shadowFactor *= step(0.0f, NdotL);
+    
+    // Применяем shadowFactor только к направленному свету, не к амбиенту
+    float dirIntensity = NdotL * dirLightDirection.w;
+    float3 dirDiffuse = dirIntensity * dirLightColor.rgb * shadowFactor;
+    
+    // Амбиент НЕ затеняется
+    float3 ambientLight = dirLightAmbient.rgb * dirLightAmbient.w;
+
+    float3 Lo = ambientLight + dirDiffuse;
+
     for (int i = 0; i < NUM_LIGHTS; i++)
     {
         if (diffuseColor[i].w < 0.001f) continue;
-
-        float3 L = input.lightVec[i];
-        float intensity = saturate(dot(N, L));
+        float3 L         = input.lightVec[i];
+        float  intensity = saturate(dot(N, L));
         float3 lightColor = diffuseColor[i].rgb * diffuseColor[i].w;
-        
         Lo += lightColor * intensity;
     }
 
-    // ❌ УБРАЛ ambient — теперь спина будет тёмной!
-    // float3 ambient = float3(0.03f, 0.03f, 0.03f) * albedo;
-    float3 ambient = float3(0.0f, 0.0f, 0.0f); // ✅ Полностью выключил
-    
-    float3 color = ambient + Lo * albedo;
-
-    // Tone mapping и gamma
-    color = color / (color + float3(1.0f, 1.0f, 1.0f));
-    color = pow(color, 1.0f / 2.2f);
+    float3 color = Lo * albedo;
+    color = pow(saturate(color), 1.0f / 2.2f);
 
     float4 finalColor = float4(color, 1.0f);
 
+    // 🔥 FIX: b3 теперь правильно читается как SelectedBuffer
     if (selectedFactor > 1.5f)
     {
         float edge = 0.5f - saturate(dot(N, float3(0, 0, 1)));
         finalColor.rgb = lerp(finalColor.rgb, float3(0.0f, 0.85f, 0.3f), edge * 0.7f);
+    }
+    else
+    {
+        finalColor.rgb *= selectedFactor;
     }
 
     return ApplyFog(finalColor, input.fogFactor);

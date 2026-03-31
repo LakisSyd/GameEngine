@@ -1,4 +1,4 @@
-#pragma once
+п»ї#pragma once
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -9,15 +9,15 @@
 namespace fs = std::filesystem;
 
 // ============================================================================
-// HELPER: Конвертация пути в std::string (C++17 vs C++20 совместимость)
+// HELPER: РљРѕРЅРІРµСЂС‚Р°С†РёСЏ РїСѓС‚Рё РІ std::string (C++17 vs C++20 СЃРѕРІРјРµСЃС‚РёРјРѕСЃС‚СЊ)
 // ============================================================================
 inline std::string ToString(const fs::path& path) {
 #ifdef __cpp_char8_t
-    // C++20: u8string() возвращает std::u8string, нужна конвертация
+    // C++20: u8string() РІРѕР·РІСЂР°С‰Р°РµС‚ std::u8string, РЅСѓР¶РЅР° РєРѕРЅРІРµСЂС‚Р°С†РёСЏ
     std::u8string u8str = path.u8string();
     return std::string(u8str.begin(), u8str.end());
 #else
-    // C++17: u8string() возвращает std::string
+    // C++17: u8string() РІРѕР·РІСЂР°С‰Р°РµС‚ std::string
     return path.u8string();
 #endif
 }
@@ -53,7 +53,7 @@ public:
         std::error_code ec;
         if (!fs::exists(m_rootPath, ec) || ec) {
             std::cout << "Creating root directory: "
-                << ToString(m_rootPath) << "\n"; // Исправлено
+                << ToString(m_rootPath) << "\n"; // РСЃРїСЂР°РІР»РµРЅРѕ
             fs::create_directories(m_rootPath, ec);
         }
     }
@@ -77,7 +77,7 @@ public:
 
             FileEntry fe;
 
-            // ИСПОЛЬЗУЕМ НАШУ ФУНКЦИЮ ToString ВМЕСТО .u8string()
+            // РРЎРџРћР›Р¬Р—РЈР•Рњ РќРђРЁРЈ Р¤РЈРќРљР¦РР® ToString Р’РњР•РЎРўРћ .u8string()
             fe.path = ToString(entry.path());
             fe.name = ToString(entry.path().filename());
 
@@ -118,7 +118,7 @@ public:
         bool removed = fs::remove(fullPath, ec);
 
         if (ec) {
-            std::cerr << "Delete error [" << ToString(relativePath) // Исправлено
+            std::cerr << "Delete error [" << ToString(relativePath) // РСЃРїСЂР°РІР»РµРЅРѕ
                 << "]: " << ec.message() << "\n";
             return false;
         }
@@ -209,10 +209,16 @@ public:
         fs::path targetPath = m_rootPath / relativeDir;
         std::string targetStr = ToString(targetPath);
 
+        // вњ… FIX: РќРѕСЂРјР°Р»РёР·СѓРµРј СЃР»СЌС€Рё РІ targetStr
         std::replace(targetStr.begin(), targetStr.end(), '\\', '/');
         if (!targetStr.empty() && targetStr.back() == '/') {
             targetStr.pop_back();
         }
+
+        // вњ… DEBUG: Р’С‹РІРѕРґРёРј targetStr РґР»СЏ РїСЂРѕРІРµСЂРєРё
+#ifdef _DEBUG
+        OutputDebugStringA(("[FS] targetStr: '" + targetStr + "'\n").c_str());
+#endif
 
         for (const auto& entry : m_files) {
             std::string entryPath = entry.path;
@@ -222,6 +228,15 @@ public:
             if (lastSlash == std::string::npos) continue;
 
             std::string parentPath = entryPath.substr(0, lastSlash);
+
+            // вњ… DEBUG: РЎСЂР°РІРЅРёРІР°РµРј РїСѓС‚Рё
+#ifdef _DEBUG
+            if (results.size() < 3) { // Р’С‹РІРѕРґРёРј РїРµСЂРІС‹Рµ 3 СЃРѕРІРїР°РґРµРЅРёСЏ
+                OutputDebugStringA(("[FS] entry.path: '" + entry.path + "'\n").c_str());
+                OutputDebugStringA(("[FS] parentPath: '" + parentPath + "'\n").c_str());
+                OutputDebugStringA(("[FS] Match: " + std::string(parentPath == targetStr ? "YES" : "NO") + "\n").c_str());
+            }
+#endif
 
             if (parentPath == targetStr) {
                 results.push_back(&entry);
@@ -272,7 +287,7 @@ public:
 
         std::string pathStr = ToString(fullPath);
 
-        // ?? FIX: предотвращаем дубль в кэше — если уже есть, не добавляем
+        // ?? FIX: РїСЂРµРґРѕС‚РІСЂР°С‰Р°РµРј РґСѓР±Р»СЊ РІ РєСЌС€Рµ вЂ” РµСЃР»Рё СѓР¶Рµ РµСЃС‚СЊ, РЅРµ РґРѕР±Р°РІР»СЏРµРј
         bool alreadyCached = false;
         for (const auto& f : m_files) {
             if (f.path == pathStr) { alreadyCached = true; break; }
@@ -282,7 +297,7 @@ public:
             FileEntry fe;
             fe.path        = pathStr;
             fe.name        = ToString(fullPath.filename());
-            fe.extension   = "";   // ?? FIX: расширение у директории всегда пустое (ранее не заполнялось)
+            fe.extension   = "";   // ?? FIX: СЂР°СЃС€РёСЂРµРЅРёРµ Сѓ РґРёСЂРµРєС‚РѕСЂРёРё РІСЃРµРіРґР° РїСѓСЃС‚РѕРµ (СЂР°РЅРµРµ РЅРµ Р·Р°РїРѕР»РЅСЏР»РѕСЃСЊ)
             fe.isDirectory = true;
             fe.size        = 0;
             m_files.push_back(fe);

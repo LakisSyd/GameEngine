@@ -1,4 +1,4 @@
-/////////////
+///////////////
 // ОПРЕДЕЛЕНИЯ
 /////////////
 #define NUM_LIGHTS 4
@@ -6,29 +6,40 @@
 /////////////
 // ГЛОБАЛЬНЫЕ ПАРАМЕТРЫ
 /////////////
-Texture2D    shaderTexture : register(t0);
-SamplerState SampleType   : register(s0);
+Texture2D shadowMap : register(t7);
+SamplerComparisonState shadowSampler : register(s7);
 
-// Слот b0 — цвета источников света
+cbuffer ShadowBuffer : register(b5)
+{
+    matrix lightViewProj;
+};
+
+Texture2D shaderTexture : register(t0);
+SamplerState SampleType : register(s0);
+
 cbuffer LightColorBuffer : register(b0)
 {
     float4 diffuseColor[NUM_LIGHTS];
 };
 
-// Слот b1 — позиции источников (передаются и в PS)
 cbuffer LightPositionBuffer : register(b1)
 {
-    float4 lightPosition[4];
+    float4 lightPosition[NUM_LIGHTS];
 };
 
-// Слот b2 — туман (зарезервирован глобально)
 #include "fog_common.hlsli"
 
-// Слот b3 — фактор выделения объекта (был b2, перенесён)
 cbuffer SelectedBuffer : register(b3)
 {
     float selectedFactor;
     float3 selectedPadding;
+};
+
+cbuffer DirectionalLightBuffer : register(b4)
+{
+    float4 dirLightDirection;
+    float4 dirLightColor;
+    float4 dirLightAmbient;
 };
 
 /////////////
@@ -39,9 +50,59 @@ struct PixelInputType
     float4 position : SV_POSITION;
     float2 tex : TEXCOORD0;
     float3 normal : NORMAL;
-    float3 lightVec[NUM_LIGHTS] : TEXCOORD1;
-    float fogFactor : FOG;   // ✅ из вершинного шейдера
+    float3 worldPos : TEXCOORD1;
+    float fogFactor : FOG;
 };
+
+// ════════════════════════════════════════════════════════════
+// 🌑 ФУНКЦИЯ РАСЧЁТА ТЕНЕЙ
+// ════════════════════════════════════════════════════════════
+float CalculateShadow(float3 worldPos)
+{
+    // 1. Трансформируем мировую позицию в light space
+    float4 lightSpacePos = mul(float4(worldPos, 1.0), lightViewProj);
+    
+    // 2. Перспективное деление (для ортогональной проекции не критично, но нужно)
+    lightSpacePos.xyz /= lightSpacePos.w;
+    
+    // 3. Преобразуем из NDC [-1,1] в UV [0,1]
+    float2 shadowUV;
+    shadowUV.x =  lightSpacePos.x * 0.5 + 0.5;
+    shadowUV.y = -lightSpacePos.y * 0.5 + 0.5; // Инвертируем Y
+    
+    // 4. Если за пределами shadow map — нет тени
+    if (shadowUV.x < 0 || shadowUV.x > 1 || 
+        shadowUV.y < 0 || shadowUV.y > 1)
+        return 1.0;
+    
+    // 5. Глубина текущего пикселя
+    float currentDepth = lightSpacePos.z;
+    
+    // Если за дальней плоскостью света — нет тени
+    if (currentDepth > 1.0)
+        return 1.0;
+    
+    // 6. PCF (Percentage-Closer Filtering) — мягкие тени
+    float shadow = 0.0;
+    float texelSize = 1.0 / 2048.0; // Размер пикселя shadow map (жёстко захардкоден — можно вынести)
+    float bias = 0.005; // Смещение против shadow acne
+    
+    [unroll]
+    for (int x = -1; x <= 1; x++)
+    {
+        [unroll]
+        for (int y = -1; y <= 1; y++)
+        {
+            float2 offset = float2(x, y) * texelSize;
+            float sampledDepth = shadowMap.SampleCmp(shadowSampler, shadowUV + offset, currentDepth - bias);
+            
+            // Если текущая глубина больше — мы в тени
+            shadow += (currentDepth - bias > sampledDepth) ? 0.0 : 1.0;
+        }
+    }
+    
+    return shadow / 9.0; // Усредняем 9 сэмплов
+}
 
 /////////////
 // ПИКСЕЛЬНЫЙ ШЕЙДЕР
@@ -49,31 +110,69 @@ struct PixelInputType
 float4 LightPixelShader(PixelInputType input) : SV_TARGET
 {
     float4 textureColor = shaderTexture.Sample(SampleType, input.tex);
-    float4 colorSum = float4(0.0f, 0.0f, 0.0f, 1.0f);
-
-    // Освещение по всем источникам
+    float3 totalDiffuse = float3(0, 0, 0);
+    
+    float3 normal = normalize(input.normal);
+    
+    // ════════════════════════════════════════════════════════════
+    // 🌑 РАСЧЁТ ТЕНИ (ОДИН РАЗ ДЛЯ ВСЕГО ПИКСЕЛЯ)
+    // ════════════════════════════════════════════════════════════
+    float shadowFactor = CalculateShadow(input.worldPos);
+    
+    // ════════════════════════════════════════════════════════════
+    // 🌞 DIRECTIONAL LIGHT (СОЛНЦЕ) + ТЕНИ
+    // ════════════════════════════════════════════════════════════
+    float3 lightDir = normalize(-dirLightDirection.xyz);
+    float dirIntensity = saturate(dot(normal, lightDir));
+    dirIntensity *= dirLightDirection.w;
+    
+    // 🔥 ПРИМЕНЯЕМ ТЕНЬ К СОЛНЦУ
+    float3 dirDiffuse = dirIntensity * dirLightColor.rgb * shadowFactor;
+    
+    // Ambient НЕ затеняется (он идёт со всех сторон)
+    float3 ambient = dirLightAmbient.rgb * dirLightAmbient.a;
+    
+    // ════════════════════════════════════════════════════════════
+    // 💡 POINT LIGHTS (без теней — они сложнее)
+    // ════════════════════════════════════════════════════════════
     for (int i = 0; i < NUM_LIGHTS; i++)
     {
-        float intensity = saturate(dot(input.normal, input.lightVec[i]));
-        colorSum += diffuseColor[i] * intensity;
+        float3 lightVec = lightPosition[i].xyz - input.worldPos;
+        float distance = length(lightVec);
+        lightVec = normalize(lightVec);
+        
+        float intensity = saturate(dot(normal, lightVec));
+        float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
+        
+        totalDiffuse += intensity * diffuseColor[i].rgb * attenuation;
     }
-
-    colorSum = saturate(colorSum);
-    float4 finalColor = colorSum * textureColor;
-
-    // Выделение объекта
+    
+    // ════════════════════════════════════════════════════════════
+    // 🎨 ФИНАЛЬНЫЙ ЦВЕТ
+    // ════════════════════════════════════════════════════════════
+    float3 finalLight = ambient + dirDiffuse + totalDiffuse;
+    finalLight = saturate(finalLight);
+    
+    float4 finalColor = textureColor * float4(finalLight, 1.0);
+    
+    // ════════════════════════════════════════════════════════════
+    // ✨ ВЫДЕЛЕНИЕ ОБЪЕКТА
+    // ════════════════════════════════════════════════════════════
     if (selectedFactor > 1.5f)
     {
-        float edgeFactor = 1.0 - saturate(dot(input.normal, float3(0, 0, 1)));
+        float3 viewDir = normalize(float3(0, 0, 1));
+        float edgeFactor = 1.0 - saturate(dot(normal, viewDir));
         finalColor.rgb = lerp(finalColor.rgb, float3(1.0, 0.85, 0.3), edgeFactor * 0.7);
     }
     else
     {
         finalColor.rgb *= selectedFactor;
     }
-
+    
     finalColor = saturate(finalColor);
-
-    // ✅ Применяем туман — одна строка для всех шейдеров
+    
+    // ════════════════════════════════════════════════════════════
+    // 🌫️ ТУМАН
+    // ════════════════════════════════════════════════════════════
     return ApplyFog(finalColor, input.fogFactor);
 }

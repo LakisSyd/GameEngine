@@ -48,7 +48,7 @@ public:
 private:
     // 📌 Внутренние методы
     // Обрабатывает один кадр: проверяет Escape и вызывает Application::Frame().
-    bool Frame(float dt);
+    bool Frame();
 
     // Регистрирует класс окна и создаёт окно нужного размера.
     // Записывает реальные размеры экрана в screenWidth / screenHeight.
