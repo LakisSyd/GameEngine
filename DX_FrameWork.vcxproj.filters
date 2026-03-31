@@ -156,9 +156,6 @@
     <ClCompile Include="src\Render\Shader\Multitextureshaderclass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
-    <ClCompile Include="src\Render\Shader\NormalMapShaderClass.cpp">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="src\Render\Shader\LightMapShaderClass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
@@ -180,11 +177,50 @@
     <ClCompile Include="src\Render\Shader\WaterShaderClass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
-    <ClCompile Include="PBRShaderClass.cpp">
+    <ClCompile Include="src\ECS\System\FloodingSystem.cpp">
+      <Filter>ECS</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECS\System\JointConnectionSystem.cpp">
+      <Filter>ECS</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECS\System\PhysicsSystem.cpp">
+      <Filter>ECS</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECS\System\PressureSystem.cpp">
+      <Filter>ECS</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECS\System\SubmarineBuilder.cpp">
+      <Filter>ECS</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\ProjectionShaderClass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
-    <ClCompile Include="ProjectionShaderClass.cpp">
-      <Filter>Исходные файлы</Filter>
+    <ClCompile Include="src\Render\Shader\ShadowMap.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\ShadowShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Camera\ViewPointClass.cpp">
+      <Filter>Render\Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Physics\DebugPhysicsVisualizer.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\NormalMapShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ECS\System\SubmarineJointSystem.cpp">
+      <Filter>ECS</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\PBRShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="CompartmentDebugRenderer.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="PhysicsDebugRenderer.cpp">
+      <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -323,11 +359,68 @@
     <ClInclude Include="src\Render\Shader\WaterShaderClass.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
-    <ClInclude Include="PBRShaderClass.h">
-      <Filter>Render\Shader</Filter>
-    </ClInclude>
     <ClInclude Include="ProjectionShaderClass.h">
       <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\FileSystem.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="PhysicsWorld.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Physics\DebugPhysicsVisualizer.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="TimeManager.h">
+      <Filter>Config</Filter>
+    </ClInclude>
+    <ClInclude Include="SubmarineBuilder.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\PBRShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\FloodingSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\JointConnectionSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\PhysicsSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\PressureSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\SubmarineBuilder.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\ProjectionShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\ShadowMap.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\ShadowShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Camera\ViewPointClass.h">
+      <Filter>Render\Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Config\CollisionUtils.h">
+      <Filter>Config</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\SubmarineJointSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="CompartmentDebugRenderer.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="PhysicsDebugRenderer.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="SubmarineSystem.h">
+      <Filter>ECS</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -335,12 +428,6 @@
       <Filter>Файлы ресурсов</Filter>
     </None>
     <None Include="src\Render\Shader\Ps\Lightmap.ps">
-      <Filter>Файлы ресурсов</Filter>
-    </None>
-    <None Include="src\Render\Shader\color.ps">
-      <Filter>Файлы ресурсов</Filter>
-    </None>
-    <None Include="src\Render\Shader\color.vs">
       <Filter>Файлы ресурсов</Filter>
     </None>
     <None Include="src\Render\Shader\texture.ps">
@@ -372,6 +459,20 @@
       <Filter>Файлы ресурсов</Filter>
     </None>
     <None Include="src\Render\Shader\Vs\pbr.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Ps\projection.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Vs\projection.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="shadow.vs" />
+    <None Include="shadow.ps" />
+    <None Include="src\Render\Shader\Vs\color.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Ps\color.ps">
       <Filter>Файлы ресурсов</Filter>
     </None>
   </ItemGroup>

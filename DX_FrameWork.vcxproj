@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CompartmentDebugRenderer.cpp" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_dx11.cpp" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_win32.cpp" />
     <ClCompile Include="lib\imgui-master\imgui.cpp" />
@@ -26,18 +27,25 @@
     <ClCompile Include="lib\imgui-master\imgui_draw.cpp" />
     <ClCompile Include="lib\imgui-master\imgui_tables.cpp" />
     <ClCompile Include="lib\imgui-master\imgui_widgets.cpp" />
-    <ClCompile Include="ProjectionShaderClass.cpp" />
-    <ClCompile Include="PBRShaderClass.cpp" />
+    <ClCompile Include="PhysicsDebugRenderer.cpp" />
     <ClCompile Include="src\Config\PickingSystem.cpp" />
     <ClCompile Include="src\Core\ApplicationClass.cpp" />
     <ClCompile Include="src\Core\main.cpp" />
     <ClCompile Include="src\Core\SystemClass.cpp" />
+    <ClCompile Include="src\ECS\System\FloodingSystem.cpp" />
+    <ClCompile Include="src\ECS\System\JointConnectionSystem.cpp" />
+    <ClCompile Include="src\ECS\System\PhysicsSystem.cpp" />
+    <ClCompile Include="src\ECS\System\PressureSystem.cpp" />
+    <ClCompile Include="src\ECS\System\SubmarineBuilder.cpp" />
+    <ClCompile Include="src\ECS\System\SubmarineJointSystem.cpp" />
     <ClCompile Include="src\Editor\EditorUI.cpp" />
     <ClCompile Include="src\Input\InputClass.cpp" />
     <ClCompile Include="src\Input\InputManager.cpp" />
+    <ClCompile Include="src\Physics\DebugPhysicsVisualizer.cpp" />
     <ClCompile Include="src\Render\BitMap\BitmapClass.cpp" />
     <ClCompile Include="src\Render\BitMap\WorldSpriteClass.cpp" />
     <ClCompile Include="src\Render\Camera\cameraclass.cpp" />
+    <ClCompile Include="src\Render\Camera\ViewPointClass.cpp" />
     <ClCompile Include="src\Render\D3DClass.cpp" />
     <ClCompile Include="src\Render\Material\MaterialClass.cpp" />
     <ClCompile Include="src\Render\Model\assimpmodelclass.cpp" />
@@ -52,7 +60,11 @@
     <ClCompile Include="src\Render\Shader\LightShaderClass.cpp" />
     <ClCompile Include="src\Render\Shader\Multitextureshaderclass.cpp" />
     <ClCompile Include="src\Render\Shader\NormalMapShaderClass.cpp" />
+    <ClCompile Include="src\Render\Shader\PBRShaderClass.cpp" />
+    <ClCompile Include="src\Render\Shader\ProjectionShaderClass.cpp" />
     <ClCompile Include="src\Render\Shader\ReflectionShaderClass.cpp" />
+    <ClCompile Include="src\Render\Shader\ShadowMap.cpp" />
+    <ClCompile Include="src\Render\Shader\ShadowShaderClass.cpp" />
     <ClCompile Include="src\Render\Shader\Textureshaderclass.cpp" />
     <ClCompile Include="src\Render\Shader\WaterShaderClass.cpp" />
     <ClCompile Include="src\Render\Texture\RenderTextureClass.cpp" />
@@ -62,30 +74,42 @@
     <ClCompile Include="src\Scene\SceneManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="CompartmentDebugRenderer.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h" />
     <ClInclude Include="lib\imgui-master\ImGuizmo.h" />
+    <ClInclude Include="PhysicsDebugRenderer.h" />
+    <ClInclude Include="PhysicsWorld.h" />
     <ClInclude Include="ProjectionShaderClass.h" />
-    <ClInclude Include="PBRShaderClass.h" />
+    <ClInclude Include="src\Config\CollisionUtils.h" />
     <ClInclude Include="src\Config\GameSettings.h" />
     <ClInclude Include="src\Config\PickingSystem.h" />
     <ClInclude Include="src\Core\ApplicationClass.h" />
+    <ClInclude Include="src\Core\FileSystem.h" />
     <ClInclude Include="src\Core\SystemClass.h" />
     <ClInclude Include="src\ECS\Components\ComponentManager.h" />
     <ClInclude Include="src\ECS\Components\Components.h" />
     <ClInclude Include="src\ECS\Components\IComponentPull.h" />
     <ClInclude Include="src\ECS\ECSRegistry .h" />
     <ClInclude Include="src\ECS\ECSTypes.h" />
+    <ClInclude Include="src\ECS\System\FloodingSystem.h" />
+    <ClInclude Include="src\ECS\System\JointConnectionSystem.h" />
+    <ClInclude Include="src\ECS\System\PhysicsSystem.h" />
+    <ClInclude Include="src\ECS\System\PressureSystem.h" />
     <ClInclude Include="src\ECS\System\RenderMesh.h" />
     <ClInclude Include="src\ECS\System\RenderSystem.h" />
+    <ClInclude Include="src\ECS\System\SubmarineBuilder.h" />
+    <ClInclude Include="src\ECS\System\SubmarineJointSystem.h" />
     <ClInclude Include="src\ECS\System\TransformSystem.h" />
     <ClInclude Include="src\Editor\EditorUI.h" />
     <ClInclude Include="src\HelpFunc\helper.h" />
     <ClInclude Include="src\Input\InputClass.h" />
     <ClInclude Include="src\Input\InputManager.h" />
+    <ClInclude Include="src\Physics\DebugPhysicsVisualizer.h" />
     <ClInclude Include="src\Render\BitMap\BitmapClass.h" />
     <ClInclude Include="src\Render\BitMap\WorldSpriteClass.h" />
     <ClInclude Include="src\Render\Camera\cameraclass.h" />
+    <ClInclude Include="src\Render\Camera\ViewPointClass.h" />
     <ClInclude Include="src\Render\D3DClass.h" />
     <ClInclude Include="src\Render\Material\MaterialClass.h" />
     <ClInclude Include="src\Render\Model\assimpmodelclass.h" />
@@ -100,8 +124,12 @@
     <ClInclude Include="src\Render\Shader\LightShaderClass.h" />
     <ClInclude Include="src\Render\Shader\Multitextureshaderclass.h" />
     <ClInclude Include="src\Render\Shader\NormalMapShaderClass.h" />
+    <ClInclude Include="src\Render\Shader\PBRShaderClass.h" />
+    <ClInclude Include="src\Render\Shader\ProjectionShaderClass.h" />
     <ClInclude Include="src\Render\Shader\ReflectionShaderClass.h" />
     <ClInclude Include="src\Render\Shader\ShaderManager.h" />
+    <ClInclude Include="src\Render\Shader\ShadowMap.h" />
+    <ClInclude Include="src\Render\Shader\ShadowShaderClass.h" />
     <ClInclude Include="src\Render\Shader\Textureshaderclass.h" />
     <ClInclude Include="src\Render\Shader\WaterShaderClass.h" />
     <ClInclude Include="src\Render\Texture\RenderTextureClass.h" />
@@ -109,23 +137,30 @@
     <ClInclude Include="src\Scene\gameobject.h" />
     <ClInclude Include="src\Scene\Light\LightClass.h" />
     <ClInclude Include="src\Scene\SceneManager.h" />
+    <ClInclude Include="SubmarineBuilder.h" />
+    <ClInclude Include="SubmarineSystem.h" />
+    <ClInclude Include="TimeManager.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="src\Render\Shader\color.ps" />
-    <None Include="src\Render\Shader\color.vs" />
+    <None Include="shadow.ps" />
+    <None Include="shadow.vs" />
     <None Include="src\Render\Shader\fog_common.hlsli" />
+    <None Include="src\Render\Shader\Ps\color.ps" />
     <None Include="src\Render\Shader\Ps\fog.ps" />
     <None Include="src\Render\Shader\Ps\light.ps" />
     <None Include="src\Render\Shader\Ps\Lightmap.ps" />
     <None Include="src\Render\Shader\Ps\Normalmap.ps" />
     <None Include="src\Render\Shader\Ps\pbr.ps" />
+    <None Include="src\Render\Shader\Ps\projection.ps" />
     <None Include="src\Render\Shader\texture.ps" />
     <None Include="src\Render\Shader\texture.vs" />
+    <None Include="src\Render\Shader\Vs\color.vs" />
     <None Include="src\Render\Shader\Vs\fog.vs" />
     <None Include="src\Render\Shader\Vs\light.vs" />
     <None Include="src\Render\Shader\Vs\Lightmap.vs" />
     <None Include="src\Render\Shader\Vs\Normalmap.vs" />
     <None Include="src\Render\Shader\Vs\pbr.vs" />
+    <None Include="src\Render\Shader\Vs\projection.vs" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -211,14 +246,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\System;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\Components;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Config;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Material;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\assimp;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\imgui-master;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene\Light;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Texture;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Model;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Camera;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\BitMap;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Input;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\HelpFunc;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Editor;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Physics;C:\Users\Lakis\Desktop\vcpkg\packages\bullet3_x64-windows\include\bullet;C:\Users\Lakis\Desktop\vcpkg\packages\bullet3_x64-windows\include;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\System;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\Components;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Config;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Material;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\assimp;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\imgui-master;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene\Light;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Texture;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Model;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Camera;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\BitMap;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Input;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\HelpFunc;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Editor;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
-      <AdditionalDependencies>assimp-vc143-mt.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\Lakis\Desktop\vcpkg\packages\bullet3_x64-windows\debug\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>assimp-vc143-mt.lib;BulletDynamics_Debug.lib;BulletCollision_Debug.lib;LinearMath_Debug.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

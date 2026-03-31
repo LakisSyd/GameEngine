@@ -31,8 +31,12 @@
 #include <colorshaderclass.h>
 #include "WaterShaderClass.h"
 #include "GlassShaderClass.h"
-#include "../../ProjectionShaderClass.h"
-#include "../../PBRShaderClass.h"
+#include "ProjectionShaderClass.h"
+#include "PBRShaderClass.h"
+#include "DebugPhysicsVisualizer.h"
+#include "ShadowMap.h"
+#include "ShadowShaderClass.h"
+#include "../../CompartmentDebugRenderer.h"
 
 const bool  FULL_SCREEN = false;
 const bool  VSYNC_ENABLED = true;
@@ -50,6 +54,7 @@ public:
     ~ApplicationClass() = default;
 
     bool Initialize(int screenWidth, int screenHeight, HWND hwnd);
+    void CreatePhysicsTestScene();
     void Shutdown();
     bool Frame(float dt);
     void SpawnObjectFromRequest(const EditorUI::SpawnRequest& req);
@@ -62,14 +67,14 @@ private:
     void RenderWorldSprites(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
 
     // ── Вспомогательные методы ───────────────────────────────────────────────
-    void     SetupLights(XMFLOAT4 colors[], XMFLOAT4 positions[]);
+  
 
     // ── Обработка ввода ──────────────────────────────────────────────────────
     void HandleCameraMovement(float dt);
     void HandleDragDrop();
 
     // ── Вспомогательные методы drag-and-drop ─────────────────────────────────
-    void StartDraggingLight(int index, const CameraClass::Ray& pickRay);
+  
     void StartDraggingSprite(int index, const CameraClass::Ray& pickRay, const XMFLOAT3& spritePos);
     void StartDraggingObject(int index, const CameraClass::Ray& pickRay, const XMFLOAT3& objPos);
     void UpdateDraggedPosition(const CameraClass::Ray& ray);
@@ -77,12 +82,23 @@ private:
 
     XMMATRIX BuildReflectionMatrix(CameraClass* camera, float reflectY);
 
+    void CreateTestSubmarine();
+
     void Render3DObjectsExcluding(ID3D11DeviceContext* context,
         const XMMATRIX& view,
         const XMMATRIX& proj,
         int excludeIndex);
 
 private:
+
+    void Render3DObjectsToShadowMap(
+        ID3D11DeviceContext* context,
+        const XMMATRIX& lightViewProj);
+
+
+    ShadowMap* m_shadowMap;
+    ShadowShaderClass* m_shadowShader;  // ← НОВОЕ
+
     // ── Ядро Direct3D ────────────────────────────────────────────────────────
     std::unique_ptr<D3DClass> m_direct3D;
 
@@ -100,6 +116,8 @@ private:
     AssimpModelClass* m_mainModel = nullptr;
     AssimpModelClass* m_lightSphereModel = nullptr;
 
+	AssimpModelClass* m_boxModel = nullptr;
+	AssimpModelClass* m_capsuleModel = nullptr;
     // ── Сцена ────────────────────────────────────────────────────────────────
     SceneManager            m_sceneManager;
     std::vector<GameObject> m_lightSpheres;
@@ -143,7 +161,7 @@ private:
 
     // ── Редактор ─────────────────────────────────────────────────────────────
     EditorUI m_editorUI;
-
+    ColorShaderClass* m_colorShader = nullptr;
     // ── Материал по умолчанию ────────────────────────────────────────────────
     MaterialClass* m_defaultMaterial = nullptr;
 
@@ -153,6 +171,17 @@ private:
 
     // ── Файловая система ─────────────────────────────────────────────────────
     std::unique_ptr<FileSystem> m_gameFs;
+
+    ECSRegistry m_registry;
+    DebugPhysicsVisualizer* m_debugVisualizer = nullptr;
+    private:
+        PhysicsDebugRenderer* m_physicsDebugRenderer = nullptr;
+        PhysicsDebugSettings m_physicsDebugSettings;  // Настройки
+
+    
+        CompartmentDebugRenderer* m_compartmentRenderer = nullptr;
+
+    ID3D11RasterizerState* m_wireframeRS = nullptr;
 };
 
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);

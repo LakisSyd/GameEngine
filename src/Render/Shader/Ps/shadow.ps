@@ -1,0 +1,11 @@
+// shadow.ps (можно пустой — глубина пишется автоматически)
+struct PixelInput
+{
+    float4 position : SV_POSITION;
+};
+
+void ShadowPixelShader(PixelInput input)
+{
+    // Пустой! Глубина записывается автоматически в Depth Stencil View
+    // Этот шейдер нужен только чтобы pipeline был валидным
+}

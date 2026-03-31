@@ -94,6 +94,11 @@ public:
     void Bind(ID3D11DeviceContext* context);
     void Unbind(ID3D11DeviceContext* context);
 
+    void SetProjectionView2(const XMMATRIX& view) { m_view2 = view; }
+    XMMATRIX GetProjectionView2() const { return m_view2; }
+    void SetProjectionProj2(const XMMATRIX& proj) { m_proj2 = proj; }
+    XMMATRIX GetProjectionProj2() const { return m_proj2; }
+
 private:
 
     XMMATRIX m_projectorProjection = XMMatrixIdentity(); // новое поле
@@ -118,4 +123,7 @@ private:
     float                     m_reflectRefractScale = 0.02f;
     XMFLOAT4                  m_refractionTint = { 0.0f, 0.3f, 0.5f, 1.0f };
     ID3D11ShaderResourceView* m_refractionSRV = nullptr; // не владеет!
+
+    XMMATRIX m_view2 = XMMatrixIdentity();
+    XMMATRIX m_proj2 = XMMatrixIdentity();
 };

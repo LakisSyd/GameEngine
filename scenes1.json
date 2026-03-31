@@ -1,0 +1,102 @@
+{
+    "objects": [
+        {
+            "id": 0,
+            "is_light": true,
+            "light_color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "light_enabled": true,
+            "model_path": "assets/model/sphere.obj",
+            "position": {
+                "x": 2.601780414581299,
+                "y": -1.448063850402832,
+                "z": -0.6063308715820313
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 0.30000001192092896,
+                "y": 0.30000001192092896,
+                "z": 0.30000001192092896
+            },
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "id": 1,
+            "is_light": true,
+            "light_color": [
+                1.0,
+                1.0,
+                1.0,
+                1.0
+            ],
+            "light_enabled": true,
+            "model_path": "assets/model/sphere.obj",
+            "position": {
+                "x": 2.798511505126953,
+                "y": 4.696126461029053,
+                "z": -6.431537628173828
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "id": 2,
+            "model_path": "assets/model/sphere.obj",
+            "position": {
+                "x": 0.48986369371414185,
+                "y": -1.4122378826141357,
+                "z": -0.41300201416015625
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "id": 3,
+            "model_path": "assets/model/cube.obj",
+            "position": {
+                "x": 0.5383784770965576,
+                "y": -1.3659791946411133,
+                "z": -0.38666343688964844
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": "assets/texture/stone.tga"
+        }
+    ],
+    "scene_name": "MyLevel",
+    "version": 1
+}

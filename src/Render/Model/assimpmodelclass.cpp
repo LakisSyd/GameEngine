@@ -379,6 +379,15 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
         }
     }
 
+
+    // Предварительно вычисляем bounds для кэширования
+    XMFLOAT3 min, max, center;
+    float radius;
+    GetBoundingBox(&min, &max);
+    GetBoundingSphere(&center, &radius);
+
+    return true;
+
     OutputDebugStringA("AssimpModelClass initialized successfully.\n");
     return true;
 }
@@ -398,7 +407,7 @@ void AssimpModelClass::Shutdown()
     }
     m_meshParts.clear();
     m_totalIndexCount = 0;
-
+    m_boundsCached = false;
     // Удаляем созданные TextureClass (они в Shutdown вызовут Release внутренних SRV)
     for (auto* t : m_ownedTextures)
     {
@@ -684,4 +693,187 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(ID3D11Device
     }
 
     return nullptr; // Не найдено
+}
+
+
+
+// ============================================================================
+// GetBoundingBox — вычисляет AABB (Axis-Aligned Bounding Box)
+// ============================================================================
+void AssimpModelClass::GetBoundingBox(XMFLOAT3* min, XMFLOAT3* max) const
+{
+    if (!min || !max) return;
+
+    // Если уже вычислены — возвращаем кэшированные
+    if (m_boundsCached)
+    {
+        *min = m_cachedBBMin;
+        *max = m_cachedBBMax;
+        return;
+    }
+
+    // Инициализация экстремальных значений
+    XMFLOAT3 bbMin(FLT_MAX, FLT_MAX, FLT_MAX);
+    XMFLOAT3 bbMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+    // Проходим по всем мешам модели
+    if (m_scene)
+    {
+        for (unsigned int i = 0; i < m_scene->mNumMeshes; i++)
+        {
+            aiMesh* mesh = m_scene->mMeshes[i];
+            for (unsigned int j = 0; j < mesh->mNumVertices; j++)
+            {
+                aiVector3D& v = mesh->mVertices[j];
+
+                // Обновляем минимум
+                if (v.x < bbMin.x) bbMin.x = v.x;
+                if (v.y < bbMin.y) bbMin.y = v.y;
+                if (v.z < bbMin.z) bbMin.z = v.z;
+
+                // Обновляем максимум
+                if (v.x > bbMax.x) bbMax.x = v.x;
+                if (v.y > bbMax.y) bbMax.y = v.y;
+                if (v.z > bbMax.z) bbMax.z = v.z;
+            }
+        }
+    }
+
+    // Кэшируем результат
+    m_cachedBBMin = bbMin;
+    m_cachedBBMax = bbMax;
+    m_boundsCached = true;
+
+    *min = bbMin;
+    *max = bbMax;
+
+    // DEBUG: выводим размеры
+    char buf[256];
+    sprintf_s(buf, "BoundingBox: Min(%.2f, %.2f, %.2f) Max(%.2f, %.2f, %.2f)\n",
+        bbMin.x, bbMin.y, bbMin.z, bbMax.x, bbMax.y, bbMax.z);
+    OutputDebugStringA(buf);
+}
+
+// ============================================================================
+// GetBoundingSphere — вычисляет описанную сферу вокруг модели
+// ============================================================================
+void AssimpModelClass::GetBoundingSphere(XMFLOAT3* center, float* radius) const
+{
+    if (!center || !radius) return;
+
+    // Если уже вычислены — возвращаем кэшированные
+    if (m_boundsCached && m_cachedSphereRadius > 0.0f)
+    {
+        *center = m_cachedSphereCenter;
+        *radius = m_cachedSphereRadius;
+        return;
+    }
+
+    // Сначала вычисляем AABB
+    XMFLOAT3 bbMin, bbMax;
+    GetBoundingBox(&bbMin, &bbMax);
+
+    // Центр сферы = центр AABB
+    XMFLOAT3 sphereCenter(
+        (bbMin.x + bbMax.x) * 0.5f,
+        (bbMin.y + bbMax.y) * 0.5f,
+        (bbMin.z + bbMax.z) * 0.5f
+    );
+
+    // Радиус = максимальное расстояние от центра до любой вершины
+    float maxDistSq = 0.0f;
+
+    if (m_scene)
+    {
+        for (unsigned int i = 0; i < m_scene->mNumMeshes; i++)
+        {
+            aiMesh* mesh = m_scene->mMeshes[i];
+            for (unsigned int j = 0; j < mesh->mNumVertices; j++)
+            {
+                aiVector3D& v = mesh->mVertices[j];
+
+                float dx = v.x - sphereCenter.x;
+                float dy = v.y - sphereCenter.y;
+                float dz = v.z - sphereCenter.z;
+                float distSq = dx * dx + dy * dy + dz * dz;
+
+                if (distSq > maxDistSq)
+                    maxDistSq = distSq;
+            }
+        }
+    }
+
+    float sphereRadius = sqrtf(maxDistSq);
+
+    // Кэшируем результат
+    m_cachedSphereCenter = sphereCenter;
+    m_cachedSphereRadius = sphereRadius;
+
+    *center = sphereCenter;
+    *radius = sphereRadius;
+
+    // DEBUG: выводим радиус
+    char buf[256];
+    sprintf_s(buf, "BoundingSphere: Center(%.2f, %.2f, %.2f) Radius=%.3f\n",
+        sphereCenter.x, sphereCenter.y, sphereCenter.z, sphereRadius);
+    OutputDebugStringA(buf);
+}
+
+void AssimpModelClass::GetVertices(std::vector<XMFLOAT3>& outVertices) const
+{
+    outVertices.clear();
+    if (!m_scene) return;
+
+    for (unsigned int i = 0; i < m_scene->mNumMeshes; ++i)
+    {
+        const aiMesh* mesh = m_scene->mMeshes[i];
+        if (!mesh || !mesh->HasPositions()) continue;
+
+        for (unsigned int j = 0; j < mesh->mNumVertices; ++j)
+        {
+            const aiVector3D& v = mesh->mVertices[j];
+            outVertices.emplace_back(v.x, v.y, v.z);
+        }
+    }
+}
+void AssimpModelClass::GetRawVertices(std::vector<XMFLOAT3>& outVertices) const
+{
+    outVertices.clear();
+    if (!m_scene) return;
+
+    for (unsigned int i = 0; i < m_scene->mNumMeshes; ++i)
+    {
+        const aiMesh* mesh = m_scene->mMeshes[i];
+        if (!mesh || !mesh->HasPositions()) continue;
+
+        for (unsigned int j = 0; j < mesh->mNumVertices; ++j)
+        {
+            const aiVector3D& v = mesh->mVertices[j];
+            outVertices.emplace_back(v.x, v.y, v.z);
+        }
+    }
+}
+
+void AssimpModelClass::GetRawTriangles(std::vector<XMFLOAT3>& outTriangles) const
+{
+    outTriangles.clear();
+    if (!m_scene) return;
+
+    for (unsigned int i = 0; i < m_scene->mNumMeshes; ++i)
+    {
+        const aiMesh* mesh = m_scene->mMeshes[i];
+        if (!mesh || !mesh->HasPositions() || !mesh->HasFaces()) continue;
+
+        for (unsigned int f = 0; f < mesh->mNumFaces; ++f)
+        {
+            const aiFace& face = mesh->mFaces[f];
+            if (face.mNumIndices != 3) continue; // только треугольники
+
+            for (unsigned int k = 0; k < 3; ++k)
+            {
+                const aiVector3D& v = mesh->mVertices[face.mIndices[k]];
+                outTriangles.emplace_back(v.x, v.y, v.z);
+            }
+        }
+    }
 }

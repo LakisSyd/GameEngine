@@ -1,5 +1,6 @@
 ﻿#include "gameobject.h"
 #include "Textureshaderclass.h"
+#include <colorshaderclass.h>
 
 GameObject::GameObject()
     : m_model(nullptr),
@@ -36,6 +37,26 @@ void GameObject::RenderSimple(ID3D11DeviceContext* context,
     m_model->Render(context);
     shader->Render(context, m_model->GetIndexCount(), world, view, proj, m_model->GetTexture());
 }
+void GameObject::RenderSimpleColor(
+    ID3D11DeviceContext* context,
+    XMMATRIX view,
+    XMMATRIX projection,
+    ColorShaderClass* colorShader)
+{
+    if (!m_model || !colorShader) return;
+
+    XMMATRIX world = GetWorldMatrix(); // или собери из position/rotation/scale
+
+    // ColorShaderClass::Render ожидает: (context, indexCount, world, view, projection)
+    colorShader->Render(
+        context,
+        m_model->GetIndexCount(),
+        world,
+        view,
+        projection
+    );
+}
+
 
 // ============================================================================
 // GetWorldMatrix: Scale * Rotation * Translation

@@ -31,19 +31,7 @@ using json = nlohmann::json;
 class SceneManager
 {
 public:
-    struct LightSource
-    {
-        XMFLOAT4 position;
-        XMFLOAT4 color;
-        bool     active;
-        int      attachedToObjectIndex;
-        XMFLOAT3 offset;
-
-        LightSource()
-            : position(0, 0, 0, 1), color(0, 0, 0, 1), active(false)
-            , attachedToObjectIndex(-1), offset(0, 0, 0) {
-        }
-    };
+   
 
     SceneManager();
     ~SceneManager();
@@ -74,6 +62,10 @@ public:
             mesh->material = mat;
     }
 
+
+
+
+
     bool IsObjectActive(Entity entity)
     {
         return m_registry.HasComponent<ActiveComponent>(entity);
@@ -96,31 +88,13 @@ public:
     // =========================================================================
     // Свет
     // =========================================================================
-    void SetLight(int index, const XMFLOAT3& pos, const XMFLOAT4& color, bool active = true);
-    void AttachLightToObject(int lightIndex, int objectIndex, const XMFLOAT3& offset = { 0,0,0 });
-    void DetachLight(int lightIndex);
+   
     void UpdateLights();
 
-    const XMFLOAT4& GetLightColor(int i) const { return m_lights[i].color; }
-    const XMFLOAT4& GetLightPosition(int i) const { return m_lights[i].position; }
-    bool            IsLightActive(int i) const { return m_lights[i].active; }
+   
 
     // Convenience setters for individual light properties (used by EditorUI)
-    void SetLightPosition(int i, const XMFLOAT3& pos)
-    {
-        if (i < 0 || i >= NUM_LIGHTS) return;
-        m_lights[i].position = XMFLOAT4(pos.x, pos.y, pos.z, 1.0f);
-    }
-    void SetLightColor(int i, const XMFLOAT4& color)
-    {
-        if (i < 0 || i >= NUM_LIGHTS) return;
-        m_lights[i].color = color;
-    }
-    void SetLightActive(int i, bool active)
-    {
-        if (i < 0 || i >= NUM_LIGHTS) return;
-        m_lights[i].active = active;
-    }
+  
 
     // =========================================================================
     // Спрайты
@@ -150,7 +124,8 @@ public:
 
     void SetObjectTexture(Entity entity, int slot, const std::string& path, ID3D11Device* device, ID3D11DeviceContext* context);
 
-
+    void SetLightModel(AssimpModelClass* model) { m_lightModel = model; }        // ✅ НОВОЕ
+    AssimpModelClass* GetLightModel() const { return m_lightModel; }
 
     // =========================================================================
     // Обновление и рендер
@@ -205,12 +180,36 @@ public:
     void SetFogStart(float start) { m_fogSettings.FOG_START = start; m_fogSettings.enabled = true; }
     void SetFogEnd(float end) { m_fogSettings.FOG_END = end; m_fogSettings.enabled = true; }
 
+    Entity SpawnLight(const XMFLOAT3& position, const XMFLOAT4& color, bool isGizmo = false);
+    bool   RemoveLight(Entity entity);
+    
+    bool IsLightActive(Entity i) 
+    {
+      
+        if (m_registry.HasComponent<LightComponent>(i))
+        {
+            return m_registry.GetComponent<LightComponent>(i)->enabled;
+      }
+        
+    }
+
+    
+    
+    void SetLightPosition(Entity entity, const XMFLOAT3& position);
+    void SetLightEnabled(Entity entity, bool enabled);
+    void AttachLightToObject(Entity lightEntity, Entity targetEntity, const XMFLOAT3& offset = {});
+    void DetachLight(Entity lightEntity);
+    void SetLightColor(Entity entity, const XMFLOAT4& color);
+
+    // Для рендера: собираем данные о светах в массивы для шейдера
+    void GatherLightsForShader(XMFLOAT4 outColors[], XMFLOAT4 outPositions[], int maxLights = NUM_LIGHTS);
+
 
 
 private:
     ECSRegistry m_registry;
 
-    std::array<LightSource, NUM_LIGHTS>            m_lights;
+
     std::vector<std::unique_ptr<WorldSpriteClass>>  m_sprites;
     std::unordered_map<std::string, AssimpModelClass*> m_modelCache;
 
@@ -221,9 +220,19 @@ private:
     json   SerializeObject(Entity entity, int id);
     Entity DeserializeObject(const json& j, ID3D11Device* device,
         ID3D11DeviceContext* deviceContext);
-    json   SerializeLight(const LightSource& light, int index);
-    void   DeserializeLight(const json& j, LightSource& light);
+  
     json   SerializeMaterial(const MaterialClass* mat);
 
     ID3D11ShaderResourceView* m_refractionSRV = nullptr;
+
+    AssimpModelClass* m_lightModel = nullptr;
+
+
+    //WATER 
+    float m_waterLevel = 0.0f;  // 🌊 Уровень поверхности воды
+
+    public:
+        float GetWaterLevel() const { return m_waterLevel; }
+        void SetWaterLevel(float level) { m_waterLevel = level; }
+    
 };
