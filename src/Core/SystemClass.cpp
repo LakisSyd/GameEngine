@@ -4,9 +4,8 @@
 
 #include "systemclass.h"
 #include <windowsx.h>
-
 #include "backends/imgui_impl_win32.h"
-
+#include "TimeManager.h"
 // Объявляем обработчик ImGui, определённый в imgui_impl_win32.cpp
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -100,46 +99,52 @@ void SystemClass::Shutdown()
 // ============================================================================
 void SystemClass::Run()
 {
-    MSG  msg;
+    MSG msg = {};
     bool done = false;
-
-    // Подсказка — что добавить в Run() перед циклом:
-    LARGE_INTEGER frequency, lastTime, currentTime;
-    QueryPerformanceFrequency(&frequency);
-    QueryPerformanceCounter(&lastTime);
-
-
-    ZeroMemory(&msg, sizeof(MSG));
 
     while (!done)
     {
+        // 1. Обновляем время (всегда!)
+        TimeManager::Instance().UpdateFrame();
 
-        QueryPerformanceCounter(&currentTime);
-        float dt = static_cast<float>(currentTime.QuadPart - lastTime.QuadPart)
-            / static_cast<float>(frequency.QuadPart);
-        lastTime = currentTime;
-
-        // Извлекаем сообщения из очереди и отправляем в WndProc
+        // 2. Обработка сообщений Windows
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
         {
-            TranslateMessage(&msg); // преобразуем виртуальные коды клавиш
-            DispatchMessage(&msg);  // отправляем в WndProc
+            // Обработка хоткеев отладки
+            if (msg.message == WM_KEYDOWN)
+            {
+                switch (msg.wParam)
+                {
+                case VK_SPACE: // Пауза / Продолжить
+                    if (TimeManager::GetState() == TimeState::Running)
+                        TimeManager::SetState(TimeState::Paused);
+                    else
+                        TimeManager::SetState(TimeState::Running);
+                    break;
+
+                case 'K': // Шаг кадра (только в паузе/степ-моде)
+                    if (TimeManager::GetState() != TimeState::Running)
+                    {
+                        TimeManager::SetState(TimeState::StepMode);
+                        TimeManager::Instance().StepFrame();
+                    }
+                    break;
+                }
+            }
+
+            if (msg.message == WM_QUIT) done = true;
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
         }
 
-        if (msg.message == WM_QUIT)
-        {
-            done = true;
-        }
-        else
-        {
-            // Frame() возвращает false при нажатии Escape или ошибке рендера
-            if (!Frame(dt))
-                done = true;
-        }
+        // 3. Игровой цикл
+        if (!Frame()) done = true;
+
+        // 4. Сброс флага шага после кадра
+        TimeManager::Instance().ResetStep();
     }
-
-    Shutdown();
 }
+
 
 // ============================================================================
 // Frame — логика одного кадра
@@ -147,8 +152,10 @@ void SystemClass::Run()
 // Сначала проверяем ввод, потом передаём управление графической подсистеме.
 // ApplicationClass::Frame() внутри себя вызывает рендер.
 // ============================================================================
-bool SystemClass::Frame(float dt)
+bool SystemClass::Frame()
 {
+    float dt = TimeManager::DeltaTime(); // Получаем "игровое" время
+
     // Escape — запросить выход из приложения
     if (m_Input->IsKeyDown(VK_ESCAPE))
         return false;

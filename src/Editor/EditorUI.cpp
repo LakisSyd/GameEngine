@@ -4,6 +4,12 @@
 #include "SceneManager.h"
 #include <backends/imgui_impl_win32.h>
 #include <imgui-master/backends/imgui_impl_dx11.h>
+#include "PhysicsSystem.h"
+#include "SubmarineJointSystem.h"
+#include "FloodingSystem.h"
+#include "SubmarineBuilder.h"
+#include "JointConnectionSystem.h"
+#include "../../SubmarineSystem.h"
 
 // ── Цвета темы (UE5-стиль) ───────────────────────────────────────────────────
 static constexpr ImVec4 COL_HEADER = ImVec4(0.13f, 0.13f, 0.13f, 1.0f);
@@ -35,6 +41,12 @@ bool EditorUI::Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* 
         m_currentDir = "";
         m_fileSystem->Refresh();
     }
+
+    m_debugSettings.showColliders = true;
+    m_debugSettings.showContacts = false;
+    m_debugSettings.showAABB = false;
+    m_debugSettings.colorDynamic = { 0.2f, 0.8f, 0.2f, 0.6f };
+    m_debugSettings.colorStatic = { 0.8f, 0.2f, 0.2f, 0.6f };
 
     ImGui::StyleColorsDark();
     ImGuiStyle& s = ImGui::GetStyle();
@@ -369,6 +381,8 @@ void EditorUI::Update(SceneManager& sceneManager)
     NewFrame();
     RenderMainMenu(sceneManager);
     RenderSidebar(sceneManager);
+    RenderCompartmentEditor(sceneManager);
+    RenderDetailsPanel(sceneManager);
     RenderScenePreview();
 }
 
@@ -388,20 +402,40 @@ void EditorUI::RenderSceneOutliner(SceneManager& sceneManager)
     const float avail = ImGui::GetContentRegionAvail().y - std::floor(4.0f * ScaleY());
     ImGui::BeginChild("##OutlinerList", ImVec2(-1, avail), false);
 
-    // ── Объекты (ECS) ─────────────────────────────────────────────────────────
+    // ✅ НОВОЕ: Итерируем ВСЕ сущности с MeshRendererComponent
     auto& meshPool = sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
+    auto& registry = sceneManager.GetECSRegistry();
+
     for (auto& [entity, mesh] : meshPool)
     {
+        // Пропускаем неактивные
         if (!sceneManager.IsObjectActive(entity)) continue;
 
-        char label[64];
-        snprintf(label, sizeof(label), "  Object [%u]", entity);
+        // 🔥 Проверяем, это свет или обычный объект
+        auto* light = registry.GetComponent<LightComponent>(entity);
 
-        bool selected = (m_selectedType == SelectedType::Object && m_selectedEntity == entity);
+        char label[64];
+        if (light)
+        {
+            // Это источник света
+            snprintf(label, sizeof(label), "  💡 Light [%u]", entity);
+        }
+        else
+        {
+            // Обычный объект
+            snprintf(label, sizeof(label), "  📦 Object [%u]", entity);
+        }
+
+        // Определяем тип выделения
+        SelectedType typeForThis = light ? SelectedType::Light : SelectedType::Object;
+        bool selected = (m_selectedType == typeForThis && m_selectedEntity == entity);
+
         if (selected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
 
         if (ImGui::Selectable(label, selected))
-            SetSelection(SelectedType::Object, entity);
+        {
+            SetSelection(typeForThis, entity);
+        }
 
         if (selected) ImGui::PopStyleColor();
     }
@@ -410,32 +444,11 @@ void EditorUI::RenderSceneOutliner(SceneManager& sceneManager)
     ImGui::Separator();
     ImGui::Spacing();
 
-    // ── Источники света ───────────────────────────────────────────────────────
-    for (int i = 0; i < NUM_LIGHTS; ++i)
-    {
-        if (!sceneManager.IsLightActive(i)) continue;
-
-        char label[64];
-        snprintf(label, sizeof(label), "  Light #%d", i);
-
-        bool selected = (m_selectedType == SelectedType::Light && m_selectedLegacyIndex == i);
-        if (selected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
-
-        if (ImGui::Selectable(label, selected))
-            SetSelection(SelectedType::Light, i);
-
-        if (selected) ImGui::PopStyleColor();
-    }
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // ── Спрайты ───────────────────────────────────────────────────────────────
+    // ── Спрайты (остаются как раньше) ───────────────────────────────────────
     for (int i = 0; i < sceneManager.GetSpriteCount(); ++i)
     {
         char label[64];
-        snprintf(label, sizeof(label), "  Sprite #%d", i);
+        snprintf(label, sizeof(label), "  🖼 Sprite #%d", i);
 
         bool selected = (m_selectedType == SelectedType::Sprite && m_selectedLegacyIndex == i);
         if (selected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
@@ -454,30 +467,31 @@ void EditorUI::RenderSceneOutliner(SceneManager& sceneManager)
 //=============================================================================
 void EditorUI::RenderDetailsPanel(SceneManager& sceneManager)
 {
-    ImGui::Spacing();
+    if (m_selectedType == SelectedType::None) return;
+
+    ImGui::Begin("Details", nullptr, ImGuiWindowFlags_NoCollapse);
 
     switch (m_selectedType)
     {
     case SelectedType::Object:
         if (m_selectedEntity != INVALID_ENTITY)
             RenderObjectProperties(sceneManager, m_selectedEntity);
-        else
-            ImGui::TextColored(COL_TEXT_DIM, "No object selected");
         break;
 
     case SelectedType::Light:
-        RenderLightProperties(sceneManager, m_selectedLegacyIndex);
+        if (m_selectedEntity != INVALID_ENTITY)
+            RenderLightPropertiesByEntity(sceneManager, m_selectedEntity);
         break;
 
     case SelectedType::Sprite:
-        RenderSpriteProperties(sceneManager.GetSprite(m_selectedLegacyIndex));
-        break;
-
-    default:
-        ImGui::TextColored(COL_TEXT_DIM, "Select something in Outliner");
+        // ...
         break;
     }
+
+    ImGui::End();
 }
+
+
 
 //=============================================================================
 // RenderObjectProperties — Transform + менеджер компонентов
@@ -531,6 +545,7 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
     if (ImGui::Button("Remove Object", ImVec2(-1, 0)))
     {
         sceneManager.RemoveObject(entity);
+
         m_selectedEntity = INVALID_ENTITY;
         m_selectedType = SelectedType::None;
     }
@@ -544,6 +559,254 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
 void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 {
     auto& registry = sceneManager.GetECSRegistry();
+
+    if (registry.HasComponent<CompartmentComponent>(entity))
+    {
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.25f, 0.35f, 1.0f)); // 🔵 Синий
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.35f, 0.48f, 1.0f));
+        bool open = ImGui::CollapsingHeader("  Compartment Component##comp", ImGuiTreeNodeFlags_DefaultOpen);
+        ImGui::PopStyleColor(2);
+
+        if (open)
+        {
+            auto* comp = registry.GetComponent<CompartmentComponent>(entity);
+            if (!comp) { ImGui::TextColored(COL_RED, "Component error"); return; }
+
+            ImGui::Spacing();
+
+            // ── AABB отсека ────────────────────────────────────────────
+            ImGui::TextColored(COL_TEXT_DIM, " Compartment Bounds (Local)");
+            float min[3] = { comp->localMin.x, comp->localMin.y, comp->localMin.z };
+            float max[3] = { comp->localMax.x, comp->localMax.y, comp->localMax.z };
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+            ImGui::TextColored(COL_TEXT_DIM, " Compartment Bounds");
+
+            // Переключатель: Центр+Размер ИЛИ Мин/Макс
+            static bool useCenterSize = true;
+            ImGui::Checkbox(" Use Center + Size", &useCenterSize);
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Reset View")) { useCenterSize = true; }
+
+            if (useCenterSize)
+            {
+                // 🔹 Вычисляем центр и размер из min/max (если ещё не кэшировано)
+                if (m_editingCompartment != entity)
+                {
+                    StartCompartmentEdit(entity);
+                }
+
+                // Редактирование ЦЕНТРА (относительно подлодки)
+                ImGui::TextColored(COL_TEXT_DIM, " Center Offset (Local)");
+                float center[3] = { m_compartmentCenter.x, m_compartmentCenter.y, m_compartmentCenter.z };
+
+                // Цветные поля для осей
+                if (DragFloat3Colored("##CompCenter", center, 0.1f))
+                {
+                    m_compartmentCenter = { center[0], center[1], center[2] };
+                    UpdateCompartmentFromCache(comp);  // Применяем изменения
+                }
+
+                // Редактирование РАЗМЕРА
+                ImGui::Spacing();
+                ImGui::TextColored(COL_TEXT_DIM, " Size (X, Y, Z)");
+                float size[3] = { m_compartmentSize.x, m_compartmentSize.y, m_compartmentSize.z };
+                if (DragFloat3Colored("##CompSize", size, 0.1f))
+                {
+                    // Не даём размеру стать отрицательным или нулевым
+                    m_compartmentSize = {
+                        fmaxf(0.5f, size[0]),
+                        fmaxf(0.5f, size[1]),
+                        fmaxf(0.5f, size[2])
+                    };
+                    XMFLOAT3 oldMin = comp->localMin;
+                    XMFLOAT3 oldMax = comp->localMax;
+                    UpdateCompartmentFromCache(comp);
+                    UpdateBreachesOnResize(comp, oldMin, oldMax); // <--- добавьте этот вызов
+                }
+
+                // Пресеты размеров
+                ImGui::Spacing();
+                ImGui::TextColored(COL_TEXT_DIM, " Preset Sizes:");
+                if (ImGui::SmallButton("Small (1×1×1)")) { m_compartmentSize = { 1,1,1 }; UpdateCompartmentFromCache(comp); }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Medium (2×2×3)")) { m_compartmentSize = { 2,2,3 }; UpdateCompartmentFromCache(comp); }
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Large (4×3×5)")) { m_compartmentSize = { 4,3,5 }; UpdateCompartmentFromCache(comp); }
+            }
+            else
+            {
+                // 🔹 Старый режим: прямой редактирование Min/Max
+                ImGui::TextColored(COL_TEXT_DIM, " Min Bounds (Local)");
+                float min[3] = { comp->localMin.x, comp->localMin.y, comp->localMin.z };
+                if (DragFloat3Colored("##CompMin", min, 0.1f))
+                {
+                    comp->localMin = { min[0], min[1], min[2] };
+                    comp->RecalculateVolume();
+                }
+
+                ImGui::Spacing();
+                ImGui::TextColored(COL_TEXT_DIM, " Max Bounds (Local)");
+                float max[3] = { comp->localMax.x, comp->localMax.y, comp->localMax.z };
+                if (DragFloat3Colored("##CompMax", max, 0.1f))
+                {
+                    comp->localMax = { max[0], max[1], max[2] };
+                    comp->RecalculateVolume();
+                }
+            }
+
+            // 🔹 Кнопки быстрого позиционирования (только для режима Center+Size)
+            if (useCenterSize)
+            {
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+                ImGui::TextColored(COL_TEXT_DIM, " Quick Position (relative to submarine):");
+
+                // Кнопки-пресеты для позиционирования
+                const float btnW = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
+
+                // Перед/Центр/Зад
+                if (ImGui::Button("Front", ImVec2(btnW, 0))) { m_compartmentCenter.z = 4.0f; UpdateCompartmentFromCache(comp); }
+                ImGui::SameLine(0, 4);
+                if (ImGui::Button("Center", ImVec2(btnW, 0))) { m_compartmentCenter = { 0,0,0 }; UpdateCompartmentFromCache(comp); }
+                ImGui::SameLine(0, 4);
+                if (ImGui::Button("Rear", ImVec2(btnW, 0))) { m_compartmentCenter.z = -4.0f; UpdateCompartmentFromCache(comp); }
+
+                // Верх/Средина/Низ
+                if (ImGui::Button("Top", ImVec2(btnW, 0))) { m_compartmentCenter.y = 2.0f; UpdateCompartmentFromCache(comp); }
+                ImGui::SameLine(0, 4);
+                if (ImGui::Button("Middle", ImVec2(btnW, 0))) { m_compartmentCenter.y = 0.0f; UpdateCompartmentFromCache(comp); }
+                ImGui::SameLine(0, 4);
+                if (ImGui::Button("Bottom", ImVec2(btnW, 0))) { m_compartmentCenter.y = -2.0f; UpdateCompartmentFromCache(comp); }
+
+                // Лево/Центр/Право
+                if (ImGui::Button("Left", ImVec2(btnW, 0))) { m_compartmentCenter.x = -2.0f; UpdateCompartmentFromCache(comp); }
+                ImGui::SameLine(0, 4);
+                if (ImGui::Button("Center X", ImVec2(btnW, 0))) { m_compartmentCenter.x = 0.0f; UpdateCompartmentFromCache(comp); }
+                ImGui::SameLine(0, 4);
+                if (ImGui::Button("Right", ImVec2(btnW, 0))) { m_compartmentCenter.x = 2.0f; UpdateCompartmentFromCache(comp); }
+            }
+
+            // 🔹 Визуализация в 3D: кнопка включения гизмо
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            bool gizmoEnabled = (m_compartmentEditMode != CompartmentEditMode::None && m_editingCompartment == entity);
+            if (ImGui::Checkbox("🖱️ Edit in Viewport (Gizmo)", &gizmoEnabled))
+            {
+                if (gizmoEnabled)
+                    StartCompartmentEdit(entity);
+                else
+                    m_compartmentEditMode = CompartmentEditMode::None;
+            }
+
+            if (gizmoEnabled)
+            {
+                ImGui::SameLine();
+                // Переключатель: перемещение или масштабирование
+                static bool isMoveMode = true;
+                if (ImGui::SmallButton(isMoveMode ? "Mode: Move" : "Mode: Scale"))
+                    isMoveMode = !isMoveMode;
+
+                m_compartmentEditMode = isMoveMode ? CompartmentEditMode::Move : CompartmentEditMode::Resize;
+
+                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
+                    "  ← Drag axes in viewport to move/resize");
+            }
+
+            ImGui::Spacing();
+            ImGui::Text("Volume: %.2f m³", comp->volume);
+
+            // ── Состояние затопления ───────────────────────────────────
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+            ImGui::TextColored(COL_TEXT_DIM, " Flooding Status");
+
+            float waterPercent = (comp->waterVolume / comp->volume) * 100.0f;
+            ImGui::ProgressBar(waterPercent / 100.0f, ImVec2(-1, 0),
+                (std::to_string((int)waterPercent) + "%% flooded").c_str());
+
+            ImGui::Text("Water Level: %.2f m", comp->waterLevel);
+            ImGui::Text("Breaches: %zu", comp->breaches.size());
+
+            // ── Список пробоин ──────────────────────────────────────────
+            if (comp->breaches.size() > 0)
+            {
+                ImGui::Spacing();
+                ImGui::TextColored(COL_TEXT_DIM, " Breach List:");
+                for (size_t i = 0; i < comp->breaches.size(); ++i)
+                {
+                    auto& breach = comp->breaches[i];
+                    ImGui::PushID((int)i);
+
+                    ImGui::Text("[%zu] Size: %.2fm Flow: %.3f m³/s %s",
+                        i, breach.size, breach.flowRate,
+                        breach.isSealed ? "(SEALED)" : "");
+
+                    ImGui::SameLine();
+                    if (!breach.isSealed && ImGui::SmallButton("Seal"))
+                    {
+                        FloodingSystem::SealBreach(registry, entity, i);
+                    }
+
+                    ImGui::PopID();
+                }
+            }
+
+            // ── Кнопка создания пробоины (для теста) ───────────────────
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            static float testBreachSize = 0.5f;
+            ImGui::DragFloat("Test Breach Size", &testBreachSize, 0.1f, 0.1f, 2.0f);
+
+            if (ImGui::Button(" Create Test Breach", ImVec2(-1, 0)))
+            {
+                // 🔥 ВАЖНО: Пробоина в ЛОКАЛЬНЫХ координатах отсека!
+                // Создаём в нижней части отсека
+                XMFLOAT3 localBreachPos = {
+                    (comp->localMin.x + comp->localMax.x) * 0.5f,  // Center X
+                    comp->localMin.y,                        // 🔥 У ДНА отсека
+                    (comp->localMin.z + comp->localMax.z) * 0.5f   // Center Z
+                };
+
+                FloodingSystem::CreateBreach(registry, entity, localBreachPos, testBreachSize);
+
+                OutputDebugStringA(
+                    ("✅ Created breach at local pos: " +
+                        std::to_string(localBreachPos.x) + ", " +
+                        std::to_string(localBreachPos.y) + ", " +
+                        std::to_string(localBreachPos.z) + "\n").c_str()
+                );
+            }
+
+            // ── Настройки герметичности и систем ────────────────────────
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::Checkbox("Sealed (Doors Closed)", &comp->isSealed);
+            ImGui::Checkbox("Has Power", &comp->hasPower);
+
+            ImGui::DragFloat("Pump Rate (m³/s)", &comp->pumpRate, 0.01f, 0.0f, 1.0f);
+
+            // ── Удаление компонента ─────────────────────────────────────
+            ImGui::Spacing();
+            ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+            if (ImGui::Button(" Remove Compartment Component", ImVec2(-1, 0)))
+            {
+                registry.RemoveComponent<CompartmentComponent>(entity);
+            }
+            ImGui::PopStyleColor(2);
+        }
+    }
 
     // ── LightComponent ────────────────────────────────────────────────────────
     if (registry.HasComponent<LightComponent>(entity))
@@ -582,12 +845,493 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
         }
     }
 
+
+    // ── SubmarineComponent ────────────────────────────────────────────────────────
+    if (registry.HasComponent<SubmarineComponent>(entity))
+    {
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.20f, 0.40f, 1.0f)); // 🔵 Синий для подлодки
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.28f, 0.55f, 1.0f));
+        bool open = ImGui::CollapsingHeader("  Submarine Component##sub", ImGuiTreeNodeFlags_DefaultOpen);
+        ImGui::PopStyleColor(2);
+
+        if (open)
+        {
+            auto* subComp = registry.GetComponent<SubmarineComponent>(entity);
+            if (!subComp) { ImGui::TextColored(COL_RED, "Component error"); return; }
+
+            ImGui::Spacing();
+
+            // 🔹 Если это корень подлодки
+            if (subComp->submarineRoot == entity)
+            {
+                ImGui::TextColored(COL_ACCENT, "🚢 Submarine Root");
+                ImGui::Spacing();
+
+                ImGui::TextColored(COL_TEXT_DIM, "Entity ID: %u", entity);
+                ImGui::TextColored(COL_GREEN, "This is the submarine root (self-reference)");
+
+                // Список всех отсеков
+                ImGui::TextColored(COL_TEXT_DIM, " Compartments (%zu):", subComp->allCompartments.size());
+                for (size_t i = 0; i < subComp->allCompartments.size(); ++i)
+                {
+                    Entity compEnt = subComp->allCompartments[i];
+                    auto* compTransform = registry.GetComponent<TransformComponent>(compEnt);
+                    auto* compData = registry.GetComponent<CompartmentComponent>(compEnt);
+
+                    char label[128];
+                    if (compData)
+                    {
+                        float floodPercent = (compData->volume > 0) ? (compData->waterVolume / compData->volume) * 100.f : 0.f;
+                        snprintf(label, sizeof(label), "  [%zu] Compartment #%u (%.0f%% flooded)",
+                            i, compEnt, floodPercent);
+                    }
+                    else
+                    {
+                        snprintf(label, sizeof(label), "  [%zu] Compartment #%u (no data)", i, compEnt);
+                    }
+
+                    // Подсветка, если этот отсек выбран
+                    bool isSelected = (m_selectedType == SelectedType::Object && m_selectedEntity == compEnt);
+                    if (isSelected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
+
+                    if (ImGui::Selectable(label, isSelected))
+                    {
+                        SetSelection(SelectedType::Object, compEnt);
+                    }
+
+                    if (isSelected) ImGui::PopStyleColor();
+
+                    // Кнопка быстрого перехода
+                    ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60);
+                    if (ImGui::SmallButton("Focus##Comp"))
+                    {
+                        if (compTransform)
+                        {
+                            // Можно добавить камеру, которая летит к отсеку
+                            // m_camera->SetTarget(compTransform->position);
+                        }
+                    }
+                }
+
+                // Кнопка добавить отсек
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                if (ImGui::Button("➕ Add New Compartment", ImVec2(-1, 0)))
+                {
+                    CreateNewCompartment(registry, entity);
+                }
+
+                // Кнопка проверить целостность
+                ImGui::SameLine();
+                if (ImGui::Button("🔍 Check Integrity"))
+                {
+                    bool intact = SubmarineBuilder::CheckIntegrity(registry, entity);
+                    OutputDebugStringA(intact ? "✅ Submarine integrity OK\n" : "⚠️ Submarine damaged!\n");
+                }
+            }
+            else
+            {
+                // 🔹 Если это отсек, привязанный к подлодке
+                ImGui::TextColored(COL_ACCENT, "📦 Compartment (linked)");
+                ImGui::Spacing();
+
+                
+                ImGui::TextColored(COL_TEXT_DIM, "Parent Submarine Entity ID:");
+                ImGui::SetNextItemWidth(-1);
+
+                Entity parentID = subComp->submarineRoot;
+                if (ImGui::DragInt("##ParentSubID", (int*)&parentID, 1.0f, 0, 10000))
+                {
+                    subComp->submarineRoot = parentID;
+                    OutputDebugStringA(("🔧 Updated submarineRoot to: " + std::to_string(parentID) + "\n").c_str());
+                }
+
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Set to Self"))
+                {
+                    subComp->submarineRoot = entity;
+                    OutputDebugStringA(("✅ Set submarineRoot to self (entity " + std::to_string(entity) + ")\n").c_str());
+                }
+
+                ImGui::Text("Current: %u", subComp->submarineRoot);
+                // Кнопка открепить
+                if (ImGui::Button("Unlink from Submarine", ImVec2(-1, 0)))
+                {
+                    subComp->submarineRoot = INVALID_ENTITY;
+                    // Можно также удалить из списка allCompartments у родителя
+                }
+
+                // 🔹 Редактирование локальных границ (если есть CompartmentComponent)
+                auto* compData = registry.GetComponent<CompartmentComponent>(entity);
+                if (compData)
+                {
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+
+                    ImGui::TextColored(COL_TEXT_DIM, " Local Bounds (relative to submarine)");
+                    float min[3] = { compData->localMin.x, compData->localMin.y, compData->localMin.z };
+                    float max[3] = { compData->localMax.x, compData->localMax.y, compData->localMax.z };
+
+                    if (ImGui::DragFloat3("##CompMin", min, 0.1f))
+                    {
+                        compData->localMin = { min[0], min[1], min[2] };
+                        compData->RecalculateVolume();
+                    }
+                    if (ImGui::DragFloat3("##CompMax", max, 0.1f))
+                    {
+                        compData->localMax = { max[0], max[1], max[2] };
+                        compData->RecalculateVolume();
+                    }
+
+                    ImGui::Text("Volume: %.2f m³", compData->volume);
+                }
+            }
+
+            // Кнопка удаления компонента
+            ImGui::Spacing();
+            ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+            if (ImGui::Button(" Remove Submarine Component", ImVec2(-1, 0)))
+            {
+                // Если это корень — удаляем связь у всех отсеков
+                if (subComp->submarineRoot == entity)
+                {
+                    for (Entity compEnt : subComp->allCompartments)
+                    {
+                        auto* link = registry.GetComponent<SubmarineComponent>(compEnt);
+                        if (link) link->submarineRoot = INVALID_ENTITY;
+                    }
+                }
+                registry.RemoveComponent<SubmarineComponent>(entity);
+            }
+            ImGui::PopStyleColor(2);
+        }
+    }
+
+
+    if (registry.HasComponent<RigidBodyComponent>(entity))
+    {
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.20f, 0.30f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.28f, 0.40f, 1.0f));
+        bool open = ImGui::CollapsingHeader("  RigidBody Component##rbc", ImGuiTreeNodeFlags_DefaultOpen);
+        ImGui::PopStyleColor(2);
+
+        if (open)
+        {
+            auto* rb = registry.GetComponent<RigidBodyComponent>(entity);
+
+            ImGui::Spacing();
+            ImGui::TextColored(COL_TEXT_DIM, " Mass");
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragFloat("##RBMass", &rb->mass, 0.1f, 0.0f, 10000.0f))
+            {
+                if (rb->body)
+                {
+                    // 🔥 FIX: Удаляем ОБА типа джойнтов
+                    SubmarineJointSystem::RemoveJointsForEntity(registry, entity);
+                    JointConnectionSystem::RemoveJointsForEntity(registry, entity);  // ← ДОБАВЛЕНО
+
+                    PhysicsWorld::Get().GetWorld()->removeRigidBody(rb->body);
+                    delete rb->body->getMotionState();
+                    delete rb->body;
+                    rb->body = nullptr;
+                }
+                PhysicsSystem::CreateRigidBody(registry, entity);
+            }
+
+            ImGui::Spacing();
+            ImGui::TextColored(COL_TEXT_DIM, " Shape Type");
+            const char* shapeNames[] = {
+                "Box",        // 0
+                "Sphere",     // 1
+                "Cylinder",   // 2
+                "Capsule",    // 3
+                "Plane",      // 4
+                "ConvexHull", // 5
+                "TriangleMesh" // 6
+            };
+            int shapeIdx = static_cast<int>(rb->shapeType);
+            if (ImGui::Combo("##RBShape", &shapeIdx, shapeNames, 7))
+            {
+                rb->shapeType = static_cast<RigidBodyComponent::ShapeType>(shapeIdx);
+                if (rb->body)
+                {
+                    SubmarineJointSystem::RemoveJointsForEntity(registry, entity);
+                    JointConnectionSystem::RemoveJointsForEntity(registry, entity);  // ← ДОБАВЛЕНО
+
+                    PhysicsWorld::Get().GetWorld()->removeRigidBody(rb->body);
+                    delete rb->body->getMotionState();
+                    delete rb->body;
+                    rb->body = nullptr;
+                }
+                PhysicsSystem::CreateRigidBody(registry, entity);
+            }
+
+            ImGui::Spacing();
+
+            // 🔥 ПАРАМЕТРЫ ЗАВИСЯТ ОТ ТИПА КОЛЛИЗИИ
+            switch (rb->shapeType)
+            {
+                // В EditorUI.cpp, внутри switch (rb->shapeType):
+            case RigidBodyComponent::Sphere:
+            {
+                auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+
+                if (ImGui::Checkbox(" Manual Size##SphereManual", &rb->useManualSize))
+                {
+                    RefreshRigidBody(registry, entity, rb);
+                }
+                ImGui::SameLine();
+                ImGui::TextColored(COL_TEXT_DIM, "(ignore mesh bounds)");
+
+                if (rb->useManualSize)
+                {
+                    ImGui::Spacing();
+                    ImGui::TextColored(COL_TEXT_DIM, " Radius");
+                    ImGui::SetNextItemWidth(-1);
+
+                    float radius = rb->shapeRadius;
+                    if (ImGui::DragFloat("##Radius", &radius, 0.05f, 0.01f, 100.0f))
+                    {
+                        rb->shapeRadius = radius;
+                        RefreshRigidBody(registry, entity, rb);
+                    }
+                }
+                else
+                {
+                    // --- АВТО-ОПРЕДЕЛЕНИЕ РАДИУСА ПО МЕШУ ---
+                    if (meshRenderer && meshRenderer->model)
+                    {
+                        XMFLOAT3 center;
+                        float meshRadius;
+                        meshRenderer->model->GetBoundingSphere(&center, &meshRadius);
+                        rb->shapeRadius = meshRadius;
+                        ImGui::TextColored(COL_TEXT_DIM, " Auto radius from mesh: %.3f", meshRadius);
+                    }
+                    else
+                    {
+                        ImGui::TextColored(COL_TEXT_DIM, " No mesh - using shapeRadius: %.3f", rb->shapeRadius);
+                    }
+                }
+                break;
+            }
+            case RigidBodyComponent::Box:
+            {
+                auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+
+                if (!rb->useManualSize && meshRenderer && meshRenderer->model)
+                {
+                    // --- АВТО-ОПРЕДЕЛЕНИЕ РАЗМЕРОВ ПО МЕШУ ---
+                    XMFLOAT3 min, max;
+                    meshRenderer->model->GetBoundingBox(&min, &max);
+                    rb->shapeSize = btVector3(
+                        (max.x - min.x) * 0.5f,
+                        (max.y - min.y) * 0.5f,
+                        (max.z - min.z) * 0.5f
+                    );
+                    ImGui::TextColored(COL_TEXT_DIM, " Auto box from mesh: (%.2f, %.2f, %.2f)",
+                        rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z());
+                }
+
+                ImGui::TextColored(COL_TEXT_DIM, " Half Extents (X, Y, Z)");
+                float size[3] = { rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z() };
+
+                if (ImGui::DragFloat3("##BoxSize", size, 0.05f, 0.01f, 100.0f))
+                {
+                    rb->shapeSize = btVector3(size[0], size[1], size[2]);
+                    rb->useManualSize = true; // если пользователь меняет вручную — включаем ручной режим
+                    RefreshRigidBody(registry, entity, rb);
+                }
+                break;
+            }
+
+            case RigidBodyComponent::Cylinder:
+            {}
+            case RigidBodyComponent::Capsule:
+            {
+                float radius = rb->shapeRadius;
+                float height = rb->shapeSize.y();
+                bool changed = false;
+
+                ImGui::TextColored(COL_TEXT_DIM, " Radius");
+                ImGui::SetNextItemWidth(-1);
+                if (ImGui::DragFloat("##CylRadius", &radius, 0.05f, 0.01f, 100.0f))
+                {
+                    rb->shapeRadius = radius;
+                    changed = true;
+                }
+
+                ImGui::Spacing();
+                ImGui::TextColored(COL_TEXT_DIM, " Height");
+                ImGui::SetNextItemWidth(-1);
+                if (ImGui::DragFloat("##CylHeight", &height, 0.05f, 0.01f, 100.0f))
+                {
+                    rb->shapeSize.setY(height);
+                    changed = true;
+                }
+
+                if (changed)
+                    RefreshRigidBody(registry, entity, rb);  // 🔥 Пересоздаём
+
+                break;
+            }
+
+            case RigidBodyComponent::ConvexHull:
+            {
+                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
+                    " Auto-calculated from mesh geometry");
+
+                // 🔥 Здесь можно добавить проверку наличия меша для инфо-текста
+                auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+                if (!meshRenderer || !meshRenderer->model)
+                {
+                    ImGui::TextColored(COL_RED, "⚠️ No mesh assigned");
+                }
+                break; // ← Теперь break внутри скобок — ошибки не будет
+            }
+
+                break;
+
+            case RigidBodyComponent::TriangleMesh:
+                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
+                    " Exact mesh collision (static only)");
+                rb->mass = 0.0f;
+                break;
+
+            case RigidBodyComponent::Plane:
+                ImGui::TextColored(COL_TEXT_DIM, " Y");
+                ImGui::SetNextItemWidth(-1);
+                float y = rb->shapeSize.y();
+                bool changed = false;
+                if (ImGui::DragFloat("##Y", &y, 0.05f, 0.01f, 100.0f))
+                {
+                    rb->shapeSize.setY(y);
+                    changed = true;
+                }
+
+                if (changed)
+                    RefreshRigidBody(registry, entity, rb);
+
+                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
+                    " Infinite plane at Y=0");
+                rb->mass = 0.0f;
+                break;
+            }
+
+            ImGui::Spacing();
+            ImGui::Checkbox("Enable CCD##RB", &rb->enableCCD);
+        }
+    }
+
+    if (registry.HasComponent<BuoyancyComponent>(entity))
+    {
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.30f, 0.20f, 1.0f)); // 💚 Зеленоватый оттенок для воды
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.40f, 0.28f, 1.0f));
+        bool open = ImGui::CollapsingHeader("  Buoyancy Component##buoy", ImGuiTreeNodeFlags_DefaultOpen);
+        ImGui::PopStyleColor(2);
+
+        if (open)
+        {
+            auto* buoy = registry.GetComponent<BuoyancyComponent>(entity);
+            if (!buoy) { ImGui::TextColored(COL_RED, "Component error"); return; }
+
+            ImGui::Spacing();
+
+            // ── Плотность жидкости ─────────────────────────────────────
+            ImGui::TextColored(COL_TEXT_DIM, " Fluid Density (kg/m³)");
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragFloat("##FluidDensity", &buoy->fluidDensity, 10.0f, 0.0f, 5000.0f, "%.1f"))
+            {
+                // Плотность можно менять на лету, пересоздавать тело не нужно
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Reset##Density")) buoy->fluidDensity = 1000.0f;
+            ImGui::TextColored(COL_TEXT_DIM, "  Water: 1000, Sea: 1025, Oil: ~900");
+
+            ImGui::Spacing();
+
+            // ── Объём объекта ──────────────────────────────────────────
+            ImGui::TextColored(COL_TEXT_DIM, " Volume (m³)");
+            ImGui::SetNextItemWidth(-1);
+            float oldVolume = buoy->volume;
+            if (ImGui::DragFloat("##Volume", &buoy->volume, 0.05f, 0.01f, 1000.0f, "%.2f"))
+            {
+                // Объём влияет на силу Архимеда — можно менять динамически
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Auto##Volume"))
+            {
+                // 🔹 Попытка авто-расчёта из меша (если есть)
+                auto* mesh = registry.GetComponent<MeshRendererComponent>(entity);
+                if (mesh && mesh->model)
+                {
+                    XMFLOAT3 min, max;
+                    mesh->model->GetBoundingBox(&min, &max);
+                    buoy->volume = (max.x - min.x) * (max.y - min.y) * (max.z - min.z);
+                    buoy->height = max.y - min.y; // Обновляем и высоту
+                }
+            }
+
+            ImGui::Spacing();
+
+            // ── Высота объекта (для расчёта % погружения) ───────────────
+            ImGui::TextColored(COL_TEXT_DIM, " Height (m) — для расчёта погружения");
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::DragFloat("##Height", &buoy->height, 0.05f, 0.01f, 100.0f, "%.2f"))
+            {
+                // Высота используется только для расчёта submersionRatio
+            }
+
+            ImGui::Spacing();
+
+            // ── Множитель плавучести (тонкая настройка) ─────────────────
+            ImGui::TextColored(COL_TEXT_DIM, " Buoyancy Multiplier (тонкая настройка)");
+            ImGui::SetNextItemWidth(-1);
+            if (ImGui::SliderFloat("##BuoyMult", &buoy->buoyancyMultiplier, 0.1f, 2.0f, "%.2f"))
+            {
+                // <1.0 = тонет быстрее, >1.0 = всплывает активнее
+            }
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Reset##Mult")) buoy->buoyancyMultiplier = 1.0f;
+            ImGui::TextColored(COL_TEXT_DIM, "  0.5 = тяжелее, 1.0 = нормально, 1.5 = легче");
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // ── ОТЛАДОЧНАЯ ИНФОРМАЦИЯ (только чтение) ──────────────────
+            ImGui::TextColored(COL_TEXT_DIM, " Debug Info (read-only)");
+            ImGui::Indent();
+            ImGui::Text("Smoothed Submersion: %.3f", buoy->smoothedSubmersion);
+            // Можно добавить вывод текущей силы, если передаёшь её из PhysicsSystem
+            ImGui::Unindent();
+
+            ImGui::Spacing();
+
+            // ── Кнопка удаления компонента ─────────────────────────────
+            ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+            if (ImGui::Button(" Remove Buoyancy Component", ImVec2(-1, 0)))
+            {
+                registry.RemoveComponent<BuoyancyComponent>(entity);
+                // Не нужно пересоздавать физическое тело — плавучесть не в Bullet
+            }
+            ImGui::PopStyleColor(2);
+        }
+    }
+
+
     // ── Кнопка "+ Add Component" ──────────────────────────────────────────────
     ImGui::Spacing();
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));
     if (ImGui::Button("  + Add Component", ImVec2(-1, 0)))
         ImGui::OpenPopup("##AddComponentPopup");
+
+
     ImGui::PopStyleColor(2);
 
     if (ImGui::BeginPopup("##AddComponentPopup"))
@@ -596,24 +1340,97 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
         ImGui::Separator();
         ImGui::Spacing();
 
-        // Light Component
-        const bool hasLight = registry.HasComponent<LightComponent>(entity);
-        ImGui::BeginDisabled(hasLight);
-        if (ImGui::Selectable("  Light Component"))
+        // ── Submarine Component ──────────────────────────────────────────────────
         {
-            registry.AddComponent<LightComponent>(entity, LightComponent{});
-            ImGui::CloseCurrentPopup();
-        }
-        ImGui::EndDisabled();
-        if (hasLight)
-        {
-            ImGui::SameLine();
-            ImGui::TextColored(COL_TEXT_DIM, "(already added)");
+            const bool hasSub = registry.HasComponent<SubmarineComponent>(entity);
+            ImGui::BeginDisabled(hasSub);
+            if (ImGui::Selectable("  Submarine Component"))
+            {
+                SubmarineComponent sub{};
+                sub.submarineRoot = entity;
+                registry.AddComponent<SubmarineComponent>(entity, sub);
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            if (hasSub)
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(COL_TEXT_DIM, "(already added)");
+            }
         }
 
-        // Сюда легко добавить новые компоненты в будущем:
-        // if (ImGui::Selectable("  Rigidbody")) { ... }
-        // if (ImGui::Selectable("  Audio Source")) { ... }
+        // ── Light Component ─────────────────────────────────────────────────────
+        {
+            const bool hasLight = registry.HasComponent<LightComponent>(entity);
+            ImGui::BeginDisabled(hasLight);
+            if (ImGui::Selectable("  Light Component"))
+            {
+                registry.AddComponent<LightComponent>(entity, LightComponent{});
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            if (hasLight)
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(COL_TEXT_DIM, "(already added)");
+            }
+        }
+
+        // ── RigidBody Component ─────────────────────────────────────────────────
+        {
+            const bool hasRb = registry.HasComponent<RigidBodyComponent>(entity);
+            ImGui::BeginDisabled(hasRb);
+            if (ImGui::Selectable("  RigidBody Component"))
+            {
+                registry.AddComponent<RigidBodyComponent>(entity, RigidBodyComponent{});
+                auto* rb = registry.GetComponent<RigidBodyComponent>(entity);
+                if (rb && !rb->body)
+                    PhysicsSystem::CreateRigidBody(registry, entity);
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            if (hasRb)
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(COL_TEXT_DIM, "(already added)");
+            }
+        }
+
+        // ── Buoyancy Component ──────────────────────────────────────────────────
+        {
+            const bool hasBuoy = registry.HasComponent<BuoyancyComponent>(entity);
+            ImGui::BeginDisabled(hasBuoy);
+            if (ImGui::Selectable("  Buoyancy Component"))
+            {
+                registry.AddComponent<BuoyancyComponent>(entity, BuoyancyComponent{});
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            if (hasBuoy)
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(COL_TEXT_DIM, "(already added)");
+            }
+        }
+
+        // ── Compartment Component ───────────────────────────────────────────────
+        {
+            const bool hasComp = registry.HasComponent<CompartmentComponent>(entity);
+            ImGui::BeginDisabled(hasComp);
+            if (ImGui::Selectable("  Compartment Component"))
+            {
+                CompartmentComponent comp{};
+                comp.RecalculateVolume();
+                registry.AddComponent<CompartmentComponent>(entity, comp);
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            if (hasComp)
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(COL_TEXT_DIM, "(already added)");
+            }
+        }
 
         ImGui::Spacing();
         ImGui::EndPopup();
@@ -678,13 +1495,26 @@ void EditorUI::RenderSidebar(SceneManager& sceneManager)
             ImGui::PopStyleVar();
             ImGui::EndTabItem();
         }
-        if (ImGui::BeginTabItem("Details"))
+
+        if (ImGui::BeginTabItem("🔬 Debug"))
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
+
+            // Получаем настройки из ApplicationClass (см. ниже)
+            extern PhysicsDebugSettings g_physicsDebugSettings;  // Временный хак
+            RenderPhysicsDebugPanel();
+
+            ImGui::PopStyleVar();
+            ImGui::EndTabItem();
+        }
+
+       /* if (ImGui::BeginTabItem("Details"))
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
             RenderDetailsPanel(sceneManager);
             ImGui::PopStyleVar();
             ImGui::EndTabItem();
-        }
+        }*/
         if (ImGui::BeginTabItem("Spawn"))
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
@@ -706,6 +1536,24 @@ void EditorUI::RenderSidebar(SceneManager& sceneManager)
             ImGui::PopStyleVar();
             ImGui::EndTabItem();
         }
+
+        if (ImGui::BeginTabItem("Joint "))
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
+			RenderJointConnectionUI(sceneManager.GetECSRegistry(), m_selectedEntity);
+            ImGui::PopStyleVar();
+            ImGui::EndTabItem();
+        }
+
+        if (ImGui::BeginTabItem("Submarine"))
+        {
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
+            RenderSubmarineBuilder(sceneManager);
+            ImGui::PopStyleVar();
+            ImGui::EndTabItem();
+        }
+
+     
         RenderShaderSelector(sceneManager);
 
         ImGui::EndTabBar();
@@ -943,47 +1791,48 @@ void EditorUI::RenderSpriteProperties(WorldSpriteClass* sprite)
 //=============================================================================
 // RenderLightProperties
 //=============================================================================
-void EditorUI::RenderLightProperties(SceneManager& sceneManager, int lightIndex)
+void EditorUI::RenderLightPropertiesByEntity(SceneManager& sceneManager, Entity lightEntity)
 {
-    if (lightIndex < 0 || lightIndex >= NUM_LIGHTS) return;
+    auto& registry = sceneManager.GetECSRegistry();
 
-    SectionHeader("Light");
-    ImGui::Spacing();
+    auto* light = registry.GetComponent<LightComponent>(lightEntity);
+    auto* transform = registry.GetComponent<TransformComponent>(lightEntity);
 
-    auto pos = sceneManager.GetLightPosition(lightIndex);
-    auto color = sceneManager.GetLightColor(lightIndex);
-
-    float p[3] = { pos.x,   pos.y,   pos.z };
-    float c[3] = { color.x, color.y, color.z };
-
-    ImGui::TextColored(COL_TEXT_DIM, " Position");
-    if (DragFloat3Colored("##LPos", p, 0.1f))
-        sceneManager.SetLightPosition(lightIndex, { p[0], p[1], p[2] });
-
-    ImGui::Spacing();
-
-    ImGui::TextColored(COL_TEXT_DIM, " Color");
-    ImGui::SetNextItemWidth(-1);
-    if (ImGui::ColorEdit3("##LCol", c))
-        sceneManager.SetLightColor(lightIndex, XMFLOAT4(c[0], c[1], c[2], 1.0f));
-
-    ImGui::Spacing();
-
-    bool active = sceneManager.IsLightActive(lightIndex);
-    if (ImGui::Checkbox("Active", &active))
-        sceneManager.SetLightActive(lightIndex, active);
-
-    ImGui::Spacing();
-
-    ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
-    if (ImGui::Button("Remove Light", ImVec2(-1, 0)))
+    if (!light || !transform)
     {
-        sceneManager.SetLightActive(lightIndex, false);
-        m_selectedLegacyIndex = -1;
-        m_selectedType = SelectedType::None;
+        ImGui::Text("Invalid light entity");
+        return;
     }
-    ImGui::PopStyleColor(2);
+
+    ImGui::Text("Light Properties");
+
+    // Цвет
+    float color[4] = { light->color.x, light->color.y, light->color.z, light->color.w };
+    if (ImGui::ColorEdit4("Color", color))
+    {
+        light->color = { color[0], color[1], color[2], color[3] };
+    }
+
+    // Позиция (если не привязан)
+    if (light->attachedTo == INVALID_ENTITY)
+    {
+        float pos[3] = { transform->position.x, transform->position.y, transform->position.z };
+        if (ImGui::DragFloat3("Position", pos, 0.1f))
+        {
+            transform->position = { pos[0], pos[1], pos[2] };
+            // Обновляем и визуальную сферу, если нужно
+        }
+    }
+
+    // Активность
+    ImGui::Checkbox("Enabled", &light->enabled);
+
+    // Кнопка удаления
+    if (ImGui::Button("Delete Light"))
+    {
+        // Запрос на удаление (лучше через очередь, чтобы не удалить во время итерации)
+         registry.DestroyEntity(lightEntity);
+    }
 }
 
 //=============================================================================
@@ -1000,7 +1849,25 @@ void EditorUI::RenderContentBrowser()
     if (!m_fileSystem) { ImGui::TextColored(COL_TEXT_DIM, "FileSystem not initialized"); return; }
 
     const std::string query = m_searchQuery;
-    auto entries = m_fileSystem->GetFilteredEntries(m_currentDir.string(), query, m_filterExtensions[m_activeFilterIndex]);
+
+    // ✅ FIX: Нормализация пути
+    std::string relativeDir = m_currentDir.string();
+    if (relativeDir == ".") {
+        relativeDir = "";
+    }
+
+    // ✅ DEBUG: Выводим пути перед поиском
+#ifdef _DEBUG
+    OutputDebugStringA(("[CB] relativeDir: '" + relativeDir + "'\n").c_str());
+    OutputDebugStringA(("[CB] Root: " + m_fileSystem->GetRootPath().string() + "\n").c_str());
+#endif
+
+    auto entries = m_fileSystem->GetFilteredEntries(relativeDir, query, m_filterExtensions[m_activeFilterIndex]);
+
+    // ✅ DEBUG: Сколько файлов найдено
+#ifdef _DEBUG
+    OutputDebugStringA(("[CB] Found " + std::to_string(entries.size()) + " entries\n").c_str());
+#endif
 
     RenderFileBrowserList(entries);
 }
@@ -1009,12 +1876,29 @@ void EditorUI::RenderFileBrowserToolbar()
 {
     const float btnW = std::floor(28.0f * ScaleX());
 
+    // ✅ FIX: Проверяем, можем ли идти назад
+    bool canGoBack = !m_currentDir.empty() && m_currentDir != ".";
+
+    ImGui::BeginDisabled(!canGoBack);
     if (ImGui::Button("<##Back", ImVec2(btnW, 0)) && m_fileSystem)
     {
-        auto parent = fs::path(m_currentDir).parent_path();
-        if (!parent.empty()) m_currentDir = parent;
-        m_fileSystem->Refresh();
+        fs::path currentPath(m_currentDir);
+        fs::path parentPath = currentPath.parent_path();
+
+        // ✅ FIX: Если parent пустой — возвращаемся в корень (пустая строка)
+        m_currentDir = parentPath.empty() ? "" : parentPath.generic_string();
+
+        // ✅ DEBUG: Выводим путь после навигации
+        OutputDebugStringA(("[NAV] Back to: '" + m_currentDir.string() + "'\n").c_str());
+
+        // ✅ FIX: Refresh() НЕ нужен! Кэш уже загружен
+        // m_fileSystem->Refresh(); 
     }
+    if (ImGui::IsItemHovered() && !canGoBack) {
+        ImGui::SetTooltip("Вы в корневой директории");
+    }
+    ImGui::EndDisabled();
+
     ImGui::SameLine(0, 4);
     if (ImGui::Button("R##Refresh", ImVec2(btnW, 0)) && m_fileSystem)
         m_fileSystem->Refresh();
@@ -1046,6 +1930,7 @@ void EditorUI::RenderFileBrowserToolbar()
 
 void EditorUI::RenderFileBrowserBreadcrumb()
 {
+    ImGui::TextColored(COL_TEXT_DIM, "/");
     ImGui::TextColored(COL_TEXT_DIM, "/");
     ImGui::SameLine(0, 2);
     std::string dirStr = m_currentDir.string();
@@ -1337,5 +2222,1064 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
         }
 
         ImGui::EndTabItem();
+    }
+}
+
+void EditorUI::RenderPhysicsSettings(SceneManager& sceneManager)
+{
+    if (ImGui::BeginTabItem("Physics"))
+    {
+        if (sceneManager.GetECSRegistry().HasComponent<RigidBodyComponent>(m_selectedEntity))
+        {
+            
+        }
+    }
+
+    ImGui::EndTabItem();
+
+}
+
+
+void EditorUI::RenderSubmarineBuilder(SceneManager& sceneManager)
+{
+    ImGui::Spacing();
+    SectionHeader("🚢 Submarine Editor");
+    ImGui::Spacing();
+
+    auto& registry = sceneManager.GetECSRegistry();
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🔹 СОЗДАНИЕ ПУСТОЙ ПОДЛОДКИ С МЕШЕМ
+    // ══════════════════════════════════════════════════════════════════════════
+    ImGui::TextColored(COL_ACCENT, "1. Create Submarine with Model:");
+    ImGui::TextColored(COL_TEXT_DIM, "Creates hull + compartments with visual mesh");
+    ImGui::Spacing();
+
+    static float spawnY = 0.0f;
+    static float hullRadius = 3.0f;
+    static float hullMass = 3000.0f;
+
+    ImGui::DragFloat("Spawn Height (Y)##Sub", &spawnY, 0.5f, -50.0f, 50.0f);
+    ImGui::DragFloat("Hull Radius", &hullRadius, 0.2f, 1.0f, 10.0f);
+    ImGui::DragFloat("Hull Mass", &hullMass, 100.0f, 1000.0f, 10000.0f);
+
+    ImGui::Spacing();
+
+    // Выбор модели для подлодки
+    ImGui::TextColored(COL_TEXT_DIM, " Model preset:");
+    const char* modelNames[] = { "Sphere", "Cylinder", "Cube" };
+    static int selectedHullModel = 0;
+
+    const float btnW = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
+    for (int i = 0; i < 3; i++)
+    {
+        if (i > 0) ImGui::SameLine(0, 4);
+        if (ImGui::Button(modelNames[i], ImVec2(btnW, 0)))
+            selectedHullModel = i;
+    }
+
+    ImGui::Spacing();
+
+    ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_ACCENT_HOV);
+    if (ImGui::Button("🚢 Create Submarine with Model", ImVec2(-1, 0)))
+    {
+        const char* modelPath = nullptr;
+        switch (selectedHullModel)
+        {
+        case 0: modelPath = "assets/model/sphere.obj"; break;
+        case 1: modelPath = "assets/model/cylinder.obj"; break;
+        case 2: modelPath = "assets/model/cube.obj"; break;
+        }
+
+        Entity newSub = CreateSubmarineWithMesh(
+            sceneManager,
+            XMFLOAT3(0, spawnY, 0),
+            modelPath,
+            hullRadius,
+            hullMass
+        );
+
+        if (newSub != INVALID_ENTITY)
+        {
+            m_selectedType = SelectedType::Object;
+            m_selectedEntity = newSub;
+        }
+    }
+    ImGui::PopStyleColor(2);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🔹 ДОБАВЛЕНИЕ ОТСЕКОВ К ВЫБРАННОЙ ПОДЛОДКЕ
+    // ══════════════════════════════════════════════════════════════════════════
+    ImGui::TextColored(COL_ACCENT, "2. Add Compartments:");
+    ImGui::Spacing();
+
+    if (m_selectedType == SelectedType::Object && m_selectedEntity != INVALID_ENTITY)
+    {
+        auto* subComp = registry.GetComponent<SubmarineComponent>(m_selectedEntity);
+        auto* rbComp = registry.GetComponent<RigidBodyComponent>(m_selectedEntity);
+
+        bool isSubmarineRoot = (subComp && subComp->submarineRoot == m_selectedEntity && rbComp);
+
+        if (isSubmarineRoot)
+        {
+            ImGui::TextColored(COL_GREEN, "✅ Selected: Submarine #%u", m_selectedEntity);
+            ImGui::Text("Compartments: %zu | Mass: %.0f kg", subComp->allCompartments.size(), rbComp->mass);
+            ImGui::Spacing();
+
+            ImGui::TextColored(COL_TEXT_DIM, "New Compartment Settings:");
+
+            static float compOffset[3] = { 0, 0, 0 };
+            static float compSize[3] = { 3, 2.5f, 3.5f };
+            static float compMass = 500.0f;
+            static int selectedCompModel = 0;
+
+            ImGui::DragFloat3("##CompOffset", compOffset, 0.5f);
+            ImGui::SameLine();
+            ImGui::TextColored(COL_TEXT_DIM, "Offset");
+
+            ImGui::DragFloat3("##CompSize", compSize, 0.1f, 1.0f, 10.0f);
+            ImGui::SameLine();
+            ImGui::TextColored(COL_TEXT_DIM, "Size");
+
+            ImGui::DragFloat("##CompMass", &compMass, 10.0f, 100.0f, 2000.0f);
+            ImGui::SameLine();
+            ImGui::TextColored(COL_TEXT_DIM, "Mass");
+
+            ImGui::Spacing();
+
+            // Модель для отсека
+            ImGui::TextColored(COL_TEXT_DIM, " Compartment model:");
+            const char* compModelNames[] = { "Cube", "Cylinder" };
+
+            for (int i = 0; i < 2; i++)
+            {
+                if (i > 0) ImGui::SameLine(0, 4);
+                float w = (ImGui::GetContentRegionAvail().x - 4.0f) / 2.0f;
+                if (ImGui::Button(compModelNames[i], ImVec2(w, 0)))
+                    selectedCompModel = i;
+            }
+
+            ImGui::Spacing();
+
+            // Позиция пресеты
+            ImGui::TextColored(COL_TEXT_DIM, "Position Presets:");
+
+            if (ImGui::Button("Front", ImVec2(btnW, 0))) {
+                compOffset[2] = 5.0f;
+            }
+            ImGui::SameLine(0, 4);
+            if (ImGui::Button("Center", ImVec2(btnW, 0))) {
+                compOffset[0] = compOffset[1] = compOffset[2] = 0;
+            }
+            ImGui::SameLine(0, 4);
+            if (ImGui::Button("Rear", ImVec2(btnW, 0))) {
+                compOffset[2] = -5.0f;
+            }
+
+            ImGui::Spacing();
+
+            // Размер пресеты
+            ImGui::TextColored(COL_TEXT_DIM, "Size Presets:");
+            if (ImGui::Button("Small", ImVec2(btnW, 0))) {
+                compSize[0] = 2; compSize[1] = 1.5f; compSize[2] = 2;
+            }
+            ImGui::SameLine(0, 4);
+            if (ImGui::Button("Medium", ImVec2(btnW, 0))) {
+                compSize[0] = 3; compSize[1] = 2.5f; compSize[2] = 3.5f;
+            }
+            ImGui::SameLine(0, 4);
+            if (ImGui::Button("Large", ImVec2(btnW, 0))) {
+                compSize[0] = 4; compSize[1] = 3; compSize[2] = 5;
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::PushStyleColor(ImGuiCol_Button, COL_GREEN);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_GREEN_HOV);
+            if (ImGui::Button("➕ Add Compartment with Model", ImVec2(-1, 0)))
+            {
+                const char* compModelPath = (selectedCompModel == 0)
+                    ? "assets/model/cube.obj"
+                    : "assets/model/cylinder.obj";
+
+                Entity newComp = AddCompartmentWithMesh(
+                    sceneManager,
+                    m_selectedEntity,
+                    XMFLOAT3(compOffset[0], compOffset[1], compOffset[2]),
+                    XMFLOAT3(compSize[0], compSize[1], compSize[2]),
+                    compMass,
+                    compModelPath
+                );
+
+                if (newComp != INVALID_ENTITY)
+                {
+                    m_selectedType = SelectedType::Object;
+                    m_selectedEntity = newComp;
+                }
+            }
+            ImGui::PopStyleColor(2);
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // Список отсеков
+            ImGui::TextColored(COL_TEXT_DIM, "Existing Compartments:");
+
+            if (subComp->allCompartments.empty())
+            {
+                ImGui::TextColored(COL_TEXT_DIM, "  (none yet)");
+            }
+            else
+            {
+                const float avail = ImGui::GetContentRegionAvail().y - 40.0f;
+                ImGui::BeginChild("##CompList", ImVec2(-1, avail), true);
+
+                for (size_t i = 0; i < subComp->allCompartments.size(); ++i)
+                {
+                    Entity compEnt = subComp->allCompartments[i];
+                    auto* compData = registry.GetComponent<CompartmentComponent>(compEnt);
+
+                    char label[128];
+                    if (compData)
+                    {
+                        float floodPercent = (compData->volume > 0) ?
+                            (compData->waterVolume / compData->volume) * 100.f : 0.f;
+                        snprintf(label, sizeof(label),
+                            "[%zu] Entity #%u (%.0f%% flooded)",
+                            i, compEnt, floodPercent);
+                    }
+                    else
+                    {
+                        snprintf(label, sizeof(label), "[%zu] Entity #%u", i, compEnt);
+                    }
+
+                    bool isSelected = (m_selectedEntity == compEnt);
+                    if (isSelected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
+
+                    if (ImGui::Selectable(label, isSelected, 0, ImVec2(0, 20.0f)))
+                    {
+                        m_selectedType = SelectedType::Object;
+                        m_selectedEntity = compEnt;
+                    }
+
+                    if (isSelected) ImGui::PopStyleColor();
+                }
+
+                ImGui::EndChild();
+            }
+        }
+        else
+        {
+            ImGui::TextColored(COL_RED, "⚠️ Not a Submarine Root");
+        }
+    }
+    else
+    {
+        ImGui::TextColored(COL_TEXT_DIM, "No submarine selected");
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // 🔹 СПИСОК ВСЕХ ПОДЛОДОК
+    // ══════════════════════════════════════════════════════════════════════════
+    ImGui::TextColored(COL_TEXT_DIM, "All Submarines:");
+
+    auto& subPool = registry.GetComponents<SubmarineComponent>();
+    int subCount = 0;
+
+    const float avail = ImGui::GetContentRegionAvail().y - 20.0f;
+    ImGui::BeginChild("##SubList", ImVec2(-1, avail), true);
+
+    for (auto& [entity, subComp] : subPool)
+    {
+        if (subComp.submarineRoot != entity) continue;
+
+        auto* rb = registry.GetComponent<RigidBodyComponent>(entity);
+        if (!rb) continue;
+
+        subCount++;
+
+        char label[128];
+        snprintf(label, sizeof(label), "🚢 Submarine #%u (%zu comp, %.0f kg)",
+            entity, subComp.allCompartments.size(), rb->mass);
+
+        bool isSelected = (m_selectedEntity == entity);
+        if (isSelected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
+
+        if (ImGui::Selectable(label, isSelected, 0, ImVec2(0, 20.0f)))
+        {
+            m_selectedType = SelectedType::Object;
+            m_selectedEntity = entity;
+        }
+
+        if (isSelected) ImGui::PopStyleColor();
+    }
+
+    if (subCount == 0)
+        ImGui::TextColored(COL_TEXT_DIM, "  (No submarines)");
+
+    ImGui::EndChild();
+}
+
+
+
+void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEntity)
+{
+    auto* jointComp = registry.GetComponent<JointConnectionComponent>(selectedEntity);
+
+    if (ImGui::CollapsingHeader("Joint Connection", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        if (!jointComp)
+        {
+            // Кнопка добавить компонент
+            if (ImGui::Button("Add Joint Connection"))
+            {
+                JointConnectionComponent newComp{};
+                registry.AddComponent<JointConnectionComponent>(selectedEntity, newComp);
+                jointComp = registry.GetComponent<JointConnectionComponent>(selectedEntity);
+            }
+        }
+        else
+        {
+            // ── Выбор целевого объекта ────────────────────────────────────────
+            ImGui::Text("Target Entity:");
+            ImGui::SameLine();
+
+            // Показываем текущую цель или "None"
+            std::string targetName = "None";
+            if (jointComp->targetEntity != INVALID_ENTITY)
+            {
+                targetName = "Entity " + std::to_string(jointComp->targetEntity);
+            }
+
+            if (ImGui::Button(targetName.c_str()))
+            {
+                // Открываем список всех объектов
+                ImGui::OpenPopup("SelectTargetPopup");
+            }
+
+            // Popup со списком объектов
+            if (ImGui::BeginPopup("SelectTargetPopup"))
+            {
+                auto& allTransforms = registry.GetComponents<TransformComponent>();
+                auto& allRigidBodies = registry.GetComponents<RigidBodyComponent>();
+
+                for (auto& [entity, transform] : allTransforms)
+                {
+                    if (entity == selectedEntity) continue; // Пропускаем себя
+
+                    // Проверяем есть ли RigidBody
+                    if (!allRigidBodies.Has(entity)) continue;
+
+                    std::string entityName = "Entity " + std::to_string(entity);
+                    if (ImGui::Selectable(entityName.c_str()))
+                    {
+                        // Если джойнт уже создан — удаляем его
+                        if (jointComp->joint)
+                        {
+                            JointConnectionSystem::RemoveJoint(registry, *jointComp);
+                        }
+
+                        jointComp->targetEntity = entity;
+                        jointComp->isBroken = false;
+                    }
+                }
+                ImGui::EndPopup();
+            }
+
+            // Кнопка очистить выбор
+            ImGui::SameLine();
+            if (jointComp->targetEntity != INVALID_ENTITY && ImGui::SmallButton("Clear"))
+            {
+                if (jointComp->joint)
+                {
+                    
+                    JointConnectionSystem::RemoveJoint(registry, *jointComp);
+                }
+                jointComp->targetEntity = INVALID_ENTITY;
+                jointComp->joint = nullptr;
+                jointComp->isBroken = false;
+            }
+
+            ImGui::Separator();
+
+            // ── Pivot A (локальные координаты этого объекта) ─────────────────
+            ImGui::Text("Pivot A (This):");
+            ImGui::DragFloat3("##PivotA", &jointComp->pivotA[0], 0.1f);
+
+            // ── Pivot B (локальные координаты цели) ──────────────────────────
+            ImGui::Text("Pivot B (Target):");
+            ImGui::DragFloat3("##PivotB", &jointComp->pivotB[0], 0.1f);
+
+            ImGui::Separator();
+
+            // ── Параметры ────────────────────────────────────────────────────
+            ImGui::DragFloat("Break Force", &jointComp->breakForce, 1000.0f, 0.0f, 1000000.0f);
+            ImGui::Checkbox("Disable Collisions", &jointComp->disableCollisions);
+            ImGui::Checkbox("Show Gizmo", &jointComp->showGizmo);
+
+            ImGui::ColorEdit4("Gizmo Color", &jointComp->gizmoColor.x);
+
+            ImGui::Separator();
+
+            // ── Статус ───────────────────────────────────────────────────────
+            ImGui::Text("Status:");
+            ImGui::SameLine();
+
+            if (jointComp->isBroken)
+            {
+                ImGui::TextColored(ImVec4(1, 0, 0, 1), "BROKEN");
+            }
+            else if (jointComp->joint)
+            {
+                ImGui::TextColored(ImVec4(0, 1, 0, 1), "Connected");
+
+                // Показываем текущий импульс
+                btScalar impulse = 0.f;
+                if (jointComp->joint->getJointFeedback()) // или проверка внутреннего флага
+                {
+                    impulse = jointComp->joint->getAppliedImpulse();
+                }
+                else
+                {
+                    // Опционально: включить "на лету", но данные появятся только на следующем кадре
+                    jointComp->joint->enableFeedback(true);
+                }
+                char buf[128];
+                sprintf_s(buf, "Impulse: %.2f / %.2f", impulse, jointComp->breakForce);
+                ImGui::Text(buf);
+            }
+            else if (jointComp->targetEntity != INVALID_ENTITY)
+            {
+                ImGui::TextColored(ImVec4(1, 1, 0, 1), "Pending...");
+            }
+            else
+            {
+                ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "No target");
+            }
+
+            // ── Кнопки управления ────────────────────────────────────────────
+            ImGui::Separator();
+
+            if (jointComp->joint && ImGui::Button("Remove Joint"))
+            {
+                JointConnectionSystem::RemoveJoint(registry, *jointComp);
+                jointComp->joint = nullptr;
+            }
+
+            ImGui::SameLine();
+
+            if (ImGui::Button("Auto-Calculate Pivots"))
+            {
+                // Автоматический расчёт pivot'ов на основе позиций
+                AutoCalculatePivots(registry, selectedEntity, *jointComp);
+            }
+        }
+    }
+}
+
+// Вспомогательный метод для авто-расчёта
+void EditorUI::AutoCalculatePivots(ECSRegistry& registry, Entity entity, JointConnectionComponent& jointComp)
+{
+    auto* transformA = registry.GetComponent<TransformComponent>(entity);
+    auto* transformB = registry.GetComponent<TransformComponent>(jointComp.targetEntity);
+    auto* rbA = registry.GetComponent<RigidBodyComponent>(entity);
+    auto* rbB = registry.GetComponent<RigidBodyComponent>(jointComp.targetEntity);
+
+    if (!transformA || !transformB || !rbA || !rbB) return;
+
+    // Вектор от A к B
+    btVector3 posA(transformA->position.x, transformA->position.y, transformA->position.z);
+    btVector3 posB(transformB->position.x, transformB->position.y, transformB->position.z);
+    btVector3 dir = posB - posA;
+    dir.normalize();
+
+    // Определяем главную ось
+    float absX = fabs(dir.x());
+    float absY = fabs(dir.y());
+    float absZ = fabs(dir.z());
+
+    if (absX > absY && absX > absZ)
+    {
+        // По оси X
+        jointComp.pivotA.setValue(dir.x() > 0 ? rbA->shapeSize.x() : -rbA->shapeSize.x(), 0, 0);
+        jointComp.pivotB.setValue(dir.x() > 0 ? -rbB->shapeSize.x() : rbB->shapeSize.x(), 0, 0);
+    }
+    else if (absZ > absX && absZ > absY)
+    {
+        // По оси Z
+        jointComp.pivotA.setValue(0, 0, dir.z() > 0 ? rbA->shapeSize.z() : -rbA->shapeSize.z());
+        jointComp.pivotB.setValue(0, 0, dir.z() > 0 ? -rbB->shapeSize.z() : rbB->shapeSize.z());
+    }
+    else
+    {
+        // По оси Y
+        jointComp.pivotA.setValue(0, dir.y() > 0 ? rbA->shapeSize.y() : -rbA->shapeSize.y(), 0);
+        jointComp.pivotB.setValue(0, dir.y() > 0 ? -rbB->shapeSize.y() : rbB->shapeSize.y(), 0);
+    }
+
+    OutputDebugStringA("[AutoCalculatePivots] Done!\n");
+}
+
+
+
+
+
+
+void EditorUI::RenderCompartmentEditor(SceneManager& sceneManager)
+{
+    if (m_selectedType != SelectedType::Object) return;
+
+    auto& registry = sceneManager.GetECSRegistry();
+    auto* comp = registry.GetComponent<CompartmentComponent>(m_selectedEntity);
+    if (!comp) return;
+
+    ImGui::Begin("Compartment Editor", nullptr);
+
+    // ══════════════════════════════════════════════════
+    // 🔧 ГРАНИЦЫ ОТСЕКА (AABB)
+    // ══════════════════════════════════════════════════
+    ImGui::Text("Local Bounds:");
+
+    float min[3] = { comp->localMin.x, comp->localMin.y, comp->localMin.z };
+    float max[3] = { comp->localMax.x, comp->localMax.y, comp->localMax.z };
+
+    if (ImGui::DragFloat3("Min", min, 0.1f))
+    {
+        comp->localMin = { min[0], min[1], min[2] };
+        comp->RecalculateVolume();
+    }
+
+    if (ImGui::DragFloat3("Max", max, 0.1f))
+    {
+        comp->localMax = { max[0], max[1], max[2] };
+        comp->RecalculateVolume();
+    }
+
+    // ══════════════════════════════════════════════════
+    // 🎨 ВИЗУАЛИЗАЦИЯ
+    // ══════════════════════════════════════════════════
+    ImGui::Separator();
+    ImGui::Text("Visual Settings:");
+
+    static bool showWireframe = true;
+    ImGui::Checkbox("Show Wireframe", &showWireframe);
+
+    static float wireframeAlpha = 0.4f;
+    ImGui::SliderFloat("Opacity", &wireframeAlpha, 0.0f, 1.0f);
+
+    // ══════════════════════════════════════════════════
+    // 📊 ИНФОРМАЦИЯ
+    // ══════════════════════════════════════════════════
+    ImGui::Separator();
+    ImGui::Text("Info:");
+    ImGui::Text("Volume: %.2f m³", comp->volume);
+    ImGui::Text("Water: %.1f%%", (comp->waterVolume / comp->volume) * 100.0f);
+
+    // ══════════════════════════════════════════════════
+    // 🔧 БЫСТРЫЕ ДЕЙСТВИЯ
+    // ══════════════════════════════════════════════════
+    ImGui::Separator();
+
+    if (ImGui::Button("Center on Submarine"))
+    {
+        auto* subLink = registry.GetComponent<SubmarineComponent>(m_selectedEntity);
+        if (subLink && subLink->submarineRoot != INVALID_ENTITY)
+        {
+            auto* rootTransform = registry.GetComponent<TransformComponent>(subLink->submarineRoot);
+            auto* myTransform = registry.GetComponent<TransformComponent>(m_selectedEntity);
+
+            if (rootTransform && myTransform)
+            {
+                // Вычисляем центр отсека относительно подлодки
+                XMFLOAT3 center = {
+                    (comp->localMin.x + comp->localMax.x) * 0.5f,
+                    (comp->localMin.y + comp->localMax.y) * 0.5f,
+                    (comp->localMin.z + comp->localMax.z) * 0.5f
+                };
+                comp->localCenter = center;
+            }
+        }
+    }
+
+    if (ImGui::Button("Reset to Default"))
+    {
+        comp->localMin = { -2, -1.5f, -2 };
+        comp->localMax = { 2,  1.5f,  2 };
+        comp->RecalculateVolume();
+    }
+
+    ImGui::End();
+}
+
+
+void EditorUI::RenderPhysicsDebugPanel()
+{
+    ImGui::Spacing();
+    SectionHeader("Physics Visualization");
+    ImGui::Spacing();
+
+    // ══════════════════════════════════════════════════════════════════
+    // 🎨 ОСНОВНЫЕ ПЕРЕКЛЮЧАТЕЛИ
+    // ══════════════════════════════════════════════════════════════════
+    ImGui::TextColored(COL_TEXT_DIM, " Render Modes:");
+    ImGui::Checkbox("Show Colliders", &m_debugSettings.showColliders);
+    ImGui::Checkbox("Show Contacts", &m_debugSettings.showContacts);
+    ImGui::Checkbox("Show AABB", &m_debugSettings.showAABB);
+    ImGui::Checkbox("Show Center of Mass", &m_debugSettings.showCenterOfMass);
+    ImGui::Checkbox("Show Velocity Vectors", &m_debugSettings.showVelocity);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ══════════════════════════════════════════════════════════════════
+    // 🔧 ФИЛЬТРЫ ПО ТИПАМ КОЛЛАЙДЕРОВ
+    // ══════════════════════════════════════════════════════════════════
+    ImGui::TextColored(COL_TEXT_DIM, " Collider Type Filters:");
+
+    ImGui::BeginDisabled(!m_debugSettings.showColliders);
+
+    ImGui::Columns(2, nullptr, false);
+    ImGui::Checkbox("Boxes", &m_debugSettings.showBoxes);
+    ImGui::Checkbox("Spheres", &m_debugSettings.showSpheres);
+    ImGui::Checkbox("Capsules", &m_debugSettings.showCapsules);
+    ImGui::Checkbox("Cylinders", &m_debugSettings.showCylinders);
+
+    ImGui::NextColumn();
+
+    ImGui::Checkbox("Planes", &m_debugSettings.showPlanes);
+    ImGui::Checkbox("Convex Hulls", &m_debugSettings.showConvexHulls);
+    ImGui::Checkbox("Triangle Meshes", &m_debugSettings.showTriangleMeshes);
+
+    ImGui::Columns(1);
+    ImGui::EndDisabled();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ══════════════════════════════════════════════════════════════════
+    // 🎨 ЦВЕТОВАЯ СХЕМА
+    // ══════════════════════════════════════════════════════════════════
+    if (ImGui::CollapsingHeader("🎨 Color Settings", ImGuiTreeNodeFlags_None))
+    {
+        ImGui::Spacing();
+        ImGui::TextColored(COL_TEXT_DIM, " Object States:");
+
+        ImGui::ColorEdit4("Dynamic Bodies##CD", &m_debugSettings.colorDynamic.x);
+        ImGui::ColorEdit4("Static Bodies##CS", &m_debugSettings.colorStatic.x);
+        ImGui::ColorEdit4("Kinematic Bodies##CK", &m_debugSettings.colorKinematic.x);
+        ImGui::ColorEdit4("Sleeping Bodies##CSL", &m_debugSettings.colorSleeping.x);
+
+        ImGui::Spacing();
+        ImGui::TextColored(COL_TEXT_DIM, " Debug Elements:");
+
+        ImGui::ColorEdit4("Contacts##CC", &m_debugSettings.colorContact.x);
+        ImGui::ColorEdit4("AABB##CAABB", &m_debugSettings.colorAABB.x);
+
+        ImGui::Spacing();
+
+        if (ImGui::Button("Reset to Default##Colors", ImVec2(-1, 0)))
+        {
+            m_debugSettings.colorDynamic = { 0.2f, 0.8f, 0.2f, 0.6f };
+            m_debugSettings.colorStatic = { 0.8f, 0.2f, 0.2f, 0.6f };
+            m_debugSettings.colorKinematic = { 0.2f, 0.5f, 0.9f, 0.6f };
+            m_debugSettings.colorSleeping = { 0.5f, 0.5f, 0.5f, 0.4f };
+            m_debugSettings.colorContact = { 1.0f, 1.0f, 0.0f, 1.0f };
+            m_debugSettings.colorAABB = { 0.9f, 0.6f, 0.1f, 0.3f };
+        }
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ══════════════════════════════════════════════════════════════════
+    // ⚙️ РАЗМЕРЫ И ПАРАМЕТРЫ
+    // ══════════════════════════════════════════════════════════════════
+    if (ImGui::CollapsingHeader("⚙️ Rendering Parameters"))
+    {
+        ImGui::Spacing();
+        ImGui::SliderFloat("Line Thickness", &m_debugSettings.lineThickness, 0.5f, 5.0f);
+        ImGui::SliderFloat("Contact Marker Size", &m_debugSettings.contactMarkerSize, 0.05f, 0.5f);
+        ImGui::SliderFloat("Velocity Scale", &m_debugSettings.velocityScale, 0.1f, 2.0f);
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ══════════════════════════════════════════════════════════════════
+    // 🔄 БЫСТРЫЕ ДЕЙСТВИЯ
+    // ══════════════════════════════════════════════════════════════════
+    ImGui::TextColored(COL_TEXT_DIM, " Quick Actions:");
+
+    if (ImGui::Button("Enable All##PD", ImVec2(-1, 0)))
+    {
+        m_debugSettings.showBoxes = m_debugSettings.showSpheres = m_debugSettings.showCapsules = true;
+        m_debugSettings.showCylinders = m_debugSettings.showPlanes = true;
+        m_debugSettings.showConvexHulls = m_debugSettings.showTriangleMeshes = true;
+    }
+
+    if (ImGui::Button("Disable All##PD", ImVec2(-1, 0)))
+    {
+        m_debugSettings.showBoxes = m_debugSettings.showSpheres = m_debugSettings.showCapsules = false;
+        m_debugSettings.showCylinders = m_debugSettings.showPlanes = false;
+        m_debugSettings.showConvexHulls = m_debugSettings.showTriangleMeshes = false;
+    }
+
+    if (ImGui::Button("Primitives Only##PD", ImVec2(-1, 0)))
+    {
+        m_debugSettings.showBoxes = m_debugSettings.showSpheres = m_debugSettings.showCapsules = true;
+        m_debugSettings.showCylinders = true;
+        m_debugSettings.showConvexHulls = m_debugSettings.showTriangleMeshes = false;
+    }
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+
+    // ══════════════════════════════════════════════════════════════════
+    // 📊 СТАТИСТИКА (ОТЛАДКА)
+    // ══════════════════════════════════════════════════════════════════
+    if (ImGui::CollapsingHeader("📊 Debug Info"))
+    {
+        ImGui::Spacing();
+        ImGui::TextColored(COL_TEXT_DIM, " Settings Status:");
+
+        ImGui::Text("showColliders: %s", m_debugSettings.showColliders ? "ON" : "OFF");
+        ImGui::Text("showBoxes: %s", m_debugSettings.showBoxes ? "ON" : "OFF");
+        ImGui::Text("showSpheres: %s", m_debugSettings.showSpheres ? "ON" : "OFF");
+
+        ImGui::Spacing();
+        ImGui::TextColored(COL_TEXT_DIM, " Color Values:");
+        ImGui::Text("Dynamic: (%.2f, %.2f, %.2f, %.2f)",
+            m_debugSettings.colorDynamic.x,
+            m_debugSettings.colorDynamic.y,
+            m_debugSettings.colorDynamic.z,
+            m_debugSettings.colorDynamic.w);
+    }
+}
+
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// Helper: Create a new compartment entity linked to a submarine root
+// ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// Helper: Create a new compartment entity linked to a submarine root
+// ════════════════════════════════════════════════════════════════════════════
+void EditorUI::CreateNewCompartment(ECSRegistry& registry, Entity submarineRoot)
+{
+    Entity newComp = SubmarineSystem::AddCompartmentToSubmarine(
+        registry,
+        submarineRoot,
+        XMFLOAT3(0, 0, 3),        // localOffset
+        XMFLOAT3(3, 2.5f, 3.5f),  // compartmentSize
+        500.0f                      // compartmentMass
+    );
+
+    if (newComp != INVALID_ENTITY)
+    {
+        // Подсвечиваем новый отсек
+        m_selectedType = SelectedType::Object;
+        m_selectedEntity = newComp;
+    }
+}
+
+void EditorUI::StartCompartmentEdit(Entity compartment)
+{
+    m_editingCompartment = compartment;
+
+    // Получаем компонент (предполагаем, что он есть, раз мы в редакторе)
+    // В реальном коде лучше добавить проверку через registry
+    // Но здесь мы вызываем это только из UI, где компонент уже проверен
+
+    // Кэш будет обновляться в UpdateCacheFromCompartment при каждом кадре,
+    // если отсек всё ещё выделен
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// UpdateCacheFromCompartment — синхронизация: компонент → кэш
+// ════════════════════════════════════════════════════════════════════════════
+void EditorUI::UpdateCacheFromCompartment(const CompartmentComponent* comp)
+{
+    if (!comp) return;
+
+    // Конвертируем Min/Max → Center/Size
+    m_compartmentCenter = {
+        (comp->localMin.x + comp->localMax.x) * 0.5f,
+        (comp->localMin.y + comp->localMax.y) * 0.5f,
+        (comp->localMin.z + comp->localMax.z) * 0.5f
+    };
+
+    m_compartmentSize = {
+        comp->localMax.x - comp->localMin.x,
+        comp->localMax.y - comp->localMin.y,
+        comp->localMax.z - comp->localMin.z
+    };
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// UpdateCompartmentFromCache — синхронизация: кэш → компонент
+// ════════════════════════════════════════════════════════════════════════════
+void EditorUI::UpdateCompartmentFromCache(CompartmentComponent* comp)
+{
+    if (!comp) return;
+
+    // Конвертируем Center/Size → Min/Max
+    comp->localMin = {
+        m_compartmentCenter.x - m_compartmentSize.x * 0.5f,
+        m_compartmentCenter.y - m_compartmentSize.y * 0.5f,
+        m_compartmentCenter.z - m_compartmentSize.z * 0.5f
+    };
+
+    comp->localMax = {
+        m_compartmentCenter.x + m_compartmentSize.x * 0.5f,
+        m_compartmentCenter.y + m_compartmentSize.y * 0.5f,
+        m_compartmentCenter.z + m_compartmentSize.z * 0.5f
+    };
+
+    comp->RecalculateVolume();
+}
+
+
+
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// AddCompartmentToSubmarine — добавляет отсек к существующей подлодке
+// ════════════════════════════════════════════════════════════════════════════
+// 🔧 ПРОСТО создаёт пустую подлодку (без отсеков)
+Entity EditorUI::CreateEmptySubmarine(SceneManager& sceneManager, const XMFLOAT3& position)
+{
+    auto& registry = sceneManager.GetECSRegistry();
+
+    // Создаём корень
+    Entity subRoot = registry.CreateEntity();
+
+    // Transform
+    registry.AddComponent<TransformComponent>(subRoot, TransformComponent{
+        .position = position,
+        .rotation = {0, 0, 0},
+        .scale = {1, 1, 1}
+        });
+
+    // RigidBody (сфера как placeholder)
+    RigidBodyComponent rb{};
+    rb.mass = 3000.0f;  // Только корпус
+    rb.shapeType = RigidBodyComponent::Sphere;
+    rb.shapeRadius = 2.5f;
+    rb.isDynamic = true;
+    registry.AddComponent<RigidBodyComponent>(subRoot, rb);
+    PhysicsSystem::CreateRigidBody(registry, subRoot);
+
+    // Buoyancy
+    registry.AddComponent<BuoyancyComponent>(subRoot, BuoyancyComponent{
+        .fluidDensity = 1025.0f,
+        .volume = 15.0f,  // Только корпус
+        .height = 5.0f,
+        .buoyancyMultiplier = 1.0f
+        });
+
+    // SubmarineComponent (пусто!)
+    registry.AddComponent<SubmarineComponent>(subRoot, SubmarineComponent{
+        .submarineRoot = subRoot
+        });
+
+    // Mesh (опционально - для визуализации корпуса)
+    AssimpModelClass* subModel = sceneManager.GetOrCreateModel(
+        "assets/model/sphere.obj", m_device, m_context, "assets/texture/stone.tga");
+
+    if (subModel) {
+        registry.AddComponent<MeshRendererComponent>(subRoot, MeshRendererComponent{
+            .model = subModel,
+            .material = nullptr
+            });
+    }
+
+    OutputDebugStringA(("✅ Created empty submarine #" + std::to_string(subRoot) + "\n").c_str());
+
+    return subRoot;
+}
+
+// 🔧 Добавить отсек к подлодке (обновленная версия)
+Entity EditorUI::AddCompartmentToSubmarine(SceneManager& sceneManager,
+    Entity submarineRoot,
+    const XMFLOAT3& localOffset,
+    const XMFLOAT3& size,
+    float mass)
+{
+    auto& registry = sceneManager.GetECSRegistry();
+
+    Entity newComp = SubmarineSystem::AddCompartmentToSubmarine(
+        registry,
+        submarineRoot,
+        localOffset,
+        size,
+        mass
+    );
+
+    if (newComp != INVALID_ENTITY)
+    {
+        // Отмечаем подлодку как нуждающуюся в обновлении физики
+        auto* rootSub = registry.GetComponent<SubmarineComponent>(submarineRoot);
+        if (rootSub)
+        {
+            rootSub->needsPhysicsUpdate = true;
+        }
+
+        // Выбираем новый отсек в редакторе (опционально)
+        m_selectedType = SelectedType::Object;
+        m_selectedEntity = newComp;
+    }
+
+    return newComp;
+}
+
+
+// 🔧 Добавление отсека с мешем
+Entity EditorUI::AddCompartmentWithMesh(
+    SceneManager& sceneManager,
+    Entity submarineRoot,
+    const XMFLOAT3& localOffset,
+    const XMFLOAT3& size,
+    float mass,
+    const char* modelPath)
+{
+    auto& registry = sceneManager.GetECSRegistry();
+
+    // Используем SubmarineSystem для создания отсека
+    Entity compartment = SubmarineSystem::AddCompartmentToSubmarine(
+        registry,
+        submarineRoot,
+        localOffset,
+        size,
+        mass
+    );
+
+    if (compartment == INVALID_ENTITY)
+        return INVALID_ENTITY;
+
+    // 🔥 ВАЖНО: Добавляем МЕШ отсеку!
+    AssimpModelClass* compModel = sceneManager.GetOrCreateModel(
+        modelPath, m_device, m_context, "assets/texture/stone.tga");
+
+    if (compModel)
+    {
+        registry.AddComponent<MeshRendererComponent>(compartment, MeshRendererComponent{
+            .model = compModel,
+            .material = nullptr
+            });
+    }
+
+    // Отмечаем подлодку как нуждающуюся в обновлении
+    auto* rootSub = registry.GetComponent<SubmarineComponent>(submarineRoot);
+    if (rootSub)
+    {
+        rootSub->needsPhysicsUpdate = true;
+    }
+
+    OutputDebugStringA(("✅ Added compartment #" + std::to_string(compartment) +
+        " with model " + std::string(modelPath) + "\n").c_str());
+
+    return compartment;
+}
+
+
+Entity EditorUI::CreateSubmarineWithMesh(
+    SceneManager& sceneManager,
+    const XMFLOAT3& position,
+    const char* modelPath,
+    float hullRadius,
+    float hullMass)
+{
+    auto& registry = sceneManager.GetECSRegistry();
+
+    // 1. Создаём корень подлодки
+    Entity subRoot = registry.CreateEntity();
+
+    // Transform
+    registry.AddComponent<TransformComponent>(subRoot, TransformComponent{
+        .position = position,
+        .rotation = {0, 0, 0},
+        .scale = {hullRadius, hullRadius, hullRadius}
+        });
+
+    // RigidBody
+    RigidBodyComponent rb{};
+    rb.mass = hullMass;
+    rb.shapeType = RigidBodyComponent::Sphere;
+    rb.shapeRadius = hullRadius;
+    rb.isDynamic = true;
+    registry.AddComponent<RigidBodyComponent>(subRoot, rb);
+    PhysicsSystem::CreateRigidBody(registry, subRoot);
+
+    // Buoyancy
+    registry.AddComponent<BuoyancyComponent>(subRoot, BuoyancyComponent{
+        .fluidDensity = 1025.0f,
+        .volume = 15.0f * (hullRadius / 3.0f),
+        .height = hullRadius * 2.0f,
+        .buoyancyMultiplier = 1.0f
+        });
+
+    // SubmarineComponent
+    registry.AddComponent<SubmarineComponent>(subRoot, SubmarineComponent{
+        .submarineRoot = subRoot
+        });
+
+    // 🔥 ВАЖНО: Добавляем МЕШ!
+    AssimpModelClass* hullModel = sceneManager.GetOrCreateModel(
+        modelPath, m_device, m_context, "assets/texture/stone.tga");
+
+    if (hullModel)
+    {
+        registry.AddComponent<MeshRendererComponent>(subRoot, MeshRendererComponent{
+            .model = hullModel,
+            .material = nullptr
+            });
+    }
+
+    OutputDebugStringA(("✅ Created submarine #" + std::to_string(subRoot) +
+        " with model " + std::string(modelPath) + "\n").c_str());
+
+    return subRoot;
+}
+
+
+void EditorUI::UpdateBreachesOnResize(CompartmentComponent* comp, const XMFLOAT3& oldMin, const XMFLOAT3& oldMax)
+{
+    if (!comp) return;
+    float oldHeight = oldMax.y - oldMin.y;
+    float newHeight = comp->localMax.y - comp->localMin.y;
+    float scaleY = (oldHeight > 0.0f) ? (newHeight / oldHeight) : 1.0f;
+
+    for (auto& breach : comp->breaches)
+    {
+        // Пересчёт Y-координаты относительно нового размера (оставляем относительное положение)
+        float relY = (breach.localPosition.y - oldMin.y) / oldHeight;
+        breach.localPosition.y = comp->localMin.y + relY * newHeight;
+        // Аналогично можно сделать для X и Z, если нужно
+        float oldWidth = oldMax.x - oldMin.x;
+        float newWidth = comp->localMax.x - comp->localMin.x;
+        float relX = (breach.localPosition.x - oldMin.x) / oldWidth;
+        breach.localPosition.x = comp->localMin.x + relX * newWidth;
+
+        float oldDepth = oldMax.z - oldMin.z;
+        float newDepth = comp->localMax.z - comp->localMin.z;
+        float relZ = (breach.localPosition.z - oldMin.z) / oldDepth;
+        breach.localPosition.z = comp->localMin.z + relZ * newDepth;
     }
 }

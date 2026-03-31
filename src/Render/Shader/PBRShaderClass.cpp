@@ -87,7 +87,37 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
     if (!CreateConstantBuffer(device, sizeof(SelectedBuffer), &m_selectedBuffer))   return false;
     if (!CreateFogBuffer(device))                                                         return false;
     if (!CreateDefaultSampler(device))                                                    return false;
+    if (!CreateConstantBuffer(device, sizeof(DirectionalLightBuffer),
+        &m_directionalLightBuffer))
+        return false;
 
+    // 🔥 FIX: Создаём ShadowBuffer (b5) — раньше отсутствовал!
+    if (!CreateConstantBuffer(device, sizeof(ShadowBufferType), &m_shadowBuffer))
+        return false;
+
+    // 🔥 FIX: Создаём comparison sampler для shadow map (s7)
+    D3D11_SAMPLER_DESC shadowSamplerDesc = {};
+    shadowSamplerDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+    shadowSamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
+    shadowSamplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_BORDER;
+    shadowSamplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_BORDER;
+    shadowSamplerDesc.BorderColor[0] = 1.0f;
+    shadowSamplerDesc.BorderColor[1] = 1.0f;
+    shadowSamplerDesc.BorderColor[2] = 1.0f;
+    shadowSamplerDesc.BorderColor[3] = 1.0f;
+    shadowSamplerDesc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL;
+    shadowSamplerDesc.MinLOD = 0;
+    shadowSamplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    if (FAILED(device->CreateSamplerState(&shadowSamplerDesc, &m_shadowSampler)))
+        return false;
+
+    // ... fallback текстуры без изменений ...
+    m_defaultNormalSRV = Create1x1SRV(device, 128, 128, 255, 255);
+    m_defaultMetalnessSRV = Create1x1SRV(device, 0, 0, 0, 255);
+    m_defaultRoughnessSRV = Create1x1SRV(device, 255, 255, 255, 255);
+
+  
     // ── 1x1 fallback текстуры для PBR ─────────────────────────────────────────
     // normal: neutral (0.5,0.5,1) in tangent space
     m_defaultNormalSRV = Create1x1SRV(device, 128, 128, 255, 255);
@@ -99,22 +129,57 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
     return true;
 }
 
+
+bool PBRShaderClass::SetDirectionalLight(
+    ID3D11DeviceContext* context,
+    const XMFLOAT3& direction,
+    const XMFLOAT4& color,
+    const XMFLOAT4& ambient,
+    float intensity)
+{
+    HRESULT result;
+    D3D11_MAPPED_SUBRESOURCE mapped;
+
+    result = context->Map(m_directionalLightBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (FAILED(result)) return false;
+
+    DirectionalLightBuffer* data = (DirectionalLightBuffer*)mapped.pData;
+
+    XMVECTOR dir = XMVector3Normalize(XMLoadFloat3(&direction));
+    XMStoreFloat3((XMFLOAT3*)&data->direction, dir);
+    data->direction.w = intensity;
+
+    data->color = color;
+    data->ambient = ambient;
+
+    context->Unmap(m_directionalLightBuffer, 0);
+    context->PSSetConstantBuffers(4, 1, &m_directionalLightBuffer);
+
+    return true;
+}
+
+
 void PBRShaderClass::Shutdown()
 {
-    // Освобождаем только свои буферы — базовый класс освободит остальное
-    auto release = [](auto*& ptr) { if (ptr) { ptr->Release(); ptr = nullptr; } };
+    // Освобождаем буферы
+    auto release = [](auto*& ptr) {
+        if (ptr) { ptr->Release(); ptr = nullptr; }
+        };
 
     release(m_matrixBuffer);
     release(m_lightPosBuffer);
     release(m_lightColorBuffer);
     release(m_pbrParamsBuffer);
     release(m_selectedBuffer);
+    release(m_directionalLightBuffer);
+    release(m_shadowBuffer);        // 🔥 FIX: Добавлено
+    release(m_shadowSampler);       // 🔥 FIX: Добавлено
 
     release(m_defaultNormalSRV);
     release(m_defaultMetalnessSRV);
     release(m_defaultRoughnessSRV);
 
-    ShaderBaseClass::Shutdown(); // освобождает VS, PS, layout, sampler, fogBuffer
+    ShaderBaseClass::Shutdown();
 }
 
 
@@ -160,12 +225,12 @@ bool PBRShaderClass::Render(
     PBRParamsBuffer ppb;
     ppb.cameraPos = cameraPos;
     ppb.padding = 0.0f;
-    UpdateConstantBuffer(context, m_pbrParamsBuffer, ppb, 3, false);
+    UpdateConstantBuffer(context, m_pbrParamsBuffer, ppb, 6, false);
 
     SelectedBuffer sb;
     sb.selectedFactor = selectedFactor;
     sb.padding = { 0,0,0 };
-    UpdateConstantBuffer(context, m_selectedBuffer, sb, 4, false);
+    UpdateConstantBuffer(context, m_selectedBuffer, sb, 3, false);
 
     // ── Подготовка SRV массива (логируем для диагностики)
     ID3D11ShaderResourceView* srvs[4] = { albedo, normalMap, metalness, roughness };
@@ -199,6 +264,34 @@ bool PBRShaderClass::Render(
     // Очистка слотов после рендера
     ID3D11ShaderResourceView* nullSRVs[4] = { nullptr, nullptr, nullptr, nullptr };
     context->PSSetShaderResources(0, 4, nullSRVs);
+
+    return true;
+}
+
+bool PBRShaderClass::SetShadowMap(
+    ID3D11DeviceContext* context,
+    ID3D11ShaderResourceView* shadowMapSRV,
+    const XMMATRIX& lightViewProj)
+{
+    if (!context || !shadowMapSRV) return false;
+
+    // 1. Привязываем shadow map к слоту t7
+    context->PSSetShaderResources(7, 1, &shadowMapSRV);
+
+    // 2. Привязываем comparison sampler к слоту s7
+    if (m_shadowSampler)
+        context->PSSetSamplers(7, 1, &m_shadowSampler);
+
+    // 3. Обновляем shadow constant buffer (b5)
+    D3D11_MAPPED_SUBRESOURCE mapped;
+    HRESULT result = context->Map(m_shadowBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (FAILED(result)) return false;
+
+    ShadowBufferType* data = (ShadowBufferType*)mapped.pData;
+    data->lightViewProj = XMMatrixTranspose(lightViewProj);
+
+    context->Unmap(m_shadowBuffer, 0);
+    context->PSSetConstantBuffers(5, 1, &m_shadowBuffer);
 
     return true;
 }

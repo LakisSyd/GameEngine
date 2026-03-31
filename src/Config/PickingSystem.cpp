@@ -8,23 +8,20 @@ bool PickingSystem::RayIntersectsSphere(
     const XMFLOAT3& center,
     float radius) const
 {
-    // Используем DirectXMath для надёжности
     XMVECTOR rayOrigin = XMLoadFloat3(&ray.origin);
     XMVECTOR rayDir = XMLoadFloat3(&ray.direction);
     XMVECTOR sphereCenter = XMLoadFloat3(&center);
 
-    // Формула: расстояние от центра сферы до луча
-    XMVECTOR L = sphereCenter - rayOrigin;
+    XMVECTOR L = XMVectorSubtract(sphereCenter, rayOrigin);
     float t = XMVectorGetX(XMVector3Dot(L, rayDir));
 
-    if (t < 0.0f) return false; // Сфера позади луча
+    if (t < 0.0f) return false;
 
-    XMVECTOR closest = rayOrigin + rayDir * t;
-    float distance = XMVectorGetX(XMVector3Length(closest - sphereCenter));
+    XMVECTOR closest = XMVectorAdd(rayOrigin, XMVectorScale(rayDir, t));
+    float distance = XMVectorGetX(XMVector3Length(XMVectorSubtract(closest, sphereCenter)));
 
     return distance <= radius;
 }
-
 float PickingSystem::CalculateSpriteRadius(const WorldSpriteClass* sprite) const
 {
     if (!sprite) return 0.0f;

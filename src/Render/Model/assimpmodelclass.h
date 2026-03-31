@@ -48,6 +48,7 @@ public:
         const char* modelPath, const char* textureFilename);
     void Shutdown();
 
+
     void Render(ID3D11DeviceContext* deviceContext);
     void RenderAll(ID3D11DeviceContext* deviceContext,
         TextureShaderClass* shader,
@@ -65,6 +66,12 @@ public:
 
     std::vector<TextureClass*> m_ownedTextures;
 
+
+    void GetBoundingSphere(XMFLOAT3* center, float* radius) const;
+    void GetVertices(std::vector<XMFLOAT3>& outVertices) const;
+    void GetRawVertices(std::vector<XMFLOAT3>& outVertices) const;
+    void GetRawTriangles(std::vector<XMFLOAT3>& outTriangles) const;
+    void GetBoundingBox(XMFLOAT3* min, XMFLOAT3* max) const;
 private:
     // Загружает вшитую текстуру из GLB по типу (BASE_COLOR, NORMALS, etc.)
     ID3D11ShaderResourceView* LoadEmbeddedTexture(ID3D11Device* device,
@@ -89,6 +96,14 @@ private:
     TextureClass* m_Texture;
     int                   m_totalIndexCount;
     std::vector<MeshPart> m_meshParts;
+
+
+    // 🔥 ДОБАВЬТЕ КЭШИРОВАНИЕ:
+    mutable XMFLOAT3 m_cachedBBMin = XMFLOAT3(FLT_MAX, FLT_MAX, FLT_MAX);
+    mutable XMFLOAT3 m_cachedBBMax = XMFLOAT3(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    mutable XMFLOAT3 m_cachedSphereCenter = XMFLOAT3(0, 0, 0);
+    mutable float m_cachedSphereRadius = 0.0f;
+    mutable bool m_boundsCached = false;
 
     // Владелец для любых TextureClass, созданных из встроенных изображений.
     // Они живут пока не вызовем Shutdown() и тем самым держат SRV валидными.

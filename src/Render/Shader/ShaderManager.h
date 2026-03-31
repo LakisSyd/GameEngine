@@ -72,7 +72,15 @@ public:
     {
         return m_shaders.count(name) > 0;
     }
-
+    ShaderBaseClass* GetShaderType(ShaderType type) const
+    {
+        for (const auto& [name, shader] : m_shaders)
+        {
+            if (shader && shader->GetType() == type)
+                return shader.get();
+        }
+        return nullptr;
+    }
     // ? Вызывает fn для каждого загруженного шейдера
     // Используется для обновления глобальных буферов (например, FogBuffer)
     template<typename Fn>
@@ -89,6 +97,8 @@ public:
             shader->Shutdown();
         m_shaders.clear();
     }
+
+
 
 private:
     ShaderManager() = default;

@@ -1,14 +1,9 @@
-////////////////////////////////////////////////////////////////////////////////
-// Имя файла: color.vs
-////////////////////////////////////////////////////////////////////////////////
+// color.vs — ВЕРШИННЫЙ ШЕЙДЕР
 
-/////////////
-// ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ
-/////////////
-
-// Важно: имена переменных здесь должны ТОЧНО совпадать с теми, 
-// которые вы используете в функции шейдера (регистр имеет значение!).
-cbuffer MatrixBuffer
+//////////////
+// КОНСТАНТНЫЕ БУФЕРЫ
+//////////////
+cbuffer MatrixBuffer : register(b0)
 {
     matrix worldMatrix;
     matrix viewMatrix;
@@ -16,17 +11,14 @@ cbuffer MatrixBuffer
 };
 
 //////////////
-// ОПРЕДЕЛЕНИЯ ТИПОВ
+// ТИПЫ ДАННЫХ
 //////////////
-
-// Входная структура (должна совпадать с Layout в C++ и VertexType в ModelClass)
 struct VertexInputType
 {
     float4 position : POSITION;
     float4 color : COLOR;
 };
 
-// Выходная структура (передается в пиксельный шейдер)
 struct PixelInputType
 {
     float4 position : SV_POSITION;
@@ -36,23 +28,17 @@ struct PixelInputType
 ////////////////////////////////////////////////////////////////////////////////
 // ВЕРШИННЫЙ ШЕЙДЕР
 ////////////////////////////////////////////////////////////////////////////////
-
-// Обратите внимание: входной параметр теперь типа VertexInputType (а не VertexType)
 PixelInputType ColorVertexShader(VertexInputType input)
 {
     PixelInputType output;
 
-    // Устанавливаем w компонент в 1.0 для корректного умножения матриц
     input.position.w = 1.0f;
 
-    // Вычисляем позицию вершины
-    // Теперь имена worldMatrix, viewMatrix, projectionMatrix точно найдутся в cbuffer выше
     output.position = mul(input.position, worldMatrix);
     output.position = mul(output.position, viewMatrix);
     output.position = mul(output.position, projectionMatrix);
 
-    // Передаем цвет дальше
-    output.color = input.color;
+    output.color = input.color; // Передаём цвет (хотя в PS он игнорируется)
 
     return output;
 }
