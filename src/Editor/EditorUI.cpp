@@ -10,7 +10,11 @@
 #include "SubmarineBuilder.h"
 #include "JointConnectionSystem.h"
 #include "../../SubmarineSystem.h"
-
+#include <imgui_demo.cpp>
+inline btQuaternion XMFloat4ToBtQuaternion(const DirectX::XMFLOAT4& q)
+{
+    return btQuaternion(q.x, q.y, q.z, q.w);
+}
 // ── Цвета темы (UE5-стиль) ───────────────────────────────────────────────────
 static constexpr ImVec4 COL_HEADER = ImVec4(0.13f, 0.13f, 0.13f, 1.0f);
 static constexpr ImVec4 COL_SECTION = ImVec4(0.18f, 0.18f, 0.18f, 1.0f);
@@ -927,8 +931,8 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 ImGui::SameLine();
                 if (ImGui::Button("🔍 Check Integrity"))
                 {
-                    bool intact = SubmarineBuilder::CheckIntegrity(registry, entity);
-                    OutputDebugStringA(intact ? "✅ Submarine integrity OK\n" : "⚠️ Submarine damaged!\n");
+                    
+                   
                 }
             }
             else
@@ -1022,207 +1026,342 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
         if (open)
         {
             auto* rb = registry.GetComponent<RigidBodyComponent>(entity);
-
-            ImGui::Spacing();
-            ImGui::TextColored(COL_TEXT_DIM, " Mass");
-            ImGui::SetNextItemWidth(-1);
-            if (ImGui::DragFloat("##RBMass", &rb->mass, 0.1f, 0.0f, 10000.0f))
-            {
-                if (rb->body)
-                {
-                    // 🔥 FIX: Удаляем ОБА типа джойнтов
-                    SubmarineJointSystem::RemoveJointsForEntity(registry, entity);
-                    JointConnectionSystem::RemoveJointsForEntity(registry, entity);  // ← ДОБАВЛЕНО
-
-                    PhysicsWorld::Get().GetWorld()->removeRigidBody(rb->body);
-                    delete rb->body->getMotionState();
-                    delete rb->body;
-                    rb->body = nullptr;
-                }
-                PhysicsSystem::CreateRigidBody(registry, entity);
-            }
-
-            ImGui::Spacing();
-            ImGui::TextColored(COL_TEXT_DIM, " Shape Type");
-            const char* shapeNames[] = {
-                "Box",        // 0
-                "Sphere",     // 1
-                "Cylinder",   // 2
-                "Capsule",    // 3
-                "Plane",      // 4
-                "ConvexHull", // 5
-                "TriangleMesh" // 6
-            };
-            int shapeIdx = static_cast<int>(rb->shapeType);
-            if (ImGui::Combo("##RBShape", &shapeIdx, shapeNames, 7))
-            {
-                rb->shapeType = static_cast<RigidBodyComponent::ShapeType>(shapeIdx);
-                if (rb->body)
-                {
-                    SubmarineJointSystem::RemoveJointsForEntity(registry, entity);
-                    JointConnectionSystem::RemoveJointsForEntity(registry, entity);  // ← ДОБАВЛЕНО
-
-                    PhysicsWorld::Get().GetWorld()->removeRigidBody(rb->body);
-                    delete rb->body->getMotionState();
-                    delete rb->body;
-                    rb->body = nullptr;
-                }
-                PhysicsSystem::CreateRigidBody(registry, entity);
-            }
+            bool needsRecreate = false;
 
             ImGui::Spacing();
 
-            // 🔥 ПАРАМЕТРЫ ЗАВИСЯТ ОТ ТИПА КОЛЛИЗИИ
-            switch (rb->shapeType)
+            // 🔥 1. ПЕРЕКЛЮЧАТЕЛЬ COMPOUND MODE
+            ImGui::Checkbox(" Compound Collision", &rb->isCompound);
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Enable to build collision from multiple primitive shapes");
+
+            if (rb->isCompound)
             {
-                // В EditorUI.cpp, внутри switch (rb->shapeType):
-            case RigidBodyComponent::Sphere:
-            {
-                auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+                // ═══════════════════════════════════════════════════════════════
+                // 🔥 РЕЖИМ СОСТАВНОЙ КОЛЛИЗИИ
+                // ═══════════════════════════════════════════════════════════════
+                ImGui::Separator();
+                ImGui::TextColored(COL_TEXT_DIM, " Compound Elements");
 
-                if (ImGui::Checkbox(" Manual Size##SphereManual", &rb->useManualSize))
+                // Кнопки управления списком
+                if (ImGui::Button("+ Add Element", ImVec2(-1, 0)))
                 {
-                    RefreshRigidBody(registry, entity, rb);
-                }
-                ImGui::SameLine();
-                ImGui::TextColored(COL_TEXT_DIM, "(ignore mesh bounds)");
-
-                if (rb->useManualSize)
-                {
-                    ImGui::Spacing();
-                    ImGui::TextColored(COL_TEXT_DIM, " Radius");
-                    ImGui::SetNextItemWidth(-1);
-
-                    float radius = rb->shapeRadius;
-                    if (ImGui::DragFloat("##Radius", &radius, 0.05f, 0.01f, 100.0f))
-                    {
-                        rb->shapeRadius = radius;
-                        RefreshRigidBody(registry, entity, rb);
-                    }
-                }
-                else
-                {
-                    // --- АВТО-ОПРЕДЕЛЕНИЕ РАДИУСА ПО МЕШУ ---
-                    if (meshRenderer && meshRenderer->model)
-                    {
-                        XMFLOAT3 center;
-                        float meshRadius;
-                        meshRenderer->model->GetBoundingSphere(&center, &meshRadius);
-                        rb->shapeRadius = meshRadius;
-                        ImGui::TextColored(COL_TEXT_DIM, " Auto radius from mesh: %.3f", meshRadius);
-                    }
-                    else
-                    {
-                        ImGui::TextColored(COL_TEXT_DIM, " No mesh - using shapeRadius: %.3f", rb->shapeRadius);
-                    }
-                }
-                break;
-            }
-            case RigidBodyComponent::Box:
-            {
-                auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
-
-                if (!rb->useManualSize && meshRenderer && meshRenderer->model)
-                {
-                    // --- АВТО-ОПРЕДЕЛЕНИЕ РАЗМЕРОВ ПО МЕШУ ---
-                    XMFLOAT3 min, max;
-                    meshRenderer->model->GetBoundingBox(&min, &max);
-                    rb->shapeSize = btVector3(
-                        (max.x - min.x) * 0.5f,
-                        (max.y - min.y) * 0.5f,
-                        (max.z - min.z) * 0.5f
-                    );
-                    ImGui::TextColored(COL_TEXT_DIM, " Auto box from mesh: (%.2f, %.2f, %.2f)",
-                        rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z());
-                }
-
-                ImGui::TextColored(COL_TEXT_DIM, " Half Extents (X, Y, Z)");
-                float size[3] = { rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z() };
-
-                if (ImGui::DragFloat3("##BoxSize", size, 0.05f, 0.01f, 100.0f))
-                {
-                    rb->shapeSize = btVector3(size[0], size[1], size[2]);
-                    rb->useManualSize = true; // если пользователь меняет вручную — включаем ручной режим
-                    RefreshRigidBody(registry, entity, rb);
-                }
-                break;
-            }
-
-            case RigidBodyComponent::Cylinder:
-            {}
-            case RigidBodyComponent::Capsule:
-            {
-                float radius = rb->shapeRadius;
-                float height = rb->shapeSize.y();
-                bool changed = false;
-
-                ImGui::TextColored(COL_TEXT_DIM, " Radius");
-                ImGui::SetNextItemWidth(-1);
-                if (ImGui::DragFloat("##CylRadius", &radius, 0.05f, 0.01f, 100.0f))
-                {
-                    rb->shapeRadius = radius;
-                    changed = true;
+                    RigidBodyComponent::CompoundElement newElem;
+                    newElem.type = RigidBodyComponent::CompoundElement::Box;
+                    newElem.localPosition = { 0, 0, 0 };
+                    newElem.localRotation = { 0, 0, 0, 1 }; // Euler углы
+                    newElem.size = 1.0f;
+                    newElem.radius = 0.5f;
+                    newElem.height = 1.0f;
+                    rb->compoundElements.push_back(newElem);
+                    needsRecreate = true;
                 }
 
                 ImGui::Spacing();
-                ImGui::TextColored(COL_TEXT_DIM, " Height");
-                ImGui::SetNextItemWidth(-1);
-                if (ImGui::DragFloat("##CylHeight", &height, 0.05f, 0.01f, 100.0f))
+
+                // Отрисовка списка элементов
+                // Стало (ПРАВИЛЬНО):
+                for (size_t i = 0; i < rb->compoundElements.size(); ++i)
                 {
-                    rb->shapeSize.setY(height);
-                    changed = true;
+                    auto& elem = rb->compoundElements[i]; // <-- Ссылка! Изменения применятся к оригиналу
+
+                    ImGui::PushID(i); // Важно для уникальности ID виджетов
+
+                    // Заголовок элемента
+                    char label[64];
+                    sprintf_s(label, "Element %zu", i);
+
+                    bool open = ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen);
+
+                    if (open)
+                    {
+                        ImGui::Indent();
+
+                        // Тип формы
+                        const char* types[] = { "Box", "Sphere", "Cylinder", "Capsule" };
+                        int typeIdx = (int)elem.type;
+                        if (ImGui::Combo("Type", &typeIdx, types, 4))
+                        {
+                            elem.type = (RigidBodyComponent::CompoundElement::ShapeType)typeIdx;
+                            needsRecreate = true;
+                        }
+
+                        // Позиция
+                        if (ImGui::DragFloat3("Position", &elem.localPosition.x, 0.1f))
+                        {
+                            needsRecreate = true; // Помечаем, что нужно пересоздать тело
+                        }
+
+                        // Вращение (если используете Euler)
+                        // Если храните кватернион, нужно конвертировать туда-сюда для DragFloat3
+                        XMFLOAT3 euler = QuaternionToEuler(XMFloat4ToBtQuaternion(elem.localRotation));
+                        if (ImGui::DragFloat3("Rotation", &euler.x, 0.05f))
+                        {
+                            XMFloat4ToBtQuaternion(elem.localRotation) = EulerToQuaternion(euler);
+                            needsRecreate = true;
+                        }
+
+                        // Размеры в зависимости от типа
+                        bool sizeChanged = false;
+                        if (elem.type == RigidBodyComponent::CompoundElement::Box)
+                        {
+                            if (ImGui::DragFloat("Size", &elem.size, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
+                        }
+                        else if (elem.type == RigidBodyComponent::CompoundElement::Sphere)
+                        {
+                            if (ImGui::DragFloat("Radius", &elem.radius, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
+                        }
+                        else // Cylinder, Capsule
+                        {
+                            if (ImGui::DragFloat("Radius", &elem.radius, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
+                            if (ImGui::DragFloat("Height", &elem.height, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
+                        }
+
+                        if (sizeChanged) needsRecreate = true;
+
+                        // Кнопка удаления
+                        ImGui::Spacing();
+                        if (ImGui::Button("Delete", ImVec2(-1, 0)))
+                        {
+                            rb->compoundElements.erase(rb->compoundElements.begin() + i);
+                            needsRecreate = true;
+                            ImGui::PopID();
+                            break; // Выход из цикла, так как индекс сместился
+                        }
+                        ImGui::Spacing();
+                        ImGui::Separator();
+                        ImGui::TextColored(COL_TEXT_DIM, " Advanced Size & Offsets");
+                        ImGui::Indent();
+
+                        bool shapeChanged = false;
+
+                        // В зависимости от типа фигуры показываем разные настройки
+                        if (elem.type == RigidBodyComponent::CompoundElement::Box)
+                        {
+                            // Для бокса: отдельные оффсеты для Min и Max (как у Compartment)
+                            // Это позволяет сдвигать грани независимо от центра
+                            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), " Half-Extents Adjustment");
+
+                            // Оффсет минимума (отрицательная сторона)
+                            if (ImGui::DragFloat3(" Min Offset (Neg)", &elem.boxOffsetMin.x, 0.05f, -100.0f, 100.0f))
+                            {
+                                shapeChanged = true;
+                            }
+                            ImGui::SameLine();
+                            HelpMarker("Сдвигает отрицательные грани внутрь/наружу");
+
+                            // Оффсет максимума (положительная сторона)
+                            if (ImGui::DragFloat3(" Max Offset (Pos)", &elem.boxOffsetMax.x, 0.05f, -100.0f, 100.0f))
+                            {
+                                shapeChanged = true;
+                            }
+                            ImGui::SameLine();
+                            HelpMarker("Сдвигает положительные грани внутрь/наружу");
+                        }
+                        else if (elem.type == RigidBodyComponent::CompoundElement::Cylinder ||
+                            elem.type == RigidBodyComponent::CompoundElement::Capsule)
+                        {
+                            // Для цилиндров и капсул: радиус и высота могут иметь свои смещения
+                            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), " Dimension Offsets");
+
+                            float radiusOffset = elem.radiusOffset;
+                            if (ImGui::DragFloat(" Radius Offset", &radiusOffset, 0.05f, -0.5f, 0.5f))
+                            {
+                                elem.radiusOffset = radiusOffset;
+                                shapeChanged = true;
+                            }
+
+                            float heightOffsetTop = elem.heightOffsetTop;
+                            if (ImGui::DragFloat(" Top Height Offset", &heightOffsetTop, 0.05f, -1.0f, 1.0f))
+                            {
+                                elem.heightOffsetTop = heightOffsetTop;
+                                shapeChanged = true;
+                            }
+
+                            float heightOffsetBottom = elem.heightOffsetBottom;
+                            if (ImGui::DragFloat(" Bottom Height Offset", &heightOffsetBottom, 0.05f, -1.0f, 1.0f))
+                            {
+                                elem.heightOffsetBottom = heightOffsetBottom;
+                                shapeChanged = true;
+                            }
+                        }
+
+                        ImGui::Unindent();
+
+                        // Если что-то изменилось в размерах/оффсетах — пересоздаем тело
+                        if (shapeChanged)
+                        {
+                            needsRecreate = true;
+                        }
+
+                        ImGui::Unindent();
+                    }
+
+                    ImGui::PopID();
+
                 }
 
-                if (changed)
-                    RefreshRigidBody(registry, entity, rb);  // 🔥 Пересоздаём
-
-                break;
-            }
-
-            case RigidBodyComponent::ConvexHull:
-            {
-                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
-                    " Auto-calculated from mesh geometry");
-
-                // 🔥 Здесь можно добавить проверку наличия меша для инфо-текста
-                auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
-                if (!meshRenderer || !meshRenderer->model)
+                if (needsRecreate && rb->body)
                 {
-                    ImGui::TextColored(COL_RED, "⚠️ No mesh assigned");
-                }
-                break; // ← Теперь break внутри скобок — ошибки не будет
-            }
-
-                break;
-
-            case RigidBodyComponent::TriangleMesh:
-                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
-                    " Exact mesh collision (static only)");
-                rb->mass = 0.0f;
-                break;
-
-            case RigidBodyComponent::Plane:
-                ImGui::TextColored(COL_TEXT_DIM, " Y");
-                ImGui::SetNextItemWidth(-1);
-                float y = rb->shapeSize.y();
-                bool changed = false;
-                if (ImGui::DragFloat("##Y", &y, 0.05f, 0.01f, 100.0f))
-                {
-                    rb->shapeSize.setY(y);
-                    changed = true;
-                }
-
-                if (changed)
                     RefreshRigidBody(registry, entity, rb);
+                }
 
-                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
-                    " Infinite plane at Y=0");
-                rb->mass = 0.0f;
-                break;
             }
+            else
+            {
+                // ═══════════════════════════════════════════════════════════════
+                // 🔥 РЕЖИМ ОДИНОЧНОЙ КОЛЛИЗИИ (Старый код)
+                // ═══════════════════════════════════════════════════════════════
+                ImGui::Separator();
+                ImGui::TextColored(COL_TEXT_DIM, " Mass");
+                ImGui::SetNextItemWidth(-1);
+                if (ImGui::DragFloat("##RBMass", &rb->mass, 0.1f, 0.0f, 10000.0f))
+                {
+                    if (rb->body) RefreshRigidBody(registry, entity, rb);
+                }
 
-            ImGui::Spacing();
-            ImGui::Checkbox("Enable CCD##RB", &rb->enableCCD);
+                ImGui::Spacing();
+                ImGui::TextColored(COL_TEXT_DIM, " Shape Type");
+                const char* shapeNames[] = {
+                    "Box", "Sphere", "Cylinder", "Capsule",
+                    "Plane", "ConvexHull", "TriangleMesh"
+                };
+                int shapeIdx = static_cast<int>(rb->shapeType);
+                if (ImGui::Combo("##RBShape", &shapeIdx, shapeNames, 7))
+                {
+                    rb->shapeType = static_cast<RigidBodyComponent::ShapeType>(shapeIdx);
+                    if (rb->body) RefreshRigidBody(registry, entity, rb);
+                }
+
+                ImGui::Spacing();
+
+                // ПАРАМЕТРЫ ЗАВИСЯТ ОТ ТИПА КОЛЛИЗИИ
+                switch (rb->shapeType)
+                {
+                case RigidBodyComponent::Sphere:
+                {
+                    auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+                    if (ImGui::Checkbox(" Manual Size##SphereManual", &rb->useManualSize))
+                    {
+                        if (rb->body) RefreshRigidBody(registry, entity, rb);
+                    }
+                    ImGui::SameLine();
+                    ImGui::TextColored(COL_TEXT_DIM, "(ignore mesh bounds)");
+
+                    if (rb->useManualSize)
+                    {
+                        ImGui::Spacing();
+                        ImGui::TextColored(COL_TEXT_DIM, " Radius");
+                        ImGui::SetNextItemWidth(-1);
+                        float radius = rb->shapeRadius;
+                        if (ImGui::DragFloat("##Radius", &radius, 0.05f, 0.01f, 100.0f))
+                        {
+                            rb->shapeRadius = radius;
+                            if (rb->body) RefreshRigidBody(registry, entity, rb);
+                        }
+                    }
+                    else
+                    {
+                        if (meshRenderer && meshRenderer->model)
+                        {
+                            XMFLOAT3 center;
+                            float meshRadius;
+                            meshRenderer->model->GetBoundingSphere(&center, &meshRadius);
+                            rb->shapeRadius = meshRadius;
+                            ImGui::TextColored(COL_TEXT_DIM, " Auto radius from mesh: %.3f", meshRadius);
+                        }
+                        else
+                        {
+                            ImGui::TextColored(COL_TEXT_DIM, " No mesh - using shapeRadius: %.3f", rb->shapeRadius);
+                        }
+                    }
+                    break;
+                }
+                case RigidBodyComponent::Box:
+                {
+                    auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+                    if (!rb->useManualSize && meshRenderer && meshRenderer->model)
+                    {
+                        XMFLOAT3 min, max;
+                        meshRenderer->model->GetBoundingBox(&min, &max);
+                        rb->shapeSize = btVector3(
+                            (max.x - min.x) * 0.5f,
+                            (max.y - min.y) * 0.5f,
+                            (max.z - min.z) * 0.5f
+                        );
+                        ImGui::TextColored(COL_TEXT_DIM, " Auto box from mesh: (%.2f, %.2f, %.2f)",
+                            rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z());
+                    }
+
+                    ImGui::TextColored(COL_TEXT_DIM, " Half Extents (X, Y, Z)");
+                    float size[3] = { rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z() };
+                    if (ImGui::DragFloat3("##BoxSize", size, 0.05f, 0.01f, 100.0f))
+                    {
+                        rb->shapeSize = btVector3(size[0], size[1], size[2]);
+                        rb->useManualSize = true;
+                        if (rb->body) RefreshRigidBody(registry, entity, rb);
+                    }
+                    break;
+                }
+                case RigidBodyComponent::Cylinder:
+                {
+                    float radius = rb->shapeRadius;
+                    float height = rb->shapeSize.y();
+                    bool changed = false;
+                    ImGui::TextColored(COL_TEXT_DIM, " Radius");
+                    ImGui::SetNextItemWidth(-1);
+                    if (ImGui::DragFloat("##CylRadius", &radius, 0.05f, 0.01f, 100.0f)) { rb->shapeRadius = radius; changed = true; }
+                    ImGui::Spacing();
+                    ImGui::TextColored(COL_TEXT_DIM, " Height");
+                    ImGui::SetNextItemWidth(-1);
+                    if (ImGui::DragFloat("##CylHeight", &height, 0.05f, 0.01f, 100.0f)) { rb->shapeSize.setY(height); changed = true; }
+                    if (changed && rb->body) RefreshRigidBody(registry, entity, rb);
+                    break;
+                }
+                case RigidBodyComponent::Capsule:
+                {
+                    float radius = rb->shapeRadius;
+                    float height = rb->shapeSize.y();
+                    bool changed = false;
+                    ImGui::TextColored(COL_TEXT_DIM, " Radius");
+                    ImGui::SetNextItemWidth(-1);
+                    if (ImGui::DragFloat("##CapsRadius", &radius, 0.05f, 0.01f, 100.0f)) { rb->shapeRadius = radius; changed = true; }
+                    ImGui::Spacing();
+                    ImGui::TextColored(COL_TEXT_DIM, " Height");
+                    ImGui::SetNextItemWidth(-1);
+                    if (ImGui::DragFloat("##CapsHeight", &height, 0.05f, 0.01f, 100.0f)) { rb->shapeSize.setY(height); changed = true; }
+                    if (changed && rb->body) RefreshRigidBody(registry, entity, rb);
+                    break;
+                }
+                case RigidBodyComponent::ConvexHull:
+                {
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), " Auto-calculated from mesh geometry");
+                    auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+                    if (!meshRenderer || !meshRenderer->model)
+                        ImGui::TextColored(COL_RED, "⚠️ No mesh assigned");
+                    break;
+                }
+                case RigidBodyComponent::TriangleMesh:
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), " Exact mesh collision (static only)");
+                    rb->mass = 0.0f;
+                    break;
+                case RigidBodyComponent::Plane:
+                    ImGui::TextColored(COL_TEXT_DIM, " Y");
+                    ImGui::SetNextItemWidth(-1);
+                    float y = rb->shapeSize.y();
+                    if (ImGui::DragFloat("##Y", &y, 0.05f, 0.01f, 100.0f))
+                    {
+                        rb->shapeSize.setY(y);
+                        if (rb->body) RefreshRigidBody(registry, entity, rb);
+                    }
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), " Infinite plane at Y=0");
+                    rb->mass = 0.0f;
+                    break;
+                }
+
+                ImGui::Spacing();
+                ImGui::Checkbox(" Enable CCD##RB", &rb->enableCCD);
+            }
         }
     }
 
