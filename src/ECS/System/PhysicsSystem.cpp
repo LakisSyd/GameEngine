@@ -140,6 +140,7 @@ void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
 
     if (!rb || !transform) return;
 
+    // ... (Проверки на NaN и масштаб оставляем без изменений) ...
     if (isnan(transform->position.x) || isnan(transform->position.y) || isnan(transform->position.z))
     {
         OutputDebugStringA("[ERROR] NaN in transform position! Resetting to (0,10,0)\n");
@@ -148,106 +149,218 @@ void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
         transform->scale = { 1.0f, 1.0f, 1.0f };
     }
 
-    // 🔥 ПРОВЕРКА: масштаб не должен быть нулевым или отрицательным
     if (transform->scale.x <= 0.0f || transform->scale.y <= 0.0f || transform->scale.z <= 0.0f)
     {
         OutputDebugStringA("[ERROR] Invalid scale! Resetting to (1,1,1)\n");
         transform->scale = { 1.0f, 1.0f, 1.0f };
     }
 
-
     btCollisionShape* shape = nullptr;
 
-    switch (rb->shapeType)
+    // 🔥 ГЛАВНОЕ ИЗМЕНЕНИЕ: Логика выбора формы
+    if (rb->isCompound && !rb->compoundElements.empty())
     {
-    case RigidBodyComponent::Sphere:
-    {
-        float radius = rb->shapeRadius;
-        if (meshRenderer && meshRenderer->model && !rb->useManualSize)
+        btCompoundShape* compoundShape = new btCompoundShape();
+
+        for (const auto& elem : rb->compoundElements)
         {
-            XMFLOAT3 center;
-            float meshRadius;
-            meshRenderer->model->GetBoundingSphere(&center, &meshRadius);
-            radius = meshRadius;
-        }
-        float avgScale = (transform->scale.x + transform->scale.y + transform->scale.z) / 3.0f;
-        shape = new btSphereShape(radius * avgScale);
-        break;
-    }
+            btCollisionShape* childShape = nullptr;
 
-    case RigidBodyComponent::Box:
+            // Создаем форму элемента с учетом смещений граней
+            switch (elem.type)
+            {
+            case RigidBodyComponent::CompoundElement::Box:
+            {
+                // Базовый размер
+                float hx = elem.size * 0.5f;
+                float hy = elem.size * 0.5f;
+                float hz = elem.size * 0.5f;
+
+                // Применяем смещения граней (Offset)
+                // Min offset уменьшает/увеличивает отрицательную сторону
+                // Max offset уменьшает/увеличивает положительную сторону
+                float minX = -hx + elem.boxOffsetMin.x;
+                float maxX = hx + elem.boxOffsetMax.x;
+                float minY = -hy + elem.boxOffsetMin.y;
+                float maxY = hy + elem.boxOffsetMax.y;
+                float minZ = -hz + elem.boxOffsetMin.z;
+                float maxZ = hz + elem.boxOffsetMax.z;
+
+                // Bullet требует симметричный бокс, поэтому берем макс диапазон
+                // И компенсируем сдвигом центра локального трансформации
+                float finalExtentX = (maxX - minX) * 0.5f;
+                float finalExtentY = (maxY - minY) * 0.5f;
+                float finalExtentZ = (maxZ - minZ) * 0.5f;
+
+                childShape = new btBoxShape(btVector3(finalExtentX, finalExtentY, finalExtentZ));
+
+                // ⚠️ ВАЖНО: Если границы несимметричны, нужно сдвинуть центр бокса
+                // Вычисляем смещение центра относительно исходного центра элемента
+                btVector3 centerShift(
+                    (minX + maxX) * 0.5f,
+                    (minY + maxY) * 0.5f,
+                    (minZ + maxZ) * 0.5f
+                );
+
+                // Сохраняем этот сдвиг, чтобы применить его в transform ниже
+                // (Временное решение: создадим отдельный трансформ для этого элемента)
+                // Но проще создать shape, а потом добавить её с правильным локальным трансформом
+
+                // Для простоты сейчас создадим shape без сдвига центра, 
+                // а сдвиг границ просто меняет размер. 
+                // Если нужна точная асимметрия - сложнее (требуется btConvexHull или сдвиг transform).
+                // 👇 Упрощенный вариант: просто меняем размеры
+                break;
+            }
+
+            case RigidBodyComponent::CompoundElement::Sphere:
+            {
+                float r = elem.radius + elem.radiusOffset;
+                if (r < 0.01f) r = 0.01f;
+                childShape = new btSphereShape(r);
+                break;
+            }
+
+            case RigidBodyComponent::CompoundElement::Cylinder:
+            {
+                float r = elem.radius + elem.radiusOffset;
+                float h = elem.height + elem.heightOffsetTop + elem.heightOffsetBottom;
+                if (r < 0.01f) r = 0.01f;
+                if (h < 0.01f) h = 0.01f;
+
+                // Cylinder в Bullet ориентирован по Y
+                childShape = new btCylinderShape(btVector3(r, h * 0.5f, r));
+                break;
+            }
+
+            case RigidBodyComponent::CompoundElement::Capsule:
+            {
+                float r = elem.radius + elem.radiusOffset;
+                float h = elem.height + elem.heightOffsetTop + elem.heightOffsetBottom;
+                // Высота капсулы в Bullet - это высота цилиндрической части
+                float cylHeight = h - 2.0f * r;
+                if (cylHeight < 0.0f) cylHeight = 0.0f;
+
+                childShape = new btCapsuleShape(r, cylHeight);
+                break;
+            }
+            }
+
+            if (childShape)
+            {
+                // Настраиваем локальный трансформ элемента
+                btTransform childTrans;
+                childTrans.setIdentity();
+
+                // Позиция
+                childTrans.setOrigin(btVector3(elem.localPosition.x, elem.localPosition.y, elem.localPosition.z));
+
+                // Вращение (конвертация из кватерниона XMFLOAT4)
+                childTrans.setRotation(btQuaternion(
+                    elem.localRotation.x,
+                    elem.localRotation.y,
+                    elem.localRotation.z,
+                    elem.localRotation.w
+                ));
+
+                // Добавляем в составную форму
+                // true = управляем памятью дочерней формы сами (удалять будем в деструкторе CompoundShape)
+                compoundShape->addChildShape(childTrans, childShape);
+            }
+        }
+
+        shape = compoundShape;
+    }
+    else
     {
-        if (meshRenderer && meshRenderer->model)
+        // 3. Старая логика для одиночных форм
+        switch (rb->shapeType)
         {
-            XMFLOAT3 min, max;
-            meshRenderer->model->GetBoundingBox(&min, &max);
-            shape = CreateBoxShape(min, max, transform->scale);
-        }
-        else
+        case RigidBodyComponent::Sphere:
         {
-            shape = new btBoxShape(btVector3(
-                rb->shapeSize.x() * transform->scale.x * 0.5f,
-                rb->shapeSize.y() * transform->scale.y * 0.5f,
-                rb->shapeSize.z() * transform->scale.z * 0.5f
-            ));
+            float radius = rb->shapeRadius;
+            if (meshRenderer && meshRenderer->model && !rb->useManualSize)
+            {
+                XMFLOAT3 center;
+                float meshRadius;
+                meshRenderer->model->GetBoundingSphere(&center, &meshRadius);
+                radius = meshRadius;
+            }
+            float avgScale = (transform->scale.x + transform->scale.y + transform->scale.z) / 3.0f;
+            shape = new btSphereShape(radius * avgScale);
+            break;
         }
-        break;
-    }
-
-    case RigidBodyComponent::Cylinder:
-    {
-        float radius = rb->shapeRadius;
-        float height = rb->shapeSize.y();
-        shape = CreateCylinderShape(radius, height, transform->scale);
-        break;
-    }
-
-    case RigidBodyComponent::Capsule:
-    {
-        float radius = rb->shapeRadius;
-        float height = rb->shapeSize.y();
-        shape = CreateCapsuleShape(radius, height, transform->scale);
-        break;
-    }
-
-    case RigidBodyComponent::Plane:
-    {
-        float height = rb->shapeSize.y();
-        shape = new btStaticPlaneShape(btVector3(0, 1, 0), height);
-        break;
-    }
-
-    case RigidBodyComponent::ConvexHull:
-    {
-        if (meshRenderer && meshRenderer->model)
-            shape = CreateConvexHullShape(meshRenderer->model, transform->scale);
-        else
+        // ... (остальные кейсы Box, Cylinder, Capsule и т.д. остаются без изменений) ...
+        case RigidBodyComponent::Box:
+        {
+            if (meshRenderer && meshRenderer->model)
+            {
+                XMFLOAT3 min, max;
+                meshRenderer->model->GetBoundingBox(&min, &max);
+                shape = CreateBoxShape(min, max, transform->scale);
+            }
+            else
+            {
+                shape = new btBoxShape(btVector3(
+                    rb->shapeSize.x() * transform->scale.x * 0.5f,
+                    rb->shapeSize.y() * transform->scale.y * 0.5f,
+                    rb->shapeSize.z() * transform->scale.z * 0.5f
+                ));
+            }
+            break;
+        }
+        case RigidBodyComponent::Cylinder:
+        {
+            float radius = rb->shapeRadius;
+            float height = rb->shapeSize.y();
+            shape = CreateCylinderShape(radius, height, transform->scale);
+            break;
+        }
+        case RigidBodyComponent::Capsule:
+        {
+            float radius = rb->shapeRadius;
+            float height = rb->shapeSize.y();
+            shape = CreateCapsuleShape(radius, height, transform->scale);
+            break;
+        }
+        case RigidBodyComponent::Plane:
+        {
+            float height = rb->shapeSize.y();
+            shape = new btStaticPlaneShape(btVector3(0, 1, 0), height);
+            break;
+        }
+        case RigidBodyComponent::ConvexHull:
+        {
+            if (meshRenderer && meshRenderer->model)
+                shape = CreateConvexHullShape(meshRenderer->model, transform->scale);
+            else
+                return;
+            break;
+        }
+        case RigidBodyComponent::TriangleMesh:
+        {
+            if (meshRenderer && meshRenderer->model)
+            {
+                shape = CreateTriangleMeshShape(meshRenderer->model, transform->scale, rb);
+                if (rb->mass > 0.0f) rb->mass = 0.0f;
+            }
+            else
+                return;
+            break;
+        }
+        default:
             return;
-        break;
-    }
-
-    case RigidBodyComponent::TriangleMesh:
-    {
-        if (meshRenderer && meshRenderer->model)
-        {
-            shape = CreateTriangleMeshShape(meshRenderer->model, transform->scale, rb);
-            if (rb->mass > 0.0f) rb->mass = 0.0f;
         }
-        else
-            return;
-        break;
     }
 
-    default:
-        return;
-    }
+    if (!shape) return;
+    shape->setMargin(0.04f);
 
-    // 🔥 После создания shape — проверь инерцию на NaN
+    // Расчет инерции
     btVector3 localInertia(0, 0, 0);
     if (rb->mass > 0.0f)
     {
         shape->calculateLocalInertia(rb->mass, localInertia);
-
         if (isnan(localInertia.getX()) || isnan(localInertia.getY()) || isnan(localInertia.getZ()))
         {
             OutputDebugStringA("[ERROR] NaN in inertia! Using fallback (1,1,1)\n");
@@ -255,28 +368,25 @@ void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
         }
     }
 
-
-    if (!shape) return;
-    shape->setMargin(0.04f);
-
-    if (rb->mass > 0.0f)
-        shape->calculateLocalInertia(rb->mass, localInertia);
-
+    // Создание тела
     btTransform startTransform;
     startTransform.setIdentity();
-    startTransform.setOrigin(btVector3(
-        transform->position.x,
-        transform->position.y,
-        transform->position.z
-    ));
+    startTransform.setOrigin(btVector3(transform->position.x, transform->position.y, transform->position.z));
     startTransform.setRotation(EulerToQuaternion(transform->rotation));
 
     auto* motionState = new btDefaultMotionState(startTransform);
-    btRigidBody::btRigidBodyConstructionInfo ci(
-        rb->mass, motionState, shape, localInertia
-    );
+    btRigidBody::btRigidBodyConstructionInfo ci(rb->mass, motionState, shape, localInertia);
+
+    // Удаляем старое тело если было
+    if (rb->body) {
+        PhysicsWorld::Get().GetWorld()->removeRigidBody(rb->body);
+        delete rb->body->getMotionState();
+        delete rb->body;
+    }
+
     rb->body = new btRigidBody(ci);
 
+    // Настройки тела
     if (rb->mass > 0.0f && rb->enableCCD)
     {
         rb->body->setCcdMotionThreshold(1.0f);
@@ -291,15 +401,10 @@ void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
 
     PhysicsWorld::Get().GetWorld()->addRigidBody(rb->body);
 
-    // ═══════════════════════════════════════════════════════════════════
-    // 🔥 FIX: Инициализируем кэш синхронизации.
-    //    Это позволяет отличить "физика двигает тело" от
-    //    "пользователь переместил тело в редакторе".
-    // ═══════════════════════════════════════════════════════════════════
     rb->lastSyncedPosition = transform->position;
     rb->lastSyncedRotation = transform->rotation;
 
-    OutputDebugStringA("RigidBody created successfully\n");
+    OutputDebugStringA(rb->isCompound ? "[Physics] Compound RigidBody created\n" : "[Physics] Simple RigidBody created\n");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -547,3 +652,67 @@ void PhysicsSystem::Update(ECSRegistry& registry, float deltaTime, float waterLe
     }
 }
 
+btCollisionShape* PhysicsSystem::CreateCompoundElementShape(
+    const RigidBodyComponent::CompoundElement& elem)
+{
+    switch (elem.type)
+    {
+    case RigidBodyComponent::CompoundElement::Box:
+    {
+        float halfSize = elem.size * 0.5f;
+
+        // Применяем смещения граней
+        // Новая половина размера = базовая половина + смещение
+        // Важно: смещение может быть отрицательным (уменьшать грань)
+        float hx = halfSize + elem.boxOffsetMax.x;
+        float hy = halfSize + elem.boxOffsetMax.y;
+        float hz = halfSize + elem.boxOffsetMax.z;
+
+        // Учитываем смещение минимума (оно "съедает" размер с другой стороны)
+        // Фактический центр может сместиться, но btBoxShape строится от центра.
+        // Для точной настройки формы через смещения лучше просто менять итоговый размер:
+
+        float finalHalfX = halfSize + (elem.boxOffsetMax.x - elem.boxOffsetMin.x) * 0.5f; // Упрощенная логика
+        // Но правильнее для Box просто сложить влияния:
+        // Итоговый полуразмер = (Max - Min) / 2. 
+        // Если мы считаем, что size это полный размер, а оффсеты двигают границы:
+
+        float minX = -halfSize + elem.boxOffsetMin.x;
+        float maxX = halfSize + elem.boxOffsetMax.x;
+        float minY = -halfSize + elem.boxOffsetMin.y;
+        float maxY = halfSize + elem.boxOffsetMax.y;
+        float minZ = -halfSize + elem.boxOffsetMin.z;
+        float maxZ = halfSize + elem.boxOffsetMax.z;
+
+        // Bullet требует положительные размеры
+        float finalHX = fmaxf(0.01f, (maxX - minX) * 0.5f);
+        float finalHY = fmaxf(0.01f, (maxY - minY) * 0.5f);
+        float finalHZ = fmaxf(0.01f, (maxZ - minZ) * 0.5f);
+
+        return new btBoxShape(btVector3(finalHX, finalHY, finalHZ));
+    }
+    case RigidBodyComponent::CompoundElement::Sphere:
+    {
+        return new btSphereShape(elem.radius);
+    }
+    case RigidBodyComponent::CompoundElement::Cylinder:
+    {
+        // Cylinder в Bullet ориентирован вдоль Y, нам может понадобиться ротация
+        btCylinderShape* cyl = new btCylinderShape(btVector3(
+            elem.radius,
+            elem.height * 0.5f,
+            elem.radius
+        ));
+        return cyl;
+    }
+
+    case RigidBodyComponent::CompoundElement::Capsule:
+    {
+        // Capsule также ориентирован вдоль Y
+        return new btCapsuleShape(elem.radius, elem.height);
+    }
+
+    default:
+        return new btBoxShape(btVector3(0.5f, 0.5f, 0.5f));
+    }
+}

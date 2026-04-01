@@ -137,10 +137,13 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     float  metalness = metalnessMap.Sample(SampleType, input.tex).r;
     float  roughness = max(roughnessMap.Sample(SampleType, input.tex).r, 0.04f);
 
+    // 1. Получаем базовую нормаль
     float3 N = normalize(input.normal);
 
-    // Normal map
+    // Normal map logic
     float3 ns = normalMap.Sample(SampleType, input.tex).xyz;
+    
+    // Применяем карту нормалей только если она есть
     if (length(ns - float3(0.5f, 0.5f, 1.0f)) > 0.05f)
     {
         ns = ns * 2.0f - 1.0f;
@@ -150,21 +153,36 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
         N = normalize(mul(ns, TBN));
     }
 
-
-  float shadowFactor = CalculateShadow(input.worldPos);
+    // ════════════════════════════════════════════════════════════
+    // 🔥 FIX: ДВУСТОРОННИЙ РЕНДЕРИНГ (Double Sided)
+    // ════════════════════════════════════════════════════════════
+    // Вычисляем вектор от позиции пикселя к камере
+    float3 viewDir = normalize(cameraPos - input.worldPos);
     
-    // 🔥 FIX: Если нормаль смотрит в сторону от света — полная тень
+    // Если скалярное произведение нормали и взгляда отрицательное,
+    // значит мы смотрим на заднюю грань (нормаль смотрит от нас).
+    // Инвертируем нормаль для корректного расчета освещения.
+    if (dot(N, viewDir) < 0.0f)
+    {
+        N = -N;
+        
+        // Опционально: если у вас есть карта нормалей с деталями, 
+        // для идеальной точности можно инвертировать и компонент Z карты нормалей,
+        // но инверсии итоговой нормали N обычно достаточно для освещения.
+    }
+    // ════════════════════════════════════════════════════════════
+
+    // Далее расчет теней и освещения идет как обычно, но уже с правильной нормалью
+    float shadowFactor = CalculateShadow(input.worldPos);
+    
     float3 dirLightDir = normalize(-dirLightDirection.xyz);
     float NdotL = saturate(dot(N, dirLightDir));
     
-    // Если поверхность смотрит в сторону от света, уменьшаем её влияние
     shadowFactor *= step(0.0f, NdotL);
     
-    // Применяем shadowFactor только к направленному свету, не к амбиенту
     float dirIntensity = NdotL * dirLightDirection.w;
     float3 dirDiffuse = dirIntensity * dirLightColor.rgb * shadowFactor;
     
-    // Амбиент НЕ затеняется
     float3 ambientLight = dirLightAmbient.rgb * dirLightAmbient.w;
 
     float3 Lo = ambientLight + dirDiffuse;
@@ -183,7 +201,6 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
 
     float4 finalColor = float4(color, 1.0f);
 
-    // 🔥 FIX: b3 теперь правильно читается как SelectedBuffer
     if (selectedFactor > 1.5f)
     {
         float edge = 0.5f - saturate(dot(N, float3(0, 0, 1)));

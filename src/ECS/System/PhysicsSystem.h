@@ -55,6 +55,7 @@ class PhysicsSystem
 public:
     static bool InitializeWorld();
     static void Update(ECSRegistry& registry, float deltaTime, float waterLevel);
+    static btCollisionShape* CreateCompoundElementShape(const RigidBodyComponent::CompoundElement& elem);
     static void CreateRigidBody(ECSRegistry& registry, Entity entity);
 
     // 🔥 ДОБАВЬТЕ ЭТИ МЕТОДЫ:

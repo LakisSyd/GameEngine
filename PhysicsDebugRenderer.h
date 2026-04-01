@@ -150,4 +150,5 @@ private:
 
     // Хелпер для выбора цвета
     XMFLOAT4 GetColorForRigidBody(const btRigidBody* body);
+    void RenderCompoundShape(ID3D11DeviceContext* context, btCompoundShape* compound, const btTransform& parentTransform, const XMMATRIX& view, const XMMATRIX& projection, ColorShaderClass* shader, const XMFLOAT4& color, const PhysicsDebugSettings& settings);
 };
