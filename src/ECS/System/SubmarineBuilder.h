@@ -44,6 +44,8 @@ public:
         const XMFLOAT3& localSize,
         float mass = 100.0f);
 
+    static void FinalizeSubmarinePhysics(ECSRegistry& registry, Entity submarine);
+
     // Получить геометрию модели
     static CompartmentGeometry CalculateGeometryFromModel(AssimpModelClass* model);
 
@@ -87,5 +89,5 @@ public:
     static std::vector<Entity> GetAllCompartments(ECSRegistry& registry, Entity submarine);
 
     // Проверить целостность подлодки (все ли отсеки соединены)
-    static bool CheckIntegrity(ECSRegistry& registry, Entity submarine);
+  
 };

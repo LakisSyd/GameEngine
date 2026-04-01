@@ -336,7 +336,22 @@ void PhysicsDebugRenderer::Render(
             if (!shape) continue;
 
             btTransform transform = rb.body->getWorldTransform();
-            XMFLOAT4 color = GetColorForRigidBody(rb.body);
+             XMFLOAT4 color = GetColorForRigidBody(rb.body);
+           
+            if (!shape) continue;
+
+          
+
+            // 🔥 НОВОЕ: Обработка составных форм (Compound Shape)
+            if (shape->getShapeType() == COMPOUND_SHAPE_PROXYTYPE)
+            {
+                if (!settings.showBoxes && !settings.showSpheres && !settings.showCapsules && !settings.showCylinders)
+                    continue; // Если все фильтры выключены, не рисуем
+
+                btCompoundShape* compound = static_cast<btCompoundShape*>(shape);
+                RenderCompoundShape(context, compound, transform, view, projection, shader, color, settings);
+                continue; // Переходим к следующему объекту
+            }
 
             // Проверяем фильтры
             switch (shape->getShapeType())
@@ -614,4 +629,73 @@ XMFLOAT4 PhysicsDebugRenderer::GetColorForRigidBody(const btRigidBody* body)
 
     // Динамические объекты
     return m_settings.colorDynamic;
+}
+
+
+void PhysicsDebugRenderer::RenderCompoundShape(
+    ID3D11DeviceContext* context,
+    btCompoundShape* compound,
+    const btTransform& parentTransform,
+    const XMMATRIX& view,
+    const XMMATRIX& projection,
+    ColorShaderClass* shader,
+    const XMFLOAT4& color,
+    const PhysicsDebugSettings& settings)
+{
+    int numChildren = compound->getNumChildShapes();
+
+    for (int i = 0; i < numChildren; ++i)
+    {
+        btCollisionShape* childShape = compound->getChildShape(i);
+        btTransform childLocalTransform = compound->getChildTransform(i);
+
+        // Вычисляем глобальную трансформацию дочернего элемента: Parent * LocalChild
+        btTransform childWorldTransform = parentTransform * childLocalTransform;
+
+        // Рекурсивно обрабатываем типы (вдруг внутри compound есть другой compound)
+        if (childShape->getShapeType() == COMPOUND_SHAPE_PROXYTYPE)
+        {
+            RenderCompoundShape(context, static_cast<btCompoundShape*>(childShape), childWorldTransform, view, projection, shader, color, settings);
+            continue;
+        }
+
+        // Отрисовка конкретного примитива
+        switch (childShape->getShapeType())
+        {
+        case BOX_SHAPE_PROXYTYPE:
+            if (!settings.showBoxes) break;
+            {
+                btBoxShape* box = static_cast<btBoxShape*>(childShape);
+                RenderBox(context, box->getHalfExtentsWithMargin(), childWorldTransform, view, projection, shader, color);
+            }
+            break;
+
+        case SPHERE_SHAPE_PROXYTYPE:
+            if (!settings.showSpheres) break;
+            {
+                btSphereShape* sphere = static_cast<btSphereShape*>(childShape);
+                RenderSphere(context, sphere->getRadius(), childWorldTransform.getOrigin(), view, projection, shader, color);
+            }
+            break;
+
+        case CAPSULE_SHAPE_PROXYTYPE:
+            if (!settings.showCapsules) break;
+            {
+                btCapsuleShape* capsule = static_cast<btCapsuleShape*>(childShape);
+                RenderCapsule(context, capsule->getRadius(), capsule->getHalfHeight() * 2.0f, childWorldTransform, view, projection, shader, color);
+            }
+            break;
+
+        case CYLINDER_SHAPE_PROXYTYPE:
+            if (!settings.showCylinders) break;
+            {
+                btCylinderShape* cyl = static_cast<btCylinderShape*>(childShape);
+                // Для цилиндров используем рендер бокса как упрощение или можно сделать отдельный RenderCylinder
+                RenderBox(context, cyl->getHalfExtentsWithMargin(), childWorldTransform, view, projection, shader, color);
+            }
+            break;
+
+            // Добавь другие типы по необходимости
+        }
+    }
 }

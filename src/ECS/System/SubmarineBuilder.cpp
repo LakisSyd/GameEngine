@@ -50,14 +50,12 @@ Entity SubmarineBuilder::AddCompartment(ECSRegistry& registry,
         return INVALID_ENTITY;
     }
 
-    // Вычисляем мировую позицию отсека
     XMFLOAT3 worldPos = {
         subTransform->position.x + localPosition.x,
         subTransform->position.y + localPosition.y,
         subTransform->position.z + localPosition.z
     };
 
-    // ── 1. Создаём сущность отсека ────────────────────────────────────────────
     Entity compartment = registry.CreateEntity();
 
     TransformComponent transform{};
@@ -65,60 +63,50 @@ Entity SubmarineBuilder::AddCompartment(ECSRegistry& registry,
     transform.scale = { 1, 1, 1 };
     registry.AddComponent<TransformComponent>(compartment, transform);
 
-    // ── 2. Mesh Renderer ───────────────────────────────────────────────────────
+    // ── Mesh Renderer ──────────────────────────────────────────────────────────
     MeshRendererComponent meshRenderer{};
     meshRenderer.model = model;
-    meshRenderer.material = nullptr; // Будет назначен позже
+    meshRenderer.material = nullptr;
     registry.AddComponent<MeshRendererComponent>(compartment, meshRenderer);
 
-    // ── 3. RigidBody (физика) ──────────────────────────────────────────────────
-    RigidBodyComponent rb{};
-    rb.mass = mass;
-    rb.shapeType = RigidBodyComponent::Box;
-    rb.shapeSize = btVector3(localSize.x * 0.5f, localSize.y * 0.5f, localSize.z * 0.5f);
-    rb.friction = 0.5f;
-    rb.linearDamping = 0.3f;
-    rb.angularDamping = 0.5f;
-    registry.AddComponent<RigidBodyComponent>(compartment, rb);
-    PhysicsSystem::CreateRigidBody(registry, compartment);
-
-    // ── 4. Compartment (отсек) ─────────────────────────────────────────────────
+    // ── CompartmentComponent ───────────────────────────────────────────────────
     CompartmentComponent comp{};
     comp.localMin = { -localSize.x * 0.5f, -localSize.y * 0.5f, -localSize.z * 0.5f };
     comp.localMax = { localSize.x * 0.5f,  localSize.y * 0.5f,  localSize.z * 0.5f };
+    comp.localCenter = localPosition;  // ✅ сохраняем локальный offset
     comp.RecalculateVolume();
     comp.hasPower = true;
     comp.isSealed = true;
-    comp.pumpRate = 0.2f; // 200 л/с
+    comp.pumpRate = 0.2f;
     registry.AddComponent<CompartmentComponent>(compartment, comp);
 
-    // ── 5. Buoyancy (плавучесть) ───────────────────────────────────────────────
-    BuoyancyComponent buoy{};
-    buoy.volume = comp.volume;
-    buoy.height = localSize.y;
-    buoy.fluidDensity = 1025.0f; // Морская вода
-    buoy.buoyancyMultiplier = 1.0f;
-    registry.AddComponent<BuoyancyComponent>(compartment, buoy);
-
-    // ── 6. Pressure Hull (корпус под давлением) ────────────────────────────────
-    PressureHullComponent hull{};
-    hull.maxPressure = 300000.0f; // 3 атм (~20м)
-    hull.currentHealth = 100.0f;
-    hull.repairRate = 2.0f;
-    registry.AddComponent<PressureHullComponent>(compartment, hull);
-
-    // ── 7. Submarine Component (привязка к подлодке) ───────────────────────────
+    // ── SubmarineComponent (привязка к корню) ──────────────────────────────────
     SubmarineComponent compartmentSubComp{};
     compartmentSubComp.submarineRoot = submarine;
     compartmentSubComp.compartmentIndex = (int)subComp->allCompartments.size();
     compartmentSubComp.isDetached = false;
     registry.AddComponent<SubmarineComponent>(compartment, compartmentSubComp);
 
-    // ── 8. Активный тег ────────────────────────────────────────────────────────
+    // ── PressureHull ───────────────────────────────────────────────────────────
+    PressureHullComponent hull{};
+    hull.maxPressure = 300000.0f;
+    hull.currentHealth = 100.0f;
+    hull.repairRate = 2.0f;
+    registry.AddComponent<PressureHullComponent>(compartment, hull);
+
+    // ── Активный тег ──────────────────────────────────────────────────────────
     registry.AddComponent<ActiveComponent>(compartment, {});
 
-    // ── 9. Добавляем в список отсеков подлодки ────────────────────────────────
+    // ── Добавляем в список подлодки ────────────────────────────────────────────
     subComp->allCompartments.push_back(compartment);
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // ✅ ИСПРАВЛЕНИЕ: отсек НЕ получает свой RigidBody и BuoyancyComponent!
+    //    Физика и плавучесть — только у корневой Entity подлодки.
+    //    Отсек — это логическая единица (вода, давление, герметичность),
+    //    а не отдельное физическое тело.
+    //    Корень берёт суммарный объём всех отсеков в RecalculateSubmarineMass().
+    // ══════════════════════════════════════════════════════════════════════════
 
     char buf[256];
     sprintf_s(buf, "[SubmarineBuilder] Added compartment (Entity %u) at (%.1f, %.1f, %.1f)\n",
@@ -193,40 +181,31 @@ Entity SubmarineBuilder::CreateBasicSubmarine(ECSRegistry& registry,
     OutputDebugStringA("     🚢 CREATING BASIC SUBMARINE (3 compartments)\n");
     OutputDebugStringA("════════════════════════════════════════════════════════\n\n");
 
-    // Создаём контейнер подлодки
     Entity submarine = CreateSubmarine(registry, "Basic Submarine", spawnPos);
 
-    // Размеры отсека
-    XMFLOAT3 compSize = { 2.0f, 2.0f, 3.0f }; // Ширина x Высота x Длина
-    float spacing = 3.0f; // Расстояние между центрами отсеков
+    XMFLOAT3 compSize = { 2.0f, 2.0f, 3.0f };
+    float spacing = 3.0f;
 
-    // ── НОСОВОЙ ОТСЕК (Bow) ───────────────────────────────────────────────────
-    Entity bow = AddCompartment(registry, submarine, compartmentModel,
+    Entity bow  = AddCompartment(registry, submarine, compartmentModel,
         XMFLOAT3(-spacing, 0, 0), compSize, 80.0f);
-
-    // ── ЦЕНТРАЛЬНЫЙ ОТСЕК (Main) ───────────────────────────────────────────────
     Entity main = AddCompartment(registry, submarine, compartmentModel,
         XMFLOAT3(0, 0, 0), compSize, 120.0f);
-
-    // ── КОРМОВОЙ ОТСЕК (Stern) ─────────────────────────────────────────────────
     Entity stern = AddCompartment(registry, submarine, compartmentModel,
         XMFLOAT3(spacing, 0, 0), compSize, 100.0f);
 
-    // ── СОЕДИНЕНИЯ ─────────────────────────────────────────────────────────────
-    // Носовой ↔ Центральный
     ConnectCompartments(registry, bow, main,
-        btVector3(compSize.z * 0.5f, 0, 0),   // Правая сторона bow
-        btVector3(-compSize.z * 0.5f, 0, 0),  // Левая сторона main
-        150000.0f);
-
-    // Центральный ↔ Кормовой
+        btVector3(compSize.z * 0.5f, 0, 0),
+        btVector3(-compSize.z * 0.5f, 0, 0), 150000.0f);
     ConnectCompartments(registry, main, stern,
         btVector3(compSize.z * 0.5f, 0, 0),
-        btVector3(-compSize.z * 0.5f, 0, 0),
-        150000.0f);
+        btVector3(-compSize.z * 0.5f, 0, 0), 150000.0f);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ✅ КРИТИЧНО: Добавляем физику ПОСЛЕ всех отсеков — volume уже известен!
+    // ══════════════════════════════════════════════════════════════════════
+    FinalizeSubmarinePhysics(registry, submarine);
 
     OutputDebugStringA("\n✅ Basic submarine created successfully!\n\n");
-
     return submarine;
 }
 
@@ -246,177 +225,119 @@ Entity SubmarineBuilder::CreateLargeSubmarine(ECSRegistry& registry,
     XMFLOAT3 compSize = { 2.5f, 2.5f, 3.5f };
     float spacing = 3.5f;
 
-    // ── 5 ОТСЕКОВ В РЯД ────────────────────────────────────────────────────────
     Entity comp1 = AddCompartment(registry, submarine, compartmentModel,
         XMFLOAT3(-spacing * 2, 0, 0), compSize, 100.0f);
-
     Entity comp2 = AddCompartment(registry, submarine, compartmentModel,
         XMFLOAT3(-spacing, 0, 0), compSize, 120.0f);
-
     Entity comp3 = AddCompartment(registry, submarine, compartmentModel,
         XMFLOAT3(0, 0, 0), compSize, 150.0f);
-
     Entity comp4 = AddCompartment(registry, submarine, compartmentModel,
         XMFLOAT3(spacing, 0, 0), compSize, 120.0f);
-
     Entity comp5 = AddCompartment(registry, submarine, compartmentModel,
         XMFLOAT3(spacing * 2, 0, 0), compSize, 100.0f);
 
-    // ── СОЕДИНЕНИЯ ─────────────────────────────────────────────────────────────
     ConnectCompartments(registry, comp1, comp2,
         btVector3(compSize.z * 0.5f, 0, 0),
         btVector3(-compSize.z * 0.5f, 0, 0), 200000.0f);
-
     ConnectCompartments(registry, comp2, comp3,
         btVector3(compSize.z * 0.5f, 0, 0),
-        btVector3(-compSize.z * 0.5f, 0, 0), 250000.0f); // Центр прочнее
-
+        btVector3(-compSize.z * 0.5f, 0, 0), 250000.0f);
     ConnectCompartments(registry, comp3, comp4,
         btVector3(compSize.z * 0.5f, 0, 0),
         btVector3(-compSize.z * 0.5f, 0, 0), 250000.0f);
-
     ConnectCompartments(registry, comp4, comp5,
         btVector3(compSize.z * 0.5f, 0, 0),
         btVector3(-compSize.z * 0.5f, 0, 0), 200000.0f);
 
-    OutputDebugStringA("\n✅ Large submarine created successfully!\n\n");
+    // ══════════════════════════════════════════════════════════════════════
+    // ✅ КРИТИЧНО: Добавляем физику ПОСЛЕ всех отсеков!
+    // ══════════════════════════════════════════════════════════════════════
+    FinalizeSubmarinePhysics(registry, submarine);
 
+    OutputDebugStringA("\n✅ Large submarine created successfully!\n\n");
     return submarine;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// Отделить отсек (когда джойнт сломался)
+// Финализация физики подлодки — вызывать ПОСЛЕ добавления всех отсеков!
 // ══════════════════════════════════════════════════════════════════════════════
-void SubmarineBuilder::DetachCompartment(ECSRegistry& registry, Entity compartment)
-{
-    auto* subComp = registry.GetComponent<SubmarineComponent>(compartment);
-    if (!subComp) return;
-
-    subComp->isDetached = true;
-
-    // Убираем из списка соседей
-    auto* comp = registry.GetComponent<CompartmentComponent>(compartment);
-    if (comp)
-    {
-        for (Entity neighbor : comp->connectedCompartments)
-        {
-            auto* neighborComp = registry.GetComponent<CompartmentComponent>(neighbor);
-            if (neighborComp)
-            {
-                auto& list = neighborComp->connectedCompartments;
-                list.erase(std::remove(list.begin(), list.end(), compartment), list.end());
-            }
-        }
-        comp->connectedCompartments.clear();
-    }
-
-    OutputDebugStringA("[SubmarineBuilder] Compartment detached\n");
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Получить все отсеки подлодки
-// ══════════════════════════════════════════════════════════════════════════════
-std::vector<Entity> SubmarineBuilder::GetAllCompartments(ECSRegistry& registry, Entity submarine)
+void SubmarineBuilder::FinalizeSubmarinePhysics(ECSRegistry& registry, Entity submarine)
 {
     auto* subComp = registry.GetComponent<SubmarineComponent>(submarine);
-    if (!subComp) return {};
-
-    return subComp->allCompartments;
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Проверить целостность подлодки
-// ══════════════════════════════════════════════════════════════════════════════
-bool SubmarineBuilder::CheckIntegrity(ECSRegistry& registry, Entity submarine)
-{
-    auto compartments = GetAllCompartments(registry, submarine);
-
-    for (Entity comp : compartments)
+    if (!subComp)
     {
-        auto* subComp = registry.GetComponent<SubmarineComponent>(comp);
-        if (subComp && subComp->isDetached)
-            return false; // Есть оторванные отсеки
-    }
-
-    return true; // Все отсеки на месте
-}
-void SubmarineBuilder::ConnectCompartmentsAuto(ECSRegistry& registry,
-    Entity compartmentA, Entity compartmentB,
-    float breakForce, float connectionMargin)
-{
-    auto* transformA = registry.GetComponent<TransformComponent>(compartmentA);
-    auto* transformB = registry.GetComponent<TransformComponent>(compartmentB);
-    auto* rbA = registry.GetComponent<RigidBodyComponent>(compartmentA);
-    auto* rbB = registry.GetComponent<RigidBodyComponent>(compartmentB);
-
-    if (!transformA || !transformB || !rbA || !rbB)
-    {
-        OutputDebugStringA("[ConnectCompartmentsAuto] ERROR: Missing components\n");
+        OutputDebugStringA("[FinalizePhysics] ERROR: No SubmarineComponent on root!\n");
         return;
     }
 
-    // 1. Вычисляем вектор от A к B
-    btVector3 posA(transformA->position.x, transformA->position.y, transformA->position.z);
-    btVector3 posB(transformB->position.x, transformB->position.y, transformB->position.z);
-    btVector3 direction = posB - posA;
-    direction.normalize();
+    // 1. Считаем суммарный объём всех отсеков
+    float totalVolume = 0.0f;
+    float totalMass   = 3000.0f; // базовая масса корпуса
 
-    // 2. Определяем главную ось соединения
-    btVector3 pivotA, pivotB;
-    float absX = fabs(direction.x());
-    float absY = fabs(direction.y());
-    float absZ = fabs(direction.z());
-
-    // 3. Выбираем ось с максимальным отклонением
-    if (absX > absY && absX > absZ)
+    for (Entity compEntity : subComp->allCompartments)
     {
-        // Соединение по оси X
-        float halfSizeA = rbA->shapeSize.x(); // половина ширины
-        float halfSizeB = rbB->shapeSize.x();
-
-        pivotA.setValue(direction.x() > 0 ? halfSizeA : -halfSizeA, 0, 0);
-        pivotB.setValue(direction.x() > 0 ? -halfSizeB : halfSizeB, 0, 0);
+        auto* comp = registry.GetComponent<CompartmentComponent>(compEntity);
+        if (comp)
+        {
+            totalVolume += comp->volume;
+            totalMass   += 500.0f; // масса материала отсека
+        }
     }
-    else if (absZ > absX && absZ > absY)
-    {
-        // Соединение по оси Z
-        float halfSizeA = rbA->shapeSize.z(); // половина длины
-        float halfSizeB = rbB->shapeSize.z();
 
-        pivotA.setValue(0, 0, direction.z() > 0 ? halfSizeA : -halfSizeA);
-        pivotB.setValue(0, 0, direction.z() > 0 ? -halfSizeB : halfSizeB);
+    // Добавляем запас объёма за корпус (+15 м³)
+    totalVolume += 15.0f;
+
+    char dbg[256];
+    sprintf_s(dbg,
+        "[FinalizePhysics] Compartments: %zu | TotalVolume: %.2f m³ | TotalMass: %.0f kg\n",
+        subComp->allCompartments.size(), totalVolume, totalMass);
+    OutputDebugStringA(dbg);
+
+    // 2. RigidBodyComponent на корень (если ещё нет)
+    if (!registry.HasComponent<RigidBodyComponent>(submarine))
+    {
+        RigidBodyComponent rb{};
+        rb.mass            = totalMass;
+        rb.shapeType       = RigidBodyComponent::Box;
+        rb.shapeSize       = btVector3(6.0f, 2.0f, 2.0f); // примерный размер корпуса
+        rb.linearDamping   = 0.5f;
+        rb.angularDamping  = 0.8f;
+        rb.friction        = 0.1f;
+        registry.AddComponent<RigidBodyComponent>(submarine, rb);
     }
     else
     {
-        // Соединение по оси Y (вертикальное)
-        float halfSizeA = rbA->shapeSize.y(); // половина высоты
-        float halfSizeB = rbB->shapeSize.y();
-
-        pivotA.setValue(0, direction.y() > 0 ? halfSizeA : -halfSizeA, 0);
-        pivotB.setValue(0, direction.y() > 0 ? -halfSizeB : halfSizeB, 0);
+        // Обновляем массу в существующем компоненте
+        auto* rb = registry.GetComponent<RigidBodyComponent>(submarine);
+        rb->mass = totalMass;
     }
 
-    // 4. Добавляем небольшой зазор если нужно
-    if (connectionMargin > 0)
+    // 3. BuoyancyComponent на корень (если ещё нет)
+    if (!registry.HasComponent<BuoyancyComponent>(submarine))
     {
-        pivotA += direction * connectionMargin;
-        pivotB -= direction * connectionMargin;
+        BuoyancyComponent buoy{};
+        buoy.volume               = totalVolume;
+        buoy.lastCalculatedVolume = totalVolume;
+        buoy.fluidDensity         = 1025.0f; // солёная вода
+        registry.AddComponent<BuoyancyComponent>(submarine, buoy);
+    }
+    else
+    {
+        // Обновляем объём в существующем компоненте
+        auto* buoy = registry.GetComponent<BuoyancyComponent>(submarine);
+        buoy->volume               = totalVolume;
+        buoy->lastCalculatedVolume = totalVolume;
+        buoy->fluidDensity         = 1025.0f;
     }
 
-    // 5. Создаём соединение
-    ConnectCompartments(registry, compartmentA, compartmentB,
-        pivotA, pivotB, breakForce);
+    // 4. Создаём физическое тело — volume и mass уже финальные!
+    PhysicsSystem::CreateRigidBody(registry, submarine);
 
-    // Отладка
-    char buf[512];
-    sprintf_s(buf,
-        "[ConnectCompartmentsAuto] Connected %u ↔ %u\n"
-        "  Direction: (%.2f, %.2f, %.2f)\n"
-        "  Pivot A (local): (%.3f, %.3f, %.3f)\n"
-        "  Pivot B (local): (%.3f, %.3f, %.3f)\n",
-        compartmentA, compartmentB,
-        direction.x(), direction.y(), direction.z(),
-        pivotA.x(), pivotA.y(), pivotA.z(),
-        pivotB.x(), pivotB.y(), pivotB.z());
-    OutputDebugStringA(buf);
+    // 5. Кэшируем в SubmarineComponent
+    subComp->cachedTotalMass   = totalMass;
+    subComp->cachedTotalVolume = totalVolume;
+    subComp->needsPhysicsUpdate = false;
+    subComp->compartmentCountLastFrame = (int)subComp->allCompartments.size();
+
+    OutputDebugStringA("[FinalizePhysics] ✅ Physics body created with correct volume!\n");
 }

@@ -75,27 +75,81 @@ struct RigidBodyComponent
     btTriangleMesh* triangleMesh = nullptr;
     std::vector<btConvexHullShape*> convexHulls;
 
-    ~RigidBodyComponent()
-    {
-        if (body)
-        {
-            delete body->getMotionState();
-            delete body;
-            body = nullptr;
-        }
+    bool isCompound = false;
+    
+    struct CompoundElement {
+        enum ShapeType { Box, Sphere, Cylinder, Capsule };
+        ShapeType type = Box;
 
-        if (triangleMesh)
-        {
-            delete triangleMesh;
-            triangleMesh = nullptr;
-        }
+        // Размеры
+        float size = 1.0f;   // Для Box (полная длина стороны)
+        float radius = 0.5f;
+        float height = 1.0f;
+        // Для Box: сдвигают границы AABB относительно центра
+        XMFLOAT3 boxOffsetMin = { 0,0,0 };
+        XMFLOAT3 boxOffsetMax = { 0,0,0 };
+        // Трансформация ОТНОСИТЕЛЬНО центра подлодки
+        XMFLOAT3 localPosition = { 0,0,0 };
+        XMFLOAT4 localRotation = { 0,0,0,1 }; // Кватернион (x,y,z,w)
 
-        for (auto* hull : convexHulls)
-        {
-            if (hull) delete hull;
-        }
-        convexHulls.clear();
-    }
+        float radiusOffset = 0.0f;
+        float heightOffsetTop = 0.0f;
+        float heightOffsetBottom = 0.0f;
+
+        // Для отладки/веса (физический вес считает сам Bullet через инерцию, 
+        // но это поле может пригодиться для логики игры)
+        float debugWeight = 1.0f;
+    };
+    
+     std::vector<CompoundElement> compoundElements;
+
+     ~RigidBodyComponent()
+     {
+         if (body)
+         {
+             // 1. Сначала получаем форму
+             btCollisionShape* shape = body->getCollisionShape();
+
+             // 2. Удаляем тело и motion state
+             delete body->getMotionState();
+             delete body;
+             body = nullptr;
+
+             // 3. ВАЖНО: Если это составная форма, она САМА удалит свои части.
+             // Нам нужно удалить только саму compound форму, но НЕ её детей.
+             if (shape && shape->getShapeType() == COMPOUND_SHAPE_PROXYTYPE)
+             {
+                 delete shape;
+                 // Не удаляем convexHulls/triangleMesh вручную, если они были добавлены в compound!
+                 // Очищаем векторы, чтобы не было висячих указателей, но без delete.
+                 convexHulls.clear();
+                 if (triangleMesh) { delete triangleMesh; triangleMesh = nullptr; }
+             }
+             else
+             {
+                 // Если это обычная форма, удаляем её стандартно
+                 if (shape) delete shape;
+
+                 // Очищаем ручные ресурсы для обычных форм
+                 if (triangleMesh) { delete triangleMesh; triangleMesh = nullptr; }
+                 for (auto* hull : convexHulls)
+                 {
+                     if (hull) delete hull;
+                 }
+                 convexHulls.clear();
+             }
+         }
+         else
+         {
+             // Если тела нет (ошибка создания), но ресурсы есть - чистим их вручную
+             if (triangleMesh) { delete triangleMesh; triangleMesh = nullptr; }
+             for (auto* hull : convexHulls)
+             {
+                 if (hull) delete hull;
+             }
+             convexHulls.clear();
+         }
+     }
 };
 
 struct StaticColliderComponent

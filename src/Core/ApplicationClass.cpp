@@ -159,7 +159,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     // Создаём тестовую физическую сцену
    // CreatePhysicsTestScene();
 
-  /*  CreateTestSubmarine();*/
+    CreateTestSubmarine();
 
     // Создаём визуализатор отладочных контактов
     m_debugVisualizer = new DebugPhysicsVisualizer();
@@ -1447,63 +1447,86 @@ void ApplicationClass::CreateTestSubmarine()
     ID3D11Device* device = m_direct3D->GetDevice();
     ID3D11DeviceContext* context = m_direct3D->GetDeviceContext();
 
-    // 📦 Модель
     AssimpModelClass* subModel = m_sceneManager.GetOrCreateModel(
         "assets/model/submarine.glb", device, context, "");
     if (!subModel) { OutputDebugStringA("[ERROR] Sub model failed!\n"); return; }
 
-    // 🚢 Корневая сущность
     Entity subRoot = registry.CreateEntity();
-
-    // 🔥 ВАЖНО: спавним ВЫСОКО, чтобы не было пересечения с полом
     registry.AddComponent<TransformComponent>(subRoot,
-        TransformComponent{ {0, 10.0f, 0}, {0, 0, 0}, {1, 1, 1} }); // 10 метров над землёй
+        TransformComponent{ {0, 10.0f, 0}, {0, 0, 0}, {1, 1, 1} });
 
-    // Материал
     auto* subMat = new MaterialClass();
     subMat->Initialize(device, L"SubmarineMaterial");
-
-    if (m_pbrShader)
-    {
-        subMat->SetShader(m_pbrShader);
-    }
-    else if (m_lightShader)
-    {
-        subMat->SetShader(m_lightShader);
-    }
-    else
-    {
-        OutputDebugStringA("[ERROR] No shader available!\n");
-        delete subMat;
-        return;
-    }
-
-    if (m_defaultTexture)
-        subMat->SetMainTexture(m_defaultTexture);
+    if (m_pbrShader) subMat->SetShader(m_pbrShader);
+    else if (m_lightShader) subMat->SetShader(m_lightShader);
+    else { delete subMat; return; }
+    if (m_defaultTexture) subMat->SetMainTexture(m_defaultTexture);
 
     registry.AddComponent<MeshRendererComponent>(subRoot,
         MeshRendererComponent{ subModel, subMat });
-
     registry.AddComponent<SubmarineComponent>(subRoot, SubmarineComponent{ subRoot });
     registry.AddComponent<ActiveComponent>(subRoot, ActiveComponent{});
 
-    // 🔥 ФИЗИКА: безопасные параметры
+    // ══════════════════════════════════════════════════════════════════
+    // КОЛЛИЗИЯ ПОДЛОДКИ: Compound из 3 частей (нос + тело + корма)
+    // Каждая часть — capsule/cylinder, вместе дают форму "пули"
+    // ══════════════════════════════════════════════════════════════════
     RigidBodyComponent subRB{};
-    subRB.mass = 0.0f;          // Нормальная масса (не 0, не отрицательная)
-    subRB.shapeType = RigidBodyComponent::Sphere;
-    subRB.shapeSize = btVector3(2.0f, 0.f, 0.f);  // Half-extents (половина размера!)
-    subRB.isDynamic = true;
-    subRB.linearDamping = 0.5f;   // 🔥 Увеличенное демпфирование (гасит "взрывы")
-    subRB.angularDamping = 0.5f;
+    subRB.mass = 5000.0f;
+    subRB.isCompound = true;
+
+    // Часть 1: Центральный цилиндр (основной корпус)
+    {
+        RigidBodyComponent::CompoundElement body;
+        body.type = RigidBodyComponent::CompoundElement::Cylinder;
+        body.radius = 1.8f;
+        body.height = 8.0f;
+        body.localPosition = { 0.0f, 0.0f, 0.0f };
+        // Поворот цилиндра вдоль оси Z (Bullet-цилиндр по умолчанию вдоль Y)
+        // Поворачиваем на 90° вокруг Z чтобы он лёг горизонтально
+        XMVECTOR qRot = XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0),
+            XM_PIDIV2);
+        XMStoreFloat4(&body.localRotation, qRot);
+        subRB.compoundElements.push_back(body);
+    }
+
+    // Часть 2: Носовая капсула (сужение спереди)
+    {
+        RigidBodyComponent::CompoundElement nose;
+        nose.type = RigidBodyComponent::CompoundElement::Capsule;
+        nose.radius = 1.4f;
+        nose.height = 2.0f;
+        nose.localPosition = { 5.0f, 0.0f, 0.0f }; // сдвиг вперёд по X
+        XMVECTOR qRot = XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0),
+            XM_PIDIV2);
+        XMStoreFloat4(&nose.localRotation, qRot);
+        subRB.compoundElements.push_back(nose);
+    }
+
+    // Часть 3: Кормовая часть (срез сзади — чуть шире)
+    {
+        RigidBodyComponent::CompoundElement stern;
+        stern.type = RigidBodyComponent::CompoundElement::Capsule;
+        stern.radius = 1.6f;
+        stern.height = 2.0f;
+        stern.localPosition = { -5.0f, 0.0f, 0.0f }; // сдвиг назад по X
+        XMVECTOR qRot = XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0),
+            XM_PIDIV2);
+        XMStoreFloat4(&stern.localRotation, qRot);
+        subRB.compoundElements.push_back(stern);
+    }
+
+    subRB.linearDamping = 0.5f;
+    subRB.angularDamping = 0.8f;
     subRB.friction = 0.1f;
+
     registry.AddComponent<RigidBodyComponent>(subRoot, subRB);
-
-	registry.AddComponent<BuoyancyComponent>(subRoot, BuoyancyComponent{ 1.0f, 0.5f });
-
-    // 🔥 ВАЖНО: создаём физику ПОСЛЕ всех компонентов
+    registry.AddComponent<BuoyancyComponent>(subRoot, BuoyancyComponent{ 1.0f, 0.5f });
     PhysicsSystem::CreateRigidBody(registry, subRoot);
 
-    // 🔧 Отсеки (только логика, БЕЗ физики!)
+    // ══════════════════════════════════════════════════════════════════
+    // ОТСЕКИ: только логика + СТЕНЫ для персонажей
+    // ══════════════════════════════════════════════════════════════════
     struct CompartmentDesc {
         const char* name;
         XMFLOAT3 localMin;
@@ -1512,31 +1535,24 @@ void ApplicationClass::CreateTestSubmarine()
     };
 
     std::vector<CompartmentDesc> compartments = {
-        { "Bow",    {-5, -1.5f, -2}, {-2, 1.5f, 2}, {-3.5f, 0, 0} },
-        { "Center", {-2, -1.5f, -2}, { 2, 1.5f, 2}, { 0,    0, 0} },
-        { "Stern",  { 2, -1.5f, -2}, { 5, 1.5f, 2}, { 3.5f, 0, 0} }
+        { "Bow",    {  2.0f, -1.5f, -1.8f}, { 5.0f, 1.5f, 1.8f}, { 3.5f, 0, 0} },
+        { "Center", { -2.0f, -1.5f, -1.8f}, { 2.0f, 1.5f, 1.8f}, { 0.0f, 0, 0} },
+        { "Stern",  { -5.0f, -1.5f, -1.8f}, {-2.0f, 1.5f, 1.8f}, {-3.5f, 0, 0} }
     };
 
     auto* subComp = registry.GetComponent<SubmarineComponent>(subRoot);
-
-
+    auto* rootTransform = registry.GetComponent<TransformComponent>(subRoot);
 
     for (const auto& desc : compartments)
     {
         Entity compEntity = registry.CreateEntity();
-        auto* rootTransform = registry.GetComponent<TransformComponent>(subRoot);
-        if (!rootTransform) {
-            OutputDebugStringA("[ERROR] rootTransform not found for subRoot!\n");
-            return;
-        }
+
         XMFLOAT3 worldPos;
-        XMVECTOR localOffset = XMLoadFloat3(&desc.localCenter);
-        XMVECTOR rootPos = XMLoadFloat3(&rootTransform->position);
-        XMStoreFloat3(&worldPos, XMVectorAdd(rootPos, localOffset));
-        // Найти TransformComponent корня подлодки
-      
-       
-        // 🔥 ВАЖНО: у отсеков НЕТ RigidBodyComponent!
+        XMStoreFloat3(&worldPos,
+            XMVectorAdd(
+                XMLoadFloat3(&rootTransform->position),
+                XMLoadFloat3(&desc.localCenter)));
+
         registry.AddComponent<TransformComponent>(compEntity,
             TransformComponent{ worldPos, {0,0,0}, {1,1,1} });
 
@@ -1551,14 +1567,14 @@ void ApplicationClass::CreateTestSubmarine()
         SubmarineComponent link{};
         link.submarineRoot = subRoot;
         registry.AddComponent<SubmarineComponent>(compEntity, link);
-
         registry.AddComponent<ActiveComponent>(compEntity, ActiveComponent{});
 
         if (subComp) subComp->allCompartments.push_back(compEntity);
     }
 
-    OutputDebugStringA("✅ Submarine created safely at (0, 10, 0)\n");
+    OutputDebugStringA("✅ Submarine created with bullet-shape collision\n");
 }
+
 void ApplicationClass::Render3DObjectsToShadowMap(
     ID3D11DeviceContext* context,
     const XMMATRIX& lightViewProj)
