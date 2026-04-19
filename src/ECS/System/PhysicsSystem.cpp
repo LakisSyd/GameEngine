@@ -1,8 +1,16 @@
-﻿#include "PhysicsSystem.h"
+﻿
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#define ENABLE_VHACD_IMPLEMENTATION 1  // ⚠️ Только в ОДНОМ .cpp файле!
+#define USE_VHACD
+
+// Теперь можно подключать заголовки
+#include "PhysicsSystem.h"
 #include "FloodingSystem.h"
 #include "assimpmodelclass.h"
-
-
+#include <BulletCollision/Gimpact/btGImpactShape.h>
+#include "VHACD.h"
+#include "PhysicsWorld.h"
 struct VertexType
 {
     XMFLOAT3 position;
@@ -132,6 +140,104 @@ btCollisionShape* PhysicsSystem::CreateTriangleMeshShape(
 
     return meshShape;
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 🔥 CreateGImpactMeshShape — DYNAMIC concave mesh collision
+// Unlike btBvhTriangleMeshShape (static only), btGImpactMeshShape supports
+// dynamic bodies with mass > 0. This allows objects to exist INSIDE the mesh
+// (e.g. crew/cargo inside a submarine hull) while the hull itself collides
+// with external objects.
+// ══════════════════════════════════════════════════════════════════════════════
+btCollisionShape* PhysicsSystem::CreateGImpactMeshShape(
+    AssimpModelClass* model, const XMFLOAT3& scale, RigidBodyComponent* rb)
+{
+    if (!model || !rb) return nullptr;
+
+    // 1. Create btTriangleMesh (same as TriangleMesh)
+    auto* triangleMesh = new btTriangleMesh();
+    if (!triangleMesh) return nullptr;
+
+    // 2. Get triangles from the model
+    std::vector<XMFLOAT3> triangles;
+    model->GetRawTriangles(triangles);
+
+    if (triangles.size() < 3)
+    {
+        OutputDebugStringA("[Physics] GImpactMesh: not enough triangles, using fallback box\n");
+        delete triangleMesh;
+        rb->triangleMesh = nullptr;
+        return new btBoxShape(btVector3(0.5f, 0.5f, 0.5f));
+    }
+
+    // 3. Add triangles with scale applied
+    for (size_t i = 0; i + 2 < triangles.size(); i += 3)
+    {
+        btVector3 v0(triangles[i].x * scale.x, triangles[i].y * scale.y, triangles[i].z * scale.z);
+        btVector3 v1(triangles[i + 1].x * scale.x, triangles[i + 1].y * scale.y, triangles[i + 1].z * scale.z);
+        btVector3 v2(triangles[i + 2].x * scale.x, triangles[i + 2].y * scale.y, triangles[i + 2].z * scale.z);
+        triangleMesh->addTriangle(v0, v1, v2, true);
+    }
+
+    // 4. Create GImpact shape — this is the KEY difference from TriangleMesh!
+    //    btGImpactMeshShape supports dynamic bodies (mass > 0)
+    auto* gimpactShape = new btGImpactMeshShape(triangleMesh);
+    gimpactShape->setMargin(0.04f);
+    gimpactShape->updateBound(); // CRITICAL: must call after creation!
+
+    // 5. Store reference to triangle mesh for cleanup
+    rb->triangleMesh = triangleMesh;
+
+    char buf[256];
+    sprintf_s(buf, "[Physics] GImpactMesh created: %zu triangles, scale (%.2f, %.2f, %.2f)\n",
+        triangles.size() / 3, scale.x, scale.y, scale.z);
+    OutputDebugStringA(buf);
+
+    return gimpactShape;
+}
+
+void PhysicsSystem::RefreshRigidBody(ECSRegistry& registry, Entity entity, RigidBodyComponent* rb)
+{
+    
+        if (!rb || !rb->body) return;
+
+        auto* world = PhysicsWorld::Get().GetWorld();
+
+        // 1. Сохраняем текущее состояние тела
+        btTransform oldTransform;
+        if (rb->body->getMotionState())
+            rb->body->getMotionState()->getWorldTransform(oldTransform);
+        else
+            oldTransform = rb->body->getWorldTransform();
+
+        btVector3 oldLinVel = rb->body->getLinearVelocity();
+        btVector3 oldAngVel = rb->body->getAngularVelocity();
+
+
+
+        // 2. Удаляем старое тело из мира
+        world->removeRigidBody(rb->body);
+
+        // 3. Очищаем память (но НЕ удаляем shape, если она используется в compound!)
+        delete rb->body->getMotionState();
+        delete rb->body;
+        rb->body = nullptr;
+
+        // triangleMesh удалять НЕ надо — он может использоваться в GImpact/TriangleMesh shapes
+        // и удаляется в деструкторе RigidBodyComponent
+
+        // 4. Создаём новое тело через существующую логику
+        // ⚠️ CreateRigidBody сама добавит тело в мир с правильными масками
+        PhysicsSystem::CreateRigidBody(registry, entity);
+
+        // 5. Если тело создалось — восстанавливаем скорости (опционально)
+        if (rb->body)
+        {
+            rb->body->setLinearVelocity(oldLinVel);
+            rb->body->setAngularVelocity(oldAngVel);
+        }
+    
+}
+
 void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
 {
     auto* rb = registry.GetComponent<RigidBodyComponent>(entity);
@@ -156,6 +262,47 @@ void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
     }
 
     btCollisionShape* shape = nullptr;
+
+    if (auto* scs = registry.GetComponent<SubmarineCollisionSetup>(entity))
+    {
+        if (scs->useInteriorCollider && !rb->interiorBody)
+        {
+            // Размер с учётом глобального scale и shrink factor
+            XMFLOAT3 size = scs->interiorSize;
+            float shrink = scs->interiorShrinkFactor;
+            XMFLOAT3 scaled = {
+                size.x * shrink * transform->scale.x,
+                size.y * shrink * transform->scale.y,
+                size.z * shrink * transform->scale.z
+            };
+
+            btVector3 halfExtents(scaled.x * 0.5f, scaled.y * 0.5f, scaled.z * 0.5f);
+
+            // Создаём форму и кинематическое/статическое тело (mass = 0)
+            rb->interiorShape = new btBoxShape(halfExtents);
+
+            btTransform interiorStart;
+            interiorStart.setIdentity();
+            interiorStart.setOrigin(btVector3(
+                transform->position.x + scs->interiorOffset.x,
+                transform->position.y + scs->interiorOffset.y,
+                transform->position.z + scs->interiorOffset.z
+            ));
+
+            btDefaultMotionState* interiorMS = new btDefaultMotionState(interiorStart);
+            btRigidBody::btRigidBodyConstructionInfo interiorCI(0.0f, interiorMS, rb->interiorShape, btVector3(0, 0, 0));
+            rb->interiorBody = new btRigidBody(interiorCI);
+
+            // Kinematic => будем вручную обновлять transform каждый кадр
+            rb->interiorBody->setCollisionFlags(rb->interiorBody->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
+            rb->interiorBody->setActivationState(DISABLE_DEACTIVATION);
+
+            // Добавляем в мир отдельной группой (можно настроить маску)
+            
+
+            OutputDebugStringA("[Physics] Created submarine interior collider\n");
+        }
+    }
 
     // 🔥 ГЛАВНОЕ ИЗМЕНЕНИЕ: Логика выбора формы
     if (rb->isCompound && !rb->compoundElements.empty())
@@ -213,6 +360,61 @@ void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
                 break;
             }
 
+            case RigidBodyComponent::CompoundElement::VHACD:
+            {
+                // Попытка получить модель для VHACD из нескольких источников:
+                // 1) явная ссылка elem.vhacdModel
+                // 2) meshRenderer у текущей сущности (если есть)
+                // 3) первая модель среди отсеков подлодки (SubmarineComponent::allCompartments)
+                AssimpModelClass* vhacdModel = elem.vhacdModel;
+
+                if (!vhacdModel)
+                {
+                    if (meshRenderer && meshRenderer->model)
+                    {
+                        vhacdModel = meshRenderer->model;
+                    }
+                    else
+                    {
+                        // Попробуем найти модель в отсеках у SubmarineComponent (если это подлодка)
+                        auto* subComp = registry.GetComponent<SubmarineComponent>(entity);
+                        if (subComp)
+                        {
+                            for (Entity compEnt : subComp->allCompartments)
+                            {
+                                auto* compMesh = registry.GetComponent<MeshRendererComponent>(compEnt);
+                                if (compMesh && compMesh->model)
+                                {
+                                    vhacdModel = compMesh->model;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!vhacdModel)
+                {
+                    OutputDebugStringA("[Physics] VHACD: no model available for decomposition, using fallback box\n");
+                    childShape = new btBoxShape(btVector3(0.5f, 0.5f, 0.5f));
+                    break;
+                }
+
+
+
+
+                btTransform elemTransform;
+                elemTransform.setIdentity();
+                elemTransform.setOrigin(btVector3(elem.localPosition.x, elem.localPosition.y, elem.localPosition.z));
+                elemTransform.setRotation(btQuaternion(
+                    elem.localRotation.x, elem.localRotation.y, elem.localRotation.z, elem.localRotation.w));
+
+
+
+            }
+                
+            
+
             case RigidBodyComponent::CompoundElement::Sphere:
             {
                 float r = elem.radius + elem.radiusOffset;
@@ -267,9 +469,10 @@ void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
                 // true = управляем памятью дочерней формы сами (удалять будем в деструкторе CompoundShape)
                 compoundShape->addChildShape(childTrans, childShape);
             }
-        }
+            }
 
-        shape = compoundShape;
+            shape = compoundShape;
+        
     }
     else
     {
@@ -343,6 +546,18 @@ void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
             {
                 shape = CreateTriangleMeshShape(meshRenderer->model, transform->scale, rb);
                 if (rb->mass > 0.0f) rb->mass = 0.0f;
+            }
+            else
+                return;
+            break;
+        }
+        case RigidBodyComponent::GImpactMesh:
+        {
+            if (meshRenderer && meshRenderer->model)
+            {
+                shape = CreateGImpactMeshShape(meshRenderer->model, transform->scale, rb);
+                // GImpactMesh SUPPORTS dynamic bodies — don't force mass to 0!
+                OutputDebugStringA("[Physics] GImpactMesh shape created (dynamic concave)\n");
             }
             else
                 return;
@@ -510,28 +725,59 @@ void PhysicsSystem::Update(ECSRegistry& registry, float deltaTime, float waterLe
         btVector3 pos = rigidBody->body->getWorldTransform().getOrigin();
         float objectY = pos.getY();
 
-        Entity compartmentEntity = FloodingSystem::FindCompartmentForObject(
-            registry, XMFLOAT3(pos.x(), pos.y(), pos.z()));
-
-        if (compartmentEntity == entity)
-            compartmentEntity = INVALID_ENTITY;
+        // ═══════════════════════════════════════════════════════════════
+        // Определяем, является ли entity корнем подлодки
+        // ═══════════════════════════════════════════════════════════════
+        bool isSubmarineRoot = false;
+        auto* subComp = registry.GetComponent<SubmarineComponent>(entity);
+        if (subComp && subComp->submarineRoot == entity && !subComp->allCompartments.empty())
+        {
+            isSubmarineRoot = true;
+        }
 
         float effectiveWaterLevel = waterLevel;
 
-        if (compartmentEntity != INVALID_ENTITY)
+        if (!isSubmarineRoot)
         {
-            auto* comp = registry.GetComponent<CompartmentComponent>(compartmentEntity);
-            auto* compTransform = registry.GetComponent<TransformComponent>(compartmentEntity);
+            Entity compartmentEntity = FloodingSystem::FindCompartmentForObject(
+                registry, XMFLOAT3(pos.x(), pos.y(), pos.z()));
 
-            if (comp && compTransform)
+            if (compartmentEntity == entity)
+                compartmentEntity = INVALID_ENTITY;
+
+            if (compartmentEntity != INVALID_ENTITY)
             {
-                float compartmentBottomY = compTransform->position.y + comp->localMin.y;
-                effectiveWaterLevel = compartmentBottomY + comp->waterLevel;
+                auto* comp = registry.GetComponent<CompartmentComponent>(compartmentEntity);
+                auto* compTransform = registry.GetComponent<TransformComponent>(compartmentEntity);
 
-                if (comp->waterLevel < 0.01f)
+                if (comp && compTransform)
                 {
-                    rigidBody->body->setDamping(0.01f, 0.01f);
-                    continue;
+                    float compartmentBottomY = compTransform->position.y + comp->localMin.y;
+                    effectiveWaterLevel = compartmentBottomY + comp->waterLevel;
+
+                    if (comp->waterLevel < 0.01f)
+                    {
+                        rigidBody->body->setDamping(0.01f, 0.01f);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Для подлодки: считаем воду во всех отсеках и общий объём
+        // ═══════════════════════════════════════════════════════════════
+        float totalWaterInCompartments = 0.0f;
+        float totalCompartmentVolume = 0.0f;
+        if (isSubmarineRoot && subComp)
+        {
+            for (Entity compEntity : subComp->allCompartments)
+            {
+                auto* comp = registry.GetComponent<CompartmentComponent>(compEntity);
+                if (comp)
+                {
+                    totalWaterInCompartments += comp->waterVolume;
+                    totalCompartmentVolume += comp->volume;
                 }
             }
         }
@@ -540,25 +786,25 @@ void PhysicsSystem::Update(ECSRegistry& registry, float deltaTime, float waterLe
         float topY = objectY + halfHeight;
         float bottomY = objectY - halfHeight;
 
-        float surfaceZone = 0.15f;
         float rawSubmersion = 0.0f;
-
-        if (bottomY >= effectiveWaterLevel + surfaceZone)
+        if (bottomY >= effectiveWaterLevel)
         {
             rawSubmersion = 0.0f;
         }
-        else if (topY <= effectiveWaterLevel - surfaceZone)
+        else if (topY <= effectiveWaterLevel)
         {
             rawSubmersion = 1.0f;
         }
         else
         {
-            rawSubmersion = (effectiveWaterLevel - bottomY) / (surfaceZone * 2.0f);
+
+        }
+        {
+            rawSubmersion = (effectiveWaterLevel - bottomY) / buoyancy.height;
             rawSubmersion = fmaxf(0.0f, fminf(1.0f, rawSubmersion));
-            rawSubmersion = rawSubmersion * rawSubmersion * (3.0f - 2.0f * rawSubmersion);
         }
 
-        float smoothingFactor = 0.1f;
+        float smoothingFactor = 0.3f;
         buoyancy.smoothedSubmersion =
             buoyancy.smoothedSubmersion * (1.0f - smoothingFactor) +
             rawSubmersion * smoothingFactor;
@@ -567,38 +813,115 @@ void PhysicsSystem::Update(ECSRegistry& registry, float deltaTime, float waterLe
 
         if (submersionRatio > 0.01f)
         {
-            float effectiveBuoyancyVolume = buoyancy.volume;
-            if (registry.HasComponent<CompartmentComponent>(entity))
-            {
-                auto* compSelf = registry.GetComponent<CompartmentComponent>(entity);
-                if (compSelf)
-                {
-                    effectiveBuoyancyVolume = buoyancy.volume - compSelf->waterVolume;
-                    if (effectiveBuoyancyVolume < 0.0f) effectiveBuoyancyVolume = 0.0f;
-                }
-            }
+            // ═══════════════════════════════════════════════════════════
+            // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Физически корректная модель затопления
+            //
+            // Сухая подлодка: F_buoy = ρ·g·V·submersion (выталкивает)
+            //                 F_grav = mass·g (тянет вниз) — Bullet делает сам
+            //
+            // Затопленная:    Вода внутри ДОБАВЛЕТ вес, но НЕ добавляет объём!
+            //                 F_buoy остаётся прежней (внешний объём не меняется)
+            //                 F_grav = (mass + waterMass)·g
+            //
+            // Раньше мы вычитали waterVolume из buoyancyVolume — это НЕПРАВИЛЬНО.
+            // Корпус подлодки не сжимается от воды внутри. Объём снаружи остаётся
+            // тем же. Но МАССА растёт!
+            // ═══════════════════════════════════════════════════════════
 
-            float buoyancyForce = buoyancy.fluidDensity * 9.81f * effectiveBuoyancyVolume *
+            float gravity = 9.81f;
+
+            // Объём для плавучести = ПОЛНЫЙ внешний объём (не зависит от воды внутри)
+            float buoyancyForce = buoyancy.fluidDensity * gravity * buoyancy.volume *
                 submersionRatio * buoyancy.buoyancyMultiplier;
-            float maxAcceleration = 20.0f;
-            float maxForce = rigidBody->mass * maxAcceleration;
-            buoyancyForce = fminf(buoyancyForce, maxForce);
-            rigidBody->body->applyCentralForce(btVector3(0, buoyancyForce, 0));
 
+            // Вес воды внутри отсеков (1000 кг/м³ × объём воды × g)
+            // Эта сила ДОПОЛНИТЕЛЬНО тянет вниз (Bullet не знает о ней)
+            float waterWeight = totalWaterInCompartments * 1000.0f * gravity;
+
+            // Итоговая сила: плавучесть вверх, минус доп. вес воды вниз
+            float netUpForce = buoyancyForce - waterWeight;
+
+            // Защита от экстремальных значений
+            float weight = rigidBody->mass * gravity;
+            float maxForce = weight * 5.0f;
+            netUpForce = fmaxf(-maxForce, fminf(netUpForce, maxForce));
+
+            rigidBody->body->applyCentralForce(btVector3(0, netUpForce, 0));
+
+            // ═══════════════════════════════════════════════════════════
+            // Демпфирование — уменьшаем vertical drag чтобы затопленная
+            // подлодка тонула быстрее, а не зависала
+            // ═══════════════════════════════════════════════════════════
             btVector3 vel = rigidBody->body->getLinearVelocity();
-            float dragCoeff = 10.0f * submersionRatio;
-            btVector3 dragForce = -vel * dragCoeff;
+
+            // Доля затопления (0.0 = сухая, 1.0 = полностью затоплена)
+            float floodRatio = (totalCompartmentVolume > 0.01f)
+                ? (totalWaterInCompartments / totalCompartmentVolume)
+                : 0.0f;
+            floodRatio = fminf(1.0f, floodRatio);
+
+            // Чем больше затоплена — тем МЕНЬШЕ вертикальный drag (быстрее тонет)
+            float verticalDragCoeff = 50.0f * submersionRatio * (1.0f - floodRatio * 0.8f);
+            float horizontalDragCoeff = 5.0f * submersionRatio;
+
+            btVector3 dragForce(
+                -vel.x() * horizontalDragCoeff,
+                -vel.y() * verticalDragCoeff,
+                -vel.z() * horizontalDragCoeff
+            );
             rigidBody->body->applyCentralForce(dragForce);
 
+            // ═══════════════════════════════════════════════════════════
+            // Пружинная стабилизация — ТОЛЬКО если подлодка НЕ тонет
+            // Если затоплено > 30% — пружину выключаем!
+            // ═══════════════════════════════════════════════════════════
+            if (submersionRatio > 0.9f && floodRatio < 0.3f)
+            {
+                float depthFromSurface = effectiveWaterLevel - objectY;
+                float targetDepth = buoyancy.height;
+
+                float depthError = targetDepth - depthFromSurface;
+                float springK = 2.0f * rigidBody->mass;
+                float springForce = -springK * depthError;
+
+                float maxSpring = weight * 0.5f;
+                springForce = fmaxf(-maxSpring, fminf(springForce, maxSpring));
+
+                rigidBody->body->applyCentralForce(btVector3(0, springForce, 0));
+            }
+
+            // Угловое демпфирование
             btVector3 angVel = rigidBody->body->getAngularVelocity();
-            rigidBody->body->applyTorque(-angVel * dragCoeff * 0.5f);
+            float angularDragCoeff = 20.0f * submersionRatio;
+            rigidBody->body->applyTorque(-angVel * angularDragCoeff);
 
-            float massFactor = 100.0f / rigidBody->mass;
-            massFactor = fminf(massFactor, 5.0f);
-
-            float linearDrag = 1.5f * submersionRatio * massFactor;
-            float angularDrag = 0.8f * submersionRatio * massFactor;
+            float linearDrag = 0.8f * submersionRatio * (1.0f - floodRatio * 0.5f);
+            float angularDrag = 0.9f * submersionRatio;
             rigidBody->body->setDamping(linearDrag, angularDrag);
+
+            // ═══════════════════════════════════════════════════════════
+            // 📊 DEBUG: Состояние плавучести подлодки
+            // ═══════════════════════════════════════════════════════════
+#ifdef _DEBUG
+            if (isSubmarineRoot)
+            {
+                static int debugCounter = 0;
+                if (++debugCounter % 120 == 0)  // Раз в ~2 секунды
+                {
+                    char dbg[512];
+                    sprintf_s(dbg,
+                        "[Buoyancy] Y=%.1f | flood=%.0f%% (%.1f/%.1f m³) | "
+                        "F_buoy=%.0f N | F_water=%.0f N | net=%.0f N | "
+                        "weight=%.0f N | vel_y=%.2f\n",
+                        objectY,
+                        floodRatio * 100.0f,
+                        totalWaterInCompartments, totalCompartmentVolume,
+                        buoyancyForce, waterWeight, netUpForce,
+                        weight, vel.y());
+                    OutputDebugStringA(dbg);
+                }
+            }
+#endif
         }
         else
         {
@@ -712,7 +1035,10 @@ btCollisionShape* PhysicsSystem::CreateCompoundElementShape(
         return new btCapsuleShape(elem.radius, elem.height);
     }
 
+
     default:
         return new btBoxShape(btVector3(0.5f, 0.5f, 0.5f));
     }
 }
+
+

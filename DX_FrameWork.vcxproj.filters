@@ -61,6 +61,9 @@
     <Filter Include="ECS">
       <UniqueIdentifier>{acee98c7-e229-46d5-bf21-6a60fd80ce35}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Debug">
+      <UniqueIdentifier>{6d5bac05-de90-4757-b97c-8d956e7310dc}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Core\ApplicationClass.cpp">
@@ -204,9 +207,6 @@
     <ClCompile Include="src\Render\Camera\ViewPointClass.cpp">
       <Filter>Render\Camera</Filter>
     </ClCompile>
-    <ClCompile Include="src\Physics\DebugPhysicsVisualizer.cpp">
-      <Filter>Render\Shader</Filter>
-    </ClCompile>
     <ClCompile Include="src\Render\Shader\NormalMapShaderClass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
@@ -216,11 +216,17 @@
     <ClCompile Include="src\Render\Shader\PBRShaderClass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
-    <ClCompile Include="CompartmentDebugRenderer.cpp">
-      <Filter>Core</Filter>
+    <ClCompile Include="src\Debug\CompartmentDebugRenderer.cpp">
+      <Filter>Debug</Filter>
     </ClCompile>
-    <ClCompile Include="PhysicsDebugRenderer.cpp">
-      <Filter>Core</Filter>
+    <ClCompile Include="src\Debug\DebugPhysicsVisualizer.cpp">
+      <Filter>Debug</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Debug\PhysicsDebugRenderer.cpp">
+      <Filter>Debug</Filter>
+    </ClCompile>
+    <ClCompile Include="FileName.h">
+      <Filter>ECS</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -368,9 +374,6 @@
     <ClInclude Include="PhysicsWorld.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="src\Physics\DebugPhysicsVisualizer.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="TimeManager.h">
       <Filter>Config</Filter>
     </ClInclude>
@@ -413,13 +416,19 @@
     <ClInclude Include="src\ECS\System\SubmarineJointSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
-    <ClInclude Include="CompartmentDebugRenderer.h">
-      <Filter>Core</Filter>
-    </ClInclude>
-    <ClInclude Include="PhysicsDebugRenderer.h">
-      <Filter>Core</Filter>
-    </ClInclude>
     <ClInclude Include="SubmarineSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Debug\CompartmentDebugRenderer.h">
+      <Filter>Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Debug\DebugPhysicsVisualizer.h">
+      <Filter>Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Debug\PhysicsDebugRenderer.h">
+      <Filter>Debug</Filter>
+    </ClInclude>
+    <ClInclude Include="lib\VHACD.h">
       <Filter>ECS</Filter>
     </ClInclude>
   </ItemGroup>

@@ -1,5 +1,4 @@
-﻿// EditorUI.cpp
-#include "EditorUI.h"
+﻿#include "EditorUI.h"
 #include <string>
 #include "SceneManager.h"
 #include <backends/imgui_impl_win32.h>
@@ -15,6 +14,11 @@ inline btQuaternion XMFloat4ToBtQuaternion(const DirectX::XMFLOAT4& q)
 {
     return btQuaternion(q.x, q.y, q.z, q.w);
 }
+
+
+
+
+
 // ── Цвета темы (UE5-стиль) ───────────────────────────────────────────────────
 static constexpr ImVec4 COL_HEADER = ImVec4(0.13f, 0.13f, 0.13f, 1.0f);
 static constexpr ImVec4 COL_SECTION = ImVec4(0.18f, 0.18f, 0.18f, 1.0f);
@@ -509,6 +513,65 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
         return;
     }
 
+    auto& registry = sceneManager.GetECSRegistry();
+
+    if (registry.HasComponent<SubmarineHullConfig>(entity))
+    {
+        auto* cfg = registry.GetComponent<SubmarineHullConfig>(entity);
+
+        if (ImGui::CollapsingHeader("⚓ Submarine Hull", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::DragFloat3("Extents (m)", &cfg->hullExtents.x, 0.1f, 0.1f, 200.0f);
+            ImGui::DragFloat("Wall Thickness (m)", &cfg->wallThickness, 0.05f, 0.1f, 5.0f);
+            ImGui::Checkbox("Kinematic", &cfg->isKinematic);
+            ImGui::Checkbox("Show Debug Hull", &cfg->showDebugHull);
+
+            ImGui::Spacing();
+            if (ImGui::Button("🔨 Build Hull Physics", { -1, 0 }))
+           
+
+            ImGui::Spacing();
+            if (ImGui::Button("➕ Add SubmarineHullConfig", { -1, 0 }))
+            { /* уже есть */
+            }
+        }
+    }
+    else
+    {
+        if (ImGui::Button("➕ Add Submarine Hull Config"))
+        {
+            registry.AddComponent<SubmarineHullConfig>(entity, SubmarineHullConfig{});
+            if (!registry.HasComponent<SubmarineComponent>(entity))
+                registry.AddComponent<SubmarineComponent>(entity, SubmarineComponent{
+                    .submarineRoot = entity
+                    });
+        }
+    }
+    if (auto* hullCfg = sceneManager.GetECSRegistry().GetComponent<SubmarineHullConfig>(entity))
+    {
+        if (ImGui::CollapsingHeader("⚓ Hull Physics Config", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            bool changed = false;
+            changed |= ImGui::DragFloat3("Hull Extents (m)",
+                &hullCfg->hullExtents.x, 0.1f, 0.1f, 100.0f);
+            changed |= ImGui::DragFloat("Wall Thickness (m)",
+                &hullCfg->wallThickness, 0.05f, 0.1f, 5.0f);
+            changed |= ImGui::Checkbox("Kinematic", &hullCfg->isKinematic);
+            changed |= ImGui::Checkbox("Show Debug Hull", &hullCfg->showDebugHull);
+
+            if (changed)
+            {
+                // Пересобираем физику при изменении параметров
+                ImGui::TextColored(ImVec4(1, 1, 0, 1), "⚠ Press 'Rebuild' to apply");
+            }
+
+            if (ImGui::Button("🔨 Rebuild Hull Physics"))
+            {
+                SubmarineBuilder::FinalizeSubmarinePhysics(sceneManager.GetECSRegistry(), entity);
+            }
+        }
+    }
+
     // ── Transform ─────────────────────────────────────────────────────────────
     SectionHeader("Transform");
     ImGui::Spacing();
@@ -539,6 +602,8 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
     // ── Менеджер компонентов ──────────────────────────────────────────────────
     RenderComponentManager(sceneManager, entity);
 
+
+
     ImGui::Spacing();
     ImGui::Separator();
     ImGui::Spacing();
@@ -563,6 +628,126 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
 void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 {
     auto& registry = sceneManager.GetECSRegistry();
+
+    // ── DoorComponent ─────────────────────────────────────────────────────────
+    if (registry.HasComponent<DoorComponent>(entity))
+    {
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.25f, 0.15f, 0.05f, 1.0f)); // 🟤 коричневый
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.35f, 0.22f, 0.08f, 1.0f));
+        bool open = ImGui::CollapsingHeader("  Door Component##door", ImGuiTreeNodeFlags_DefaultOpen);
+        ImGui::PopStyleColor(2);
+
+        if (open)
+        {
+            auto* door = registry.GetComponent<DoorComponent>(entity);
+
+            ImGui::Spacing();
+
+            // ── Отсек A ────────────────────────────────────────────────────────
+            ImGui::TextColored(COL_TEXT_DIM, " Compartment A:");
+            ImGui::SameLine();
+
+            std::string nameA = (door->compartmentA != INVALID_ENTITY)
+                ? ("Entity " + std::to_string(door->compartmentA)) : "None";
+
+            if (ImGui::Button((nameA + "##DoorA").c_str()))
+                ImGui::OpenPopup("##DoorPickA");
+
+            if (ImGui::BeginPopup("##DoorPickA"))
+            {
+                ImGui::TextColored(COL_TEXT_DIM, "Select Compartment A");
+                ImGui::Separator();
+                auto& compPool = registry.GetComponents<CompartmentComponent>();
+                for (auto& [compEnt, comp] : compPool)
+                {
+                    if (compEnt == door->compartmentB) continue; // не даём выбрать то же что B
+                    std::string label = "Compartment Entity " + std::to_string(compEnt);
+                    if (ImGui::Selectable(label.c_str()))
+                        door->compartmentA = compEnt;
+                }
+                ImGui::EndPopup();
+            }
+
+            // ── Отсек B ────────────────────────────────────────────────────────
+            ImGui::TextColored(COL_TEXT_DIM, " Compartment B:");
+            ImGui::SameLine();
+
+            std::string nameB = (door->compartmentB != INVALID_ENTITY)
+                ? ("Entity " + std::to_string(door->compartmentB)) : "None";
+
+            if (ImGui::Button((nameB + "##DoorB").c_str()))
+                ImGui::OpenPopup("##DoorPickB");
+
+            if (ImGui::BeginPopup("##DoorPickB"))
+            {
+                ImGui::TextColored(COL_TEXT_DIM, "Select Compartment B");
+                ImGui::Separator();
+                auto& compPool = registry.GetComponents<CompartmentComponent>();
+                for (auto& [compEnt, comp] : compPool)
+                {
+                    if (compEnt == door->compartmentA) continue; // не даём выбрать то же что A
+                    std::string label = "Compartment Entity " + std::to_string(compEnt);
+                    if (ImGui::Selectable(label.c_str()))
+                        door->compartmentB = compEnt;
+                }
+                ImGui::EndPopup();
+            }
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            // ── Состояние ──────────────────────────────────────────────────────
+            ImGui::Checkbox("Is Open", &door->isOpen);
+            ImGui::Checkbox("Is Broken", &door->isBroken);
+            ImGui::Checkbox("Requires Power", &door->requiresPower);
+
+            ImGui::Spacing();
+
+            ImGui::DragFloat("Flow Rate (m³/s)", &door->flowRate, 0.1f, 0.0f, 20.0f);
+            ImGui::DragFloat("Open Speed", &door->openSpeed, 0.1f, 0.1f, 10.0f);
+
+            // Прогресс анимации (только чтение)
+            ImGui::ProgressBar(door->openProgress, ImVec2(-1, 0), "Open Progress");
+
+            ImGui::Spacing();
+
+            // ── Быстрые действия ───────────────────────────────────────────────
+            if (ImGui::Button("Open Door", ImVec2(-1, 0))) door->isOpen = true;
+            if (ImGui::Button("Close Door", ImVec2(-1, 0))) door->isOpen = false;
+
+            ImGui::Spacing();
+
+            // Статус соединения
+            bool valid = (door->compartmentA != INVALID_ENTITY && door->compartmentB != INVALID_ENTITY);
+            if (valid)
+                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "✅ Both compartments linked");
+            else
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.2f, 1.0f), "⚠ Assign both compartments!");
+
+            ImGui::Spacing();
+
+            // ── Удаление ───────────────────────────────────────────────────────
+            ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+            if (ImGui::Button("Remove Door Component", ImVec2(-1, 0)))
+                registry.RemoveComponent<DoorComponent>(entity);
+            ImGui::PopStyleColor(2);
+        }
+    }
+
+    if (registry.HasComponent<SubmarineCollisionSetup>(entity))
+    {
+
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.25f, 0.35f, 1.0f)); // 🔵 Синий
+        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.35f, 0.48f, 1.0f));
+        bool open = ImGui::CollapsingHeader("  cOLISSION Component##comp", ImGuiTreeNodeFlags_DefaultOpen);
+        ImGui::PopStyleColor(2);
+        if (open) {
+			DrawSubmarineCollisionSetup(sceneManager.GetECSRegistry(), entity);
+        }
+    }
+        
 
     if (registry.HasComponent<CompartmentComponent>(entity))
     {
@@ -931,8 +1116,8 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 ImGui::SameLine();
                 if (ImGui::Button("🔍 Check Integrity"))
                 {
-                    
-                   
+
+
                 }
             }
             else
@@ -941,7 +1126,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 ImGui::TextColored(COL_ACCENT, "📦 Compartment (linked)");
                 ImGui::Spacing();
 
-                
+
                 ImGui::TextColored(COL_TEXT_DIM, "Parent Submarine Entity ID:");
                 ImGui::SetNextItemWidth(-1);
 
@@ -1016,6 +1201,9 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
     }
 
 
+    // ═══════════════════════════════════════════════════════════════════════════
+  // 🔥 RIGIDBODY COMPONENT — ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ
+  // ═══════════════════════════════════════════════════════════════════════════
     if (registry.HasComponent<RigidBodyComponent>(entity))
     {
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.20f, 0.30f, 1.0f));
@@ -1049,10 +1237,17 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                     RigidBodyComponent::CompoundElement newElem;
                     newElem.type = RigidBodyComponent::CompoundElement::Box;
                     newElem.localPosition = { 0, 0, 0 };
-                    newElem.localRotation = { 0, 0, 0, 1 }; // Euler углы
+                    newElem.localRotation = { 0, 0, 0, 1 };
                     newElem.size = 1.0f;
                     newElem.radius = 0.5f;
                     newElem.height = 1.0f;
+                    // VHACD defaults
+                    newElem.vhacdModel = nullptr;
+                    newElem.vhacdScale = { 1.0f, 1.0f, 1.0f };
+                    newElem.vhacdResolution = 800;
+                    newElem.vhacdMaxHulls = 4;
+                    newElem.vhacdMaxVertsPerHull = 4;
+                    newElem.vhacdVolumeError = 0.005f;
                     rb->compoundElements.push_back(newElem);
                     needsRecreate = true;
                 }
@@ -1060,48 +1255,140 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 ImGui::Spacing();
 
                 // Отрисовка списка элементов
-                // Стало (ПРАВИЛЬНО):
                 for (size_t i = 0; i < rb->compoundElements.size(); ++i)
                 {
-                    auto& elem = rb->compoundElements[i]; // <-- Ссылка! Изменения применятся к оригиналу
+                    auto& elem = rb->compoundElements[i];
+                    ImGui::PushID(static_cast<int>(i));
 
-                    ImGui::PushID(i); // Важно для уникальности ID виджетов
-
-                    // Заголовок элемента
                     char label[64];
                     sprintf_s(label, "Element %zu", i);
+                    bool elemOpen = ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen);
 
-                    bool open = ImGui::CollapsingHeader(label, ImGuiTreeNodeFlags_DefaultOpen);
-
-                    if (open)
+                    if (elemOpen)
                     {
                         ImGui::Indent();
 
-                        // Тип формы
-                        const char* types[] = { "Box", "Sphere", "Cylinder", "Capsule" };
-                        int typeIdx = (int)elem.type;
-                        if (ImGui::Combo("Type", &typeIdx, types, 4))
+                        // 🔥 FIX #1: Правильный массив типов + IM_ARRAYSIZE
+                        const char* types[] = { "Box", "Sphere", "Cylinder", "Capsule", "ConvexHull", "VHACD" };
+                        int typeIdx = static_cast<int>(elem.type);
+                        if (ImGui::Combo("Type", &typeIdx, types, IM_ARRAYSIZE(types)))
                         {
-                            elem.type = (RigidBodyComponent::CompoundElement::ShapeType)typeIdx;
+                            elem.type = static_cast<RigidBodyComponent::CompoundElement::ShapeType>(typeIdx);
                             needsRecreate = true;
                         }
 
                         // Позиция
                         if (ImGui::DragFloat3("Position", &elem.localPosition.x, 0.1f))
+                            needsRecreate = true;
+
+                        // Вращение (Euler в градусах)
+                        if (elem.editorEulerDirty)
                         {
-                            needsRecreate = true; // Помечаем, что нужно пересоздать тело
+                            btQuaternion q(elem.localRotation.x, elem.localRotation.y, elem.localRotation.z, elem.localRotation.w);
+                            btScalar yaw = 0, pitch = 0, roll = 0;
+                            q.getEulerZYX(yaw, pitch, roll);
+                            elem.editorEulerDegrees = {
+                                static_cast<float>(roll) * (180.0f / XM_PI),
+                                static_cast<float>(pitch) * (180.0f / XM_PI),
+                                static_cast<float>(yaw) * (180.0f / XM_PI)
+                            };
+                            elem.editorEulerDirty = false;
                         }
 
-                        // Вращение (если используете Euler)
-                        // Если храните кватернион, нужно конвертировать туда-сюда для DragFloat3
-                        XMFLOAT3 euler = QuaternionToEuler(XMFloat4ToBtQuaternion(elem.localRotation));
-                        if (ImGui::DragFloat3("Rotation", &euler.x, 0.05f))
+                        if (ImGui::DragFloat3("Rotation (deg)", &elem.editorEulerDegrees.x, 0.5f, -360.0f, 360.0f, "%.1f°"))
                         {
-                            XMFloat4ToBtQuaternion(elem.localRotation) = EulerToQuaternion(euler);
+                            float rx = elem.editorEulerDegrees.x * (XM_PI / 180.0f);
+                            float ry = elem.editorEulerDegrees.y * (XM_PI / 180.0f);
+                            float rz = elem.editorEulerDegrees.z * (XM_PI / 180.0f);
+                            btQuaternion q; q.setEulerZYX(rz, ry, rx);
+                            elem.localRotation = { static_cast<float>(q.x()), static_cast<float>(q.y()), static_cast<float>(q.z()), static_cast<float>(q.w()) };
                             needsRecreate = true;
                         }
 
-                        // Размеры в зависимости от типа
+                        // 🔥 FIX #2: meshRenderer объявлена ВНУТРИ цикла
+                        auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+
+                        // ═══════════════════════════════════════════════════════════
+                        // 🔥 VHACD-блок (показывается ТОЛЬКО для типа VHACD)
+                        // ═══════════════════════════════════════════════════════════
+                        if (elem.type == RigidBodyComponent::CompoundElement::VHACD)
+                        {
+                            ImGui::Spacing(); ImGui::Separator();
+                            ImGui::TextColored(ImVec4(0.3f, 0.6f, 1.0f, 1.0f), " VHACD Settings");
+                            ImGui::Indent();
+                            bool vhacdChanged = false;
+
+                            // Выбор модели
+                            ImGui::Text("Source Model:"); ImGui::SameLine();
+                       //    const char* modelName = (elem.vhacdModel && elem.vhacdModel->GetName) ? elem.vhacdModel->GetName() : "None";
+                            ImGui::TextDisabled(" %s", "modelName");
+                            ImGui::SameLine();
+                            if (ImGui::SmallButton("Pick..."))
+                            {
+                                if (meshRenderer && meshRenderer->model)
+                                {
+                                    elem.vhacdModel = meshRenderer->model;
+                                    vhacdChanged = true;
+                                    OutputDebugStringA("[Editor] VHACD model assigned from renderer\n");
+                                }
+                            }
+                            ImGui::SameLine(); HelpMarker("Assign the mesh to decompose.");
+
+                            // Масштаб коллизии
+                            ImGui::Spacing(); ImGui::Text("Collision Scale:");
+                            if (ImGui::DragFloat3("##VHACDScale", &elem.vhacdScale.x, 0.1f, 0.1f, 10.0f, "%.2f"))
+                            {
+                                elem.vhacdScale.x = fmaxf(0.1f, elem.vhacdScale.x);
+                                elem.vhacdScale.y = fmaxf(0.1f, elem.vhacdScale.y);
+                                elem.vhacdScale.z = fmaxf(0.1f, elem.vhacdScale.z);
+                                vhacdChanged = true;
+                            }
+                            ImGui::SameLine(); if (ImGui::SmallButton("Reset")) { elem.vhacdScale = { 1,1,1 }; vhacdChanged = true; }
+
+                            // Параметры качества
+                            if (ImGui::CollapsingHeader("Quality Parameters", ImGuiTreeNodeFlags_DefaultOpen))
+                            {
+                                ImGui::Indent();
+                                int res = static_cast<int>(elem.vhacdResolution);
+                                if (ImGui::SliderInt("Resolution", &res, 10000, 400000, "%dk")) { elem.vhacdResolution = static_cast<uint32_t>(res); vhacdChanged = true; }
+                                ImGui::SameLine(); HelpMarker("Higher = more accurate but slower.");
+
+                                int maxHulls = static_cast<int>(elem.vhacdMaxHulls);
+                                if (ImGui::SliderInt("Max Hulls", &maxHulls, 1, 128, "%d")) { elem.vhacdMaxHulls = static_cast<uint32_t>(maxHulls); vhacdChanged = true; }
+                                ImGui::SameLine(); HelpMarker("Limit convex parts count.");
+
+                                int verts = static_cast<int>(elem.vhacdMaxVertsPerHull);
+                                if (ImGui::SliderInt("Verts/Hull", &verts, 4, 256, "%d")) { elem.vhacdMaxVertsPerHull = static_cast<uint32_t>(verts); vhacdChanged = true; }
+                                ImGui::SameLine(); HelpMarker("Max vertices per hull. 64 is good for Bullet.");
+
+                                float err = elem.vhacdVolumeError;
+                                if (ImGui::SliderFloat("Volume Error %%", &err, 0.001f, 0.1f, "%.3f%%")) { elem.vhacdVolumeError = err; vhacdChanged = true; }
+                                ImGui::SameLine(); HelpMarker("Lower = tighter fit.");
+                                ImGui::Unindent();
+                            }
+
+                            // Кнопка перегенерации
+                            ImGui::Spacing();
+                            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.4f, 0.7f, 1.0f));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.5f, 0.9f, 1.0f));
+                            if (ImGui::Button(" Regenerate Collision", ImVec2(-1, 0)))
+                            {
+                                if (elem.vhacdModel) { needsRecreate = true; OutputDebugStringA("[Editor] VHACD regeneration requested\n"); }
+                                else { ImGui::SetTooltip("⚠️ Assign a model first!"); }
+                            }
+                            ImGui::PopStyleColor(2);
+
+                            if (elem.vhacdLastHullCount > 0)
+                                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "✓ Generated: %d convex hulls", elem.vhacdLastHullCount);
+
+                            ImGui::Unindent();
+                            if (vhacdChanged) needsRecreate = true;
+                        }
+                        // ═══════════════════════════════════════════════════════════
+                        // 🔥 КОНЕЦ VHACD-блока
+                        // ═══════════════════════════════════════════════════════════
+
+                        // 🔥 FIX #3: Явные проверки типов — VHACD НЕ попадёт в else
                         bool sizeChanged = false;
                         if (elem.type == RigidBodyComponent::CompoundElement::Box)
                         {
@@ -1111,11 +1398,13 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                         {
                             if (ImGui::DragFloat("Radius", &elem.radius, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
                         }
-                        else // Cylinder, Capsule
+                        else if (elem.type == RigidBodyComponent::CompoundElement::Cylinder ||
+                            elem.type == RigidBodyComponent::CompoundElement::Capsule)
                         {
                             if (ImGui::DragFloat("Radius", &elem.radius, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
                             if (ImGui::DragFloat("Height", &elem.height, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
                         }
+                        // VHACD, ConvexHull и другие типы просто пропускают этот блок — как и нужно!
 
                         if (sizeChanged) needsRecreate = true;
 
@@ -1126,154 +1415,117 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                             rb->compoundElements.erase(rb->compoundElements.begin() + i);
                             needsRecreate = true;
                             ImGui::PopID();
-                            break; // Выход из цикла, так как индекс сместился
+                            break;
                         }
-                        ImGui::Spacing();
-                        ImGui::Separator();
+
+                        // Advanced Offsets (только для Box / Cylinder / Capsule)
+                        ImGui::Spacing(); ImGui::Separator();
                         ImGui::TextColored(COL_TEXT_DIM, " Advanced Size & Offsets");
                         ImGui::Indent();
-
                         bool shapeChanged = false;
 
-                        // В зависимости от типа фигуры показываем разные настройки
                         if (elem.type == RigidBodyComponent::CompoundElement::Box)
                         {
-                            // Для бокса: отдельные оффсеты для Min и Max (как у Compartment)
-                            // Это позволяет сдвигать грани независимо от центра
                             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), " Half-Extents Adjustment");
+                            if (ImGui::DragFloat3(" Min Offset (Neg)", &elem.boxOffsetMin.x, 0.05f, -100.0f, 100.0f)) shapeChanged = true;
+                            ImGui::SameLine(); HelpMarker("Сдвигает отрицательные грани");
+                            if (ImGui::DragFloat3(" Max Offset (Pos)", &elem.boxOffsetMax.x, 0.05f, -100.0f, 100.0f)) shapeChanged = true;
+                            ImGui::SameLine(); HelpMarker("Сдвигает положительные грани");
 
-                            // Оффсет минимума (отрицательная сторона)
-                            if (ImGui::DragFloat3(" Min Offset (Neg)", &elem.boxOffsetMin.x, 0.05f, -100.0f, 100.0f))
+                            // Кнопка Corner Edit (оставляем как было)
+                            ImGui::Spacing();
+                            bool isThisElemActive = (m_cornerEditActive && m_cornerEditEntity == entity && m_cornerEditElemIndex == (int)i);
+                            ImGui::PushStyleColor(ImGuiCol_Button, isThisElemActive ? ImVec4(0.8f, 0.4f, 0.0f, 1) : ImVec4(0.22f, 0.22f, 0.22f, 1));
+                            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, isThisElemActive ? ImVec4(1.0f, 0.55f, 0.1f, 1) : ImVec4(0.32f, 0.32f, 0.32f, 1));
+                            if (ImGui::Button(isThisElemActive ? "Corner Edit: ON" : "Edit Corners in Viewport", ImVec2(-1, 0)))
                             {
-                                shapeChanged = true;
+                                if (isThisElemActive) { m_cornerEditActive = false; m_cornerEditEntity = INVALID_ENTITY; m_cornerEditElemIndex = -1; }
+                                else { m_cornerEditActive = true; m_cornerEditEntity = entity; m_cornerEditElemIndex = (int)i; }
                             }
-                            ImGui::SameLine();
-                            HelpMarker("Сдвигает отрицательные грани внутрь/наружу");
-
-                            // Оффсет максимума (положительная сторона)
-                            if (ImGui::DragFloat3(" Max Offset (Pos)", &elem.boxOffsetMax.x, 0.05f, -100.0f, 100.0f))
-                            {
-                                shapeChanged = true;
-                            }
-                            ImGui::SameLine();
-                            HelpMarker("Сдвигает положительные грани внутрь/наружу");
+                            ImGui::PopStyleColor(2);
+                            if (isThisElemActive) ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), "  Drag white dots in viewport");
                         }
                         else if (elem.type == RigidBodyComponent::CompoundElement::Cylinder ||
                             elem.type == RigidBodyComponent::CompoundElement::Capsule)
                         {
-                            // Для цилиндров и капсул: радиус и высота могут иметь свои смещения
                             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), " Dimension Offsets");
-
-                            float radiusOffset = elem.radiusOffset;
-                            if (ImGui::DragFloat(" Radius Offset", &radiusOffset, 0.05f, -0.5f, 0.5f))
-                            {
-                                elem.radiusOffset = radiusOffset;
-                                shapeChanged = true;
-                            }
-
-                            float heightOffsetTop = elem.heightOffsetTop;
-                            if (ImGui::DragFloat(" Top Height Offset", &heightOffsetTop, 0.05f, -1.0f, 1.0f))
-                            {
-                                elem.heightOffsetTop = heightOffsetTop;
-                                shapeChanged = true;
-                            }
-
-                            float heightOffsetBottom = elem.heightOffsetBottom;
-                            if (ImGui::DragFloat(" Bottom Height Offset", &heightOffsetBottom, 0.05f, -1.0f, 1.0f))
-                            {
-                                elem.heightOffsetBottom = heightOffsetBottom;
-                                shapeChanged = true;
-                            }
+                            float ro = elem.radiusOffset;
+                            if (ImGui::DragFloat(" Radius Offset", &ro, 0.05f, -0.5f, 0.5f)) { elem.radiusOffset = ro; shapeChanged = true; }
+                            float hot = elem.heightOffsetTop;
+                            if (ImGui::DragFloat(" Top Height Offset", &hot, 0.05f, -1.0f, 1.0f)) { elem.heightOffsetTop = hot; shapeChanged = true; }
+                            float hob = elem.heightOffsetBottom;
+                            if (ImGui::DragFloat(" Bottom Height Offset", &hob, 0.05f, -1.0f, 1.0f)) { elem.heightOffsetBottom = hob; shapeChanged = true; }
                         }
 
                         ImGui::Unindent();
-
-                        // Если что-то изменилось в размерах/оффсетах — пересоздаем тело
-                        if (shapeChanged)
-                        {
-                            needsRecreate = true;
-                        }
-
+                        if (shapeChanged) needsRecreate = true;
                         ImGui::Unindent();
                     }
-
                     ImGui::PopID();
-
                 }
 
                 if (needsRecreate && rb->body)
-                {
-                    RefreshRigidBody(registry, entity, rb);
-                }
-
+                    PhysicsSystem::RefreshRigidBody(registry, entity, rb);
+                needsRecreate = false;  // 🔥 КРИТИЧНО: сброс флага!
             }
             else
             {
                 // ═══════════════════════════════════════════════════════════════
-                // 🔥 РЕЖИМ ОДИНОЧНОЙ КОЛЛИЗИИ (Старый код)
+                // 🔥 РЕЖИМ ОДИНОЧНОЙ КОЛЛИЗИИ
                 // ═══════════════════════════════════════════════════════════════
                 ImGui::Separator();
                 ImGui::TextColored(COL_TEXT_DIM, " Mass");
                 ImGui::SetNextItemWidth(-1);
                 if (ImGui::DragFloat("##RBMass", &rb->mass, 0.1f, 0.0f, 10000.0f))
-                {
-                    if (rb->body) RefreshRigidBody(registry, entity, rb);
-                }
+                    if (rb->body) PhysicsSystem::RefreshRigidBody(registry, entity, rb);
 
                 ImGui::Spacing();
                 ImGui::TextColored(COL_TEXT_DIM, " Shape Type");
+
+                // 🔥 FIX #4: Правильный массив + IM_ARRAYSIZE для одиночных форм
                 const char* shapeNames[] = {
                     "Box", "Sphere", "Cylinder", "Capsule",
-                    "Plane", "ConvexHull", "TriangleMesh"
+                    "Plane", "ConvexHull", "TriangleMesh", "GImpactMesh", "VHACD"
                 };
                 int shapeIdx = static_cast<int>(rb->shapeType);
-                if (ImGui::Combo("##RBShape", &shapeIdx, shapeNames, 7))
+                if (ImGui::Combo("##RBShape", &shapeIdx, shapeNames, IM_ARRAYSIZE(shapeNames)))
                 {
                     rb->shapeType = static_cast<RigidBodyComponent::ShapeType>(shapeIdx);
-                    if (rb->body) RefreshRigidBody(registry, entity, rb);
+                    if (rb->body)  PhysicsSystem::RefreshRigidBody(registry, entity, rb);
                 }
 
                 ImGui::Spacing();
 
-                // ПАРАМЕТРЫ ЗАВИСЯТ ОТ ТИПА КОЛЛИЗИИ
+                // ПАРАМЕТРЫ ЗАВИСЯТ ОТ ТИПА
                 switch (rb->shapeType)
                 {
                 case RigidBodyComponent::Sphere:
                 {
                     auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
                     if (ImGui::Checkbox(" Manual Size##SphereManual", &rb->useManualSize))
-                    {
-                        if (rb->body) RefreshRigidBody(registry, entity, rb);
-                    }
-                    ImGui::SameLine();
-                    ImGui::TextColored(COL_TEXT_DIM, "(ignore mesh bounds)");
-
+                        if (rb->body)  PhysicsSystem::RefreshRigidBody(registry, entity, rb);
+                    ImGui::SameLine(); ImGui::TextColored(COL_TEXT_DIM, "(ignore mesh bounds)");
                     if (rb->useManualSize)
                     {
-                        ImGui::Spacing();
-                        ImGui::TextColored(COL_TEXT_DIM, " Radius");
+                        ImGui::Spacing(); ImGui::TextColored(COL_TEXT_DIM, " Radius");
                         ImGui::SetNextItemWidth(-1);
                         float radius = rb->shapeRadius;
                         if (ImGui::DragFloat("##Radius", &radius, 0.05f, 0.01f, 100.0f))
                         {
-                            rb->shapeRadius = radius;
-                            if (rb->body) RefreshRigidBody(registry, entity, rb);
+                            rb->shapeRadius = radius; if (rb->body) PhysicsSystem::RefreshRigidBody(registry, entity, rb);
                         }
                     }
                     else
                     {
                         if (meshRenderer && meshRenderer->model)
                         {
-                            XMFLOAT3 center;
-                            float meshRadius;
+                            XMFLOAT3 center; float meshRadius;
                             meshRenderer->model->GetBoundingSphere(&center, &meshRadius);
                             rb->shapeRadius = meshRadius;
                             ImGui::TextColored(COL_TEXT_DIM, " Auto radius from mesh: %.3f", meshRadius);
                         }
                         else
-                        {
                             ImGui::TextColored(COL_TEXT_DIM, " No mesh - using shapeRadius: %.3f", rb->shapeRadius);
-                        }
                     }
                     break;
                 }
@@ -1282,89 +1534,100 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                     auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
                     if (!rb->useManualSize && meshRenderer && meshRenderer->model)
                     {
-                        XMFLOAT3 min, max;
-                        meshRenderer->model->GetBoundingBox(&min, &max);
-                        rb->shapeSize = btVector3(
-                            (max.x - min.x) * 0.5f,
-                            (max.y - min.y) * 0.5f,
-                            (max.z - min.z) * 0.5f
-                        );
-                        ImGui::TextColored(COL_TEXT_DIM, " Auto box from mesh: (%.2f, %.2f, %.2f)",
-                            rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z());
+                        XMFLOAT3 min, max; meshRenderer->model->GetBoundingBox(&min, &max);
+                        rb->shapeSize = btVector3((max.x - min.x) * 0.5f, (max.y - min.y) * 0.5f, (max.z - min.z) * 0.5f);
+                        ImGui::TextColored(COL_TEXT_DIM, " Auto box from mesh: (%.2f, %.2f, %.2f)", rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z());
                     }
-
                     ImGui::TextColored(COL_TEXT_DIM, " Half Extents (X, Y, Z)");
                     float size[3] = { rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z() };
                     if (ImGui::DragFloat3("##BoxSize", size, 0.05f, 0.01f, 100.0f))
                     {
-                        rb->shapeSize = btVector3(size[0], size[1], size[2]);
-                        rb->useManualSize = true;
-                        if (rb->body) RefreshRigidBody(registry, entity, rb);
+                        rb->shapeSize = btVector3(size[0], size[1], size[2]); rb->useManualSize = true; if (rb->body)  PhysicsSystem::RefreshRigidBody(registry, entity, rb);
                     }
                     break;
                 }
                 case RigidBodyComponent::Cylinder:
                 {
-                    float radius = rb->shapeRadius;
-                    float height = rb->shapeSize.y();
-                    bool changed = false;
-                    ImGui::TextColored(COL_TEXT_DIM, " Radius");
-                    ImGui::SetNextItemWidth(-1);
+                    float radius = rb->shapeRadius, height = rb->shapeSize.y(); bool changed = false;
+                    ImGui::TextColored(COL_TEXT_DIM, " Radius"); ImGui::SetNextItemWidth(-1);
                     if (ImGui::DragFloat("##CylRadius", &radius, 0.05f, 0.01f, 100.0f)) { rb->shapeRadius = radius; changed = true; }
-                    ImGui::Spacing();
-                    ImGui::TextColored(COL_TEXT_DIM, " Height");
-                    ImGui::SetNextItemWidth(-1);
+                    ImGui::Spacing(); ImGui::TextColored(COL_TEXT_DIM, " Height"); ImGui::SetNextItemWidth(-1);
                     if (ImGui::DragFloat("##CylHeight", &height, 0.05f, 0.01f, 100.0f)) { rb->shapeSize.setY(height); changed = true; }
-                    if (changed && rb->body) RefreshRigidBody(registry, entity, rb);
+                    if (changed && rb->body) PhysicsSystem::RefreshRigidBody(registry, entity, rb);
                     break;
                 }
                 case RigidBodyComponent::Capsule:
                 {
-                    float radius = rb->shapeRadius;
-                    float height = rb->shapeSize.y();
-                    bool changed = false;
-                    ImGui::TextColored(COL_TEXT_DIM, " Radius");
-                    ImGui::SetNextItemWidth(-1);
+                    float radius = rb->shapeRadius, height = rb->shapeSize.y(); bool changed = false;
+                    ImGui::TextColored(COL_TEXT_DIM, " Radius"); ImGui::SetNextItemWidth(-1);
                     if (ImGui::DragFloat("##CapsRadius", &radius, 0.05f, 0.01f, 100.0f)) { rb->shapeRadius = radius; changed = true; }
-                    ImGui::Spacing();
-                    ImGui::TextColored(COL_TEXT_DIM, " Height");
-                    ImGui::SetNextItemWidth(-1);
+                    ImGui::Spacing(); ImGui::TextColored(COL_TEXT_DIM, " Height"); ImGui::SetNextItemWidth(-1);
                     if (ImGui::DragFloat("##CapsHeight", &height, 0.05f, 0.01f, 100.0f)) { rb->shapeSize.setY(height); changed = true; }
-                    if (changed && rb->body) RefreshRigidBody(registry, entity, rb);
+                    if (changed && rb->body)  PhysicsSystem::RefreshRigidBody(registry, entity, rb);
                     break;
                 }
                 case RigidBodyComponent::ConvexHull:
                 {
                     ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), " Auto-calculated from mesh geometry");
                     auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
-                    if (!meshRenderer || !meshRenderer->model)
-                        ImGui::TextColored(COL_RED, "⚠️ No mesh assigned");
+                    if (!meshRenderer || !meshRenderer->model) ImGui::TextColored(COL_RED, "⚠️ No mesh assigned");
                     break;
                 }
                 case RigidBodyComponent::TriangleMesh:
+                {
                     ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), " Exact mesh collision (static only)");
                     rb->mass = 0.0f;
                     break;
-                case RigidBodyComponent::Plane:
-                    ImGui::TextColored(COL_TEXT_DIM, " Y");
-                    ImGui::SetNextItemWidth(-1);
-                    float y = rb->shapeSize.y();
-                    if (ImGui::DragFloat("##Y", &y, 0.05f, 0.01f, 100.0f))
+                }
+                case RigidBodyComponent::GImpactMesh:
+                {
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), " Exact mesh collision (dynamic!)");
+                    ImGui::TextColored(COL_TEXT_DIM, " Supports mass > 0, objects can be inside.");
+                    auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+                    if (meshRenderer && meshRenderer->model)
                     {
-                        rb->shapeSize.setY(y);
-                        if (rb->body) RefreshRigidBody(registry, entity, rb);
+                        std::vector<XMFLOAT3> tris; meshRenderer->model->GetRawTriangles(tris);
+                        ImGui::TextColored(COL_TEXT_DIM, " Triangles: %zu", tris.size() / 3);
+                        if (tris.size() / 3 > 5000) ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), " ⚠ High triangle count!");
+                    }
+                    else ImGui::TextColored(COL_RED, "⚠️ No mesh assigned!");
+                    break;
+                }
+                // 🔥 FIX #5: Добавлен кейс для VHACD в одиночном режиме
+                case RigidBodyComponent::VHACD:
+                {
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), " VHACD: Dynamic concave collision");
+                    ImGui::TextColored(COL_TEXT_DIM, " Decomposes mesh into convex hulls for stable physics.");
+                    auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+                    if (meshRenderer && meshRenderer->model)
+                    {
+                        std::vector<XMFLOAT3> tris; meshRenderer->model->GetRawTriangles(tris);
+                        ImGui::TextColored(COL_TEXT_DIM, " Triangles: %zu — will be decomposed", tris.size() / 3);
+                    }
+                    else ImGui::TextColored(COL_RED, "⚠️ Assign a mesh first!");
+                    break;
+                }
+                case RigidBodyComponent::Plane:
+                {
+                    ImGui::TextColored(COL_TEXT_DIM, " Y"); ImGui::SetNextItemWidth(-1);
+                    float y = rb->shapeSize.y();
+                    if (ImGui::DragFloat("##Y", &y, 0.05f, 0.01f, 100.0f)) { rb->shapeSize.setY(y); if (rb->body)  PhysicsSystem::RefreshRigidBody(registry, entity, rb);
                     }
                     ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), " Infinite plane at Y=0");
                     rb->mass = 0.0f;
                     break;
                 }
+                }
 
                 ImGui::Spacing();
                 ImGui::Checkbox(" Enable CCD##RB", &rb->enableCCD);
+                // 🔥 COLLISION FILTERING
+// ═══════════════════════════════════════════════════════════════
+               
             }
         }
     }
-
+	
     if (registry.HasComponent<BuoyancyComponent>(entity))
     {
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.30f, 0.20f, 1.0f)); // 💚 Зеленоватый оттенок для воды
@@ -1492,6 +1755,38 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
             }
             ImGui::EndDisabled();
             if (hasSub)
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(COL_TEXT_DIM, "(already added)");
+            }
+        }
+        {
+            const bool coll = registry.HasComponent<SubmarineCollisionSetup>(entity);
+            ImGui::BeginDisabled(coll);
+            if (ImGui::Selectable("  Collison Component"))
+            {
+                SubmarineCollisionSetup collision{};
+                registry.AddComponent<SubmarineCollisionSetup>(entity, collision);
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            if (coll)
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(COL_TEXT_DIM, "(already added)");
+            }
+        }
+
+        {
+            const bool hasDoor = registry.HasComponent<DoorComponent>(entity);
+            ImGui::BeginDisabled(hasDoor);
+            if (ImGui::Selectable("  Door Component"))
+            {
+                registry.AddComponent<DoorComponent>(entity, DoorComponent{});
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            if (hasDoor)
             {
                 ImGui::SameLine();
                 ImGui::TextColored(COL_TEXT_DIM, "(already added)");
@@ -1647,13 +1942,13 @@ void EditorUI::RenderSidebar(SceneManager& sceneManager)
             ImGui::EndTabItem();
         }
 
-       /* if (ImGui::BeginTabItem("Details"))
-        {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
-            RenderDetailsPanel(sceneManager);
-            ImGui::PopStyleVar();
-            ImGui::EndTabItem();
-        }*/
+        /* if (ImGui::BeginTabItem("Details"))
+         {
+             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
+             RenderDetailsPanel(sceneManager);
+             ImGui::PopStyleVar();
+             ImGui::EndTabItem();
+         }*/
         if (ImGui::BeginTabItem("Spawn"))
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
@@ -1679,20 +1974,14 @@ void EditorUI::RenderSidebar(SceneManager& sceneManager)
         if (ImGui::BeginTabItem("Joint "))
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
-			RenderJointConnectionUI(sceneManager.GetECSRegistry(), m_selectedEntity);
+            RenderJointConnectionUI(sceneManager.GetECSRegistry(), m_selectedEntity);
             ImGui::PopStyleVar();
             ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginTabItem("Submarine"))
-        {
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
-            RenderSubmarineBuilder(sceneManager);
-            ImGui::PopStyleVar();
-            ImGui::EndTabItem();
-        }
+        
 
-     
+
         RenderShaderSelector(sceneManager);
 
         ImGui::EndTabBar();
@@ -1970,7 +2259,7 @@ void EditorUI::RenderLightPropertiesByEntity(SceneManager& sceneManager, Entity 
     if (ImGui::Button("Delete Light"))
     {
         // Запрос на удаление (лучше через очередь, чтобы не удалить во время итерации)
-         registry.DestroyEntity(lightEntity);
+        registry.DestroyEntity(lightEntity);
     }
 }
 
@@ -2256,8 +2545,7 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
         if (ImGui::Button("Refresh List", ImVec2(-1, 0)))
             RefreshShaderList();
 
-        // ── Назначение текстур ────────────────────────────────────────────────
-               // ── Назначение текстур ────────────────────────────────────────────────
+        // ── Секция текстур ────────────────────────────────────────────────────
         if (hasObject)
         {
             ImGui::Spacing();
@@ -2266,97 +2554,140 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
             SectionHeader("Textures");
             ImGui::Spacing();
 
-            // Определяем выбранный шейдер — PBR требует особые подписи слотов
-            const bool isPBR = (m_selectedShaderIndex >= 0 &&
-                m_selectedShaderIndex < (int)m_shaderNames.size() &&
-                m_shaderNames[m_selectedShaderIndex] == "pbr");
+            // Проверяем — есть ли у модели вшитые (embedded) текстуры из GLB
+            auto* mesh = sceneManager.GetECSRegistry().GetComponent<MeshRendererComponent>(m_selectedEntity);
+            const bool hasEmbedded = mesh && mesh->model && mesh->model->IsEmbeddedFormat();
 
-            // ── Слот 0 ────────────────────────────────────────────────────────
-            ImGui::TextColored(COL_TEXT_DIM, isPBR ? " Albedo (slot 0)" : " Texture (slot 0)");
-            ImGui::SetNextItemWidth(-std::floor(60.0f * ScaleX()) - 4.0f);
-            ImGui::InputText("##Tex0Path", m_tex0PathBuf, sizeof(m_tex0PathBuf));
-            ImGui::SameLine(0, 4);
-            ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_ACCENT_HOV);
-            if (ImGui::Button("Apply##T0", ImVec2(-1, 0)))
+            if (hasEmbedded)
             {
-                if (m_tex0PathBuf[0] != '\0')
-                    OutputDebugStringA(("UI: SetObjectTexture() called for slot 0, path=" +
-                        std::string(m_tex0PathBuf) + "\n").c_str());
-
-                sceneManager.SetObjectTexture(m_selectedEntity, 0,
-                    m_tex0PathBuf, m_device, m_context);
-            }
-            ImGui::PopStyleColor(2);
-
-            ImGui::Spacing();
-
-            // ── Слот 1 ────────────────────────────────────────────────────────
-            ImGui::TextColored(COL_TEXT_DIM, isPBR ? " Normal Map (slot 1)" : " Normal Map (slot 1)");
-            ImGui::SetNextItemWidth(-std::floor(60.0f * ScaleX()) - 4.0f);
-            ImGui::InputText("##Tex1Path", m_tex1PathBuf, sizeof(m_tex1PathBuf));
-            ImGui::SameLine(0, 4);
-            ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_ACCENT_HOV);
-            if (ImGui::Button("Apply##T1", ImVec2(-1, 0)))
-            {
-                if (m_tex1PathBuf[0] != '\0')
-                    sceneManager.SetObjectTexture(m_selectedEntity, 1,
-                        m_tex1PathBuf, m_device, m_context);
-            }
-            ImGui::PopStyleColor(2);
-
-            // ── Слоты 2 и 3 — только для PBR ─────────────────────────────────
-            if (isPBR)
-            {
+                // ── GLB: текстуры уже вшиты — показываем статус по каждому мешу ──
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
+                ImGui::TextWrapped("  GLB embedded textures detected.");
+                ImGui::PopStyleColor();
+                ImGui::TextColored(COL_TEXT_DIM, "  No paths needed — textures are");
+                ImGui::TextColored(COL_TEXT_DIM, "  loaded automatically from the file.");
                 ImGui::Spacing();
 
-                ImGui::TextColored(COL_TEXT_DIM, " Metalness (slot 2)");
-                ImGui::SetNextItemWidth(-std::floor(60.0f * ScaleX()) - 4.0f);
-                ImGui::InputText("##Tex2Path", m_tex2PathBuf, sizeof(m_tex2PathBuf));
+                // Показываем сколько мешей и какие слоты заполнены
+                const auto& parts = mesh->model->GetMeshParts();
+                ImGui::TextColored(COL_TEXT_DIM, "  Meshes: %d", (int)parts.size());
+                for (int pi = 0; pi < (int)parts.size(); ++pi)
+                {
+                    const auto& p = parts[pi];
+                    ImGui::Text("  [%d]  Albedo:%s  Normal:%s  Metal:%s  Rough:%s",
+                        pi,
+                        p.texture ? "OK" : "--",
+                        p.normalMap ? "OK" : "--",
+                        p.metalness ? "OK" : "--",
+                        p.roughness ? "OK" : "--");
+                }
+
+                ImGui::Spacing();
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.3f, 1.0f),
+                    "  Tip: use 'pbr' shader to see all maps.");
+            }
+            else
+            {
+                // ── Обычная модель (OBJ/FBX) — ручной ввод путей текстур ────────
+                const bool isPBR = (m_selectedShaderIndex >= 0 &&
+                    m_selectedShaderIndex < (int)m_shaderNames.size() &&
+                    m_shaderNames[m_selectedShaderIndex] == "pbr");
+
+                // Слот 0
+                ImGui::TextColored(COL_TEXT_DIM, isPBR ? " Albedo (slot 0)" : " Texture (slot 0)");
+                ImGui::SetNextItemWidth(200.0f); // Тестовое значение
+                ImGui::InputText("##Tex0Path", m_tex0PathBuf, sizeof(m_tex0PathBuf));
                 ImGui::SameLine(0, 4);
                 ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_ACCENT_HOV);
-                if (ImGui::Button("Apply##T2", ImVec2(-1, 0)))
-                {
-                    if (m_tex2PathBuf[0] != '\0')
-                        sceneManager.SetObjectTexture(m_selectedEntity, 2,
-                            m_tex2PathBuf, m_device, m_context);
-                }
+                if (ImGui::Button("Apply##T0", ImVec2(-1, 0)))
+                    sceneManager.SetObjectTexture(m_selectedEntity, 0, m_tex0PathBuf, m_device, m_context);
                 ImGui::PopStyleColor(2);
 
                 ImGui::Spacing();
 
-                ImGui::TextColored(COL_TEXT_DIM, " Roughness (slot 3)");
+                // Слот 1
+                ImGui::TextColored(COL_TEXT_DIM, " Normal Map (slot 1)");
                 ImGui::SetNextItemWidth(-std::floor(60.0f * ScaleX()) - 4.0f);
-                ImGui::InputText("##Tex3Path", m_tex3PathBuf, sizeof(m_tex3PathBuf));
+                ImGui::InputText("##Tex1Path", m_tex1PathBuf, sizeof(m_tex1PathBuf));
                 ImGui::SameLine(0, 4);
                 ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
                 ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_ACCENT_HOV);
-                if (ImGui::Button("Apply##T3", ImVec2(-1, 0)))
-                {
-                    if (m_tex3PathBuf[0] != '\0')
-                        sceneManager.SetObjectTexture(m_selectedEntity, 3,
-                            m_tex3PathBuf, m_device, m_context);
-                }
+                if (ImGui::Button("Apply##T1", ImVec2(-1, 0)))
+                    sceneManager.SetObjectTexture(m_selectedEntity, 1, m_tex1PathBuf, m_device, m_context);
                 ImGui::PopStyleColor(2);
 
-                ImGui::Spacing();
-                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
-                    " Tip: если нет metalness/roughness\n"
-                    " текстур — используй белый/серый PNG");
-            }
+                // Слоты 2 и 3 — только для PBR
+                if (isPBR)
+                {
+                    ImGui::Spacing();
 
-            ImGui::Spacing();
+                    ImGui::TextColored(COL_TEXT_DIM, " Metalness (slot 2)");
+                    ImGui::SetNextItemWidth(-std::floor(60.0f * ScaleX()) - 4.0f);
+                    ImGui::InputText("##Tex2Path", m_tex2PathBuf, sizeof(m_tex2PathBuf));
+                    ImGui::SameLine(0, 4);
+                    ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_ACCENT_HOV);
+                    if (ImGui::Button("Apply##T2", ImVec2(-1, 0)))
+                        sceneManager.SetObjectTexture(m_selectedEntity, 2, m_tex2PathBuf, m_device, m_context);
+                    ImGui::PopStyleColor(2);
 
-            // Пресеты текстур
-            ImGui::TextColored(COL_TEXT_DIM, " Texture presets");
-            for (int i = 0; i < PRESET_COUNT; ++i)
-            {
-                if (i > 0) ImGui::SameLine(0, 4);
-                if (ImGui::SmallButton(TEXTURE_PRESETS[i]))
-                    strncpy_s(m_tex0PathBuf, sizeof(m_tex0PathBuf),
-                        TEXTURE_PRESETS[i], _TRUNCATE);
+                    ImGui::Spacing();
+
+                    ImGui::TextColored(COL_TEXT_DIM, " Roughness (slot 3)");
+                    ImGui::SetNextItemWidth(-std::floor(60.0f * ScaleX()) - 4.0f);
+                    ImGui::InputText("##Tex3Path", m_tex3PathBuf, sizeof(m_tex3PathBuf));
+                    ImGui::SameLine(0, 4);
+                    ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
+                    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_ACCENT_HOV);
+                    if (ImGui::Button("Apply##T3", ImVec2(-1, 0)))
+                        sceneManager.SetObjectTexture(m_selectedEntity, 3, m_tex3PathBuf, m_device, m_context);
+                    ImGui::PopStyleColor(2);
+
+                    // ══════════════════════════════════════════════════════
+                    // НАСТРОЙКИ СТЕКЛА
+                    // ══════════════════════════════════════════════════════
+                    ImGui::Spacing();
+                    ImGui::Separator();
+                    ImGui::Spacing();
+                    SectionHeader("Glass / Transparency");
+                    ImGui::Spacing();
+
+                    auto* mesh = sceneManager.GetObjectMesh(m_selectedEntity);
+                    MaterialClass* mat = mesh ? mesh->material : nullptr;
+
+                    if (mat)
+                    {
+                        bool isGlass = mat->IsGlass();
+                        if (ImGui::Checkbox("Enable Glass Mode", &isGlass))
+                        {
+                            float currentOpacity = mat->GetGlassOpacity();
+                            mat->SetGlass(isGlass, isGlass ? (currentOpacity < 0.99f ? currentOpacity : 0.15f) : 1.0f);
+                        }
+
+                        if (isGlass)
+                        {
+                            ImGui::Spacing();
+                            float opacity = mat->GetGlassOpacity();
+                            ImGui::TextColored(COL_TEXT_DIM, " Glass Opacity (0=clear, 1=opaque)");
+                            ImGui::SetNextItemWidth(-1);
+                            if (ImGui::SliderFloat("##GlassOpacity", &opacity, 0.0f, 0.95f, "%.2f"))
+                                mat->SetGlass(true, opacity);
+
+                            ImGui::Spacing();
+                            ImGui::TextColored(ImVec4(0.4f, 0.9f, 1.0f, 1.0f),
+                                " Tip: 0.05-0.20 = clean window glass\n"
+                                " Tip: 0.3-0.6  = tinted/dirty glass\n"
+                                " Roughness tex not needed for glass\n"
+                                " (shader forces low roughness auto)");
+                        }
+                        else
+                        {
+                            ImGui::TextColored(COL_TEXT_DIM,
+                                " Off: opaque PBR material");
+                        }
+                    }
+                }
             }
         }
 
@@ -2370,307 +2701,13 @@ void EditorUI::RenderPhysicsSettings(SceneManager& sceneManager)
     {
         if (sceneManager.GetECSRegistry().HasComponent<RigidBodyComponent>(m_selectedEntity))
         {
-            
+
         }
     }
 
     ImGui::EndTabItem();
 
 }
-
-
-void EditorUI::RenderSubmarineBuilder(SceneManager& sceneManager)
-{
-    ImGui::Spacing();
-    SectionHeader("🚢 Submarine Editor");
-    ImGui::Spacing();
-
-    auto& registry = sceneManager.GetECSRegistry();
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // 🔹 СОЗДАНИЕ ПУСТОЙ ПОДЛОДКИ С МЕШЕМ
-    // ══════════════════════════════════════════════════════════════════════════
-    ImGui::TextColored(COL_ACCENT, "1. Create Submarine with Model:");
-    ImGui::TextColored(COL_TEXT_DIM, "Creates hull + compartments with visual mesh");
-    ImGui::Spacing();
-
-    static float spawnY = 0.0f;
-    static float hullRadius = 3.0f;
-    static float hullMass = 3000.0f;
-
-    ImGui::DragFloat("Spawn Height (Y)##Sub", &spawnY, 0.5f, -50.0f, 50.0f);
-    ImGui::DragFloat("Hull Radius", &hullRadius, 0.2f, 1.0f, 10.0f);
-    ImGui::DragFloat("Hull Mass", &hullMass, 100.0f, 1000.0f, 10000.0f);
-
-    ImGui::Spacing();
-
-    // Выбор модели для подлодки
-    ImGui::TextColored(COL_TEXT_DIM, " Model preset:");
-    const char* modelNames[] = { "Sphere", "Cylinder", "Cube" };
-    static int selectedHullModel = 0;
-
-    const float btnW = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
-    for (int i = 0; i < 3; i++)
-    {
-        if (i > 0) ImGui::SameLine(0, 4);
-        if (ImGui::Button(modelNames[i], ImVec2(btnW, 0)))
-            selectedHullModel = i;
-    }
-
-    ImGui::Spacing();
-
-    ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
-    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_ACCENT_HOV);
-    if (ImGui::Button("🚢 Create Submarine with Model", ImVec2(-1, 0)))
-    {
-        const char* modelPath = nullptr;
-        switch (selectedHullModel)
-        {
-        case 0: modelPath = "assets/model/sphere.obj"; break;
-        case 1: modelPath = "assets/model/cylinder.obj"; break;
-        case 2: modelPath = "assets/model/cube.obj"; break;
-        }
-
-        Entity newSub = CreateSubmarineWithMesh(
-            sceneManager,
-            XMFLOAT3(0, spawnY, 0),
-            modelPath,
-            hullRadius,
-            hullMass
-        );
-
-        if (newSub != INVALID_ENTITY)
-        {
-            m_selectedType = SelectedType::Object;
-            m_selectedEntity = newSub;
-        }
-    }
-    ImGui::PopStyleColor(2);
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // 🔹 ДОБАВЛЕНИЕ ОТСЕКОВ К ВЫБРАННОЙ ПОДЛОДКЕ
-    // ══════════════════════════════════════════════════════════════════════════
-    ImGui::TextColored(COL_ACCENT, "2. Add Compartments:");
-    ImGui::Spacing();
-
-    if (m_selectedType == SelectedType::Object && m_selectedEntity != INVALID_ENTITY)
-    {
-        auto* subComp = registry.GetComponent<SubmarineComponent>(m_selectedEntity);
-        auto* rbComp = registry.GetComponent<RigidBodyComponent>(m_selectedEntity);
-
-        bool isSubmarineRoot = (subComp && subComp->submarineRoot == m_selectedEntity && rbComp);
-
-        if (isSubmarineRoot)
-        {
-            ImGui::TextColored(COL_GREEN, "✅ Selected: Submarine #%u", m_selectedEntity);
-            ImGui::Text("Compartments: %zu | Mass: %.0f kg", subComp->allCompartments.size(), rbComp->mass);
-            ImGui::Spacing();
-
-            ImGui::TextColored(COL_TEXT_DIM, "New Compartment Settings:");
-
-            static float compOffset[3] = { 0, 0, 0 };
-            static float compSize[3] = { 3, 2.5f, 3.5f };
-            static float compMass = 500.0f;
-            static int selectedCompModel = 0;
-
-            ImGui::DragFloat3("##CompOffset", compOffset, 0.5f);
-            ImGui::SameLine();
-            ImGui::TextColored(COL_TEXT_DIM, "Offset");
-
-            ImGui::DragFloat3("##CompSize", compSize, 0.1f, 1.0f, 10.0f);
-            ImGui::SameLine();
-            ImGui::TextColored(COL_TEXT_DIM, "Size");
-
-            ImGui::DragFloat("##CompMass", &compMass, 10.0f, 100.0f, 2000.0f);
-            ImGui::SameLine();
-            ImGui::TextColored(COL_TEXT_DIM, "Mass");
-
-            ImGui::Spacing();
-
-            // Модель для отсека
-            ImGui::TextColored(COL_TEXT_DIM, " Compartment model:");
-            const char* compModelNames[] = { "Cube", "Cylinder" };
-
-            for (int i = 0; i < 2; i++)
-            {
-                if (i > 0) ImGui::SameLine(0, 4);
-                float w = (ImGui::GetContentRegionAvail().x - 4.0f) / 2.0f;
-                if (ImGui::Button(compModelNames[i], ImVec2(w, 0)))
-                    selectedCompModel = i;
-            }
-
-            ImGui::Spacing();
-
-            // Позиция пресеты
-            ImGui::TextColored(COL_TEXT_DIM, "Position Presets:");
-
-            if (ImGui::Button("Front", ImVec2(btnW, 0))) {
-                compOffset[2] = 5.0f;
-            }
-            ImGui::SameLine(0, 4);
-            if (ImGui::Button("Center", ImVec2(btnW, 0))) {
-                compOffset[0] = compOffset[1] = compOffset[2] = 0;
-            }
-            ImGui::SameLine(0, 4);
-            if (ImGui::Button("Rear", ImVec2(btnW, 0))) {
-                compOffset[2] = -5.0f;
-            }
-
-            ImGui::Spacing();
-
-            // Размер пресеты
-            ImGui::TextColored(COL_TEXT_DIM, "Size Presets:");
-            if (ImGui::Button("Small", ImVec2(btnW, 0))) {
-                compSize[0] = 2; compSize[1] = 1.5f; compSize[2] = 2;
-            }
-            ImGui::SameLine(0, 4);
-            if (ImGui::Button("Medium", ImVec2(btnW, 0))) {
-                compSize[0] = 3; compSize[1] = 2.5f; compSize[2] = 3.5f;
-            }
-            ImGui::SameLine(0, 4);
-            if (ImGui::Button("Large", ImVec2(btnW, 0))) {
-                compSize[0] = 4; compSize[1] = 3; compSize[2] = 5;
-            }
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            ImGui::PushStyleColor(ImGuiCol_Button, COL_GREEN);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_GREEN_HOV);
-            if (ImGui::Button("➕ Add Compartment with Model", ImVec2(-1, 0)))
-            {
-                const char* compModelPath = (selectedCompModel == 0)
-                    ? "assets/model/cube.obj"
-                    : "assets/model/cylinder.obj";
-
-                Entity newComp = AddCompartmentWithMesh(
-                    sceneManager,
-                    m_selectedEntity,
-                    XMFLOAT3(compOffset[0], compOffset[1], compOffset[2]),
-                    XMFLOAT3(compSize[0], compSize[1], compSize[2]),
-                    compMass,
-                    compModelPath
-                );
-
-                if (newComp != INVALID_ENTITY)
-                {
-                    m_selectedType = SelectedType::Object;
-                    m_selectedEntity = newComp;
-                }
-            }
-            ImGui::PopStyleColor(2);
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            // Список отсеков
-            ImGui::TextColored(COL_TEXT_DIM, "Existing Compartments:");
-
-            if (subComp->allCompartments.empty())
-            {
-                ImGui::TextColored(COL_TEXT_DIM, "  (none yet)");
-            }
-            else
-            {
-                const float avail = ImGui::GetContentRegionAvail().y - 40.0f;
-                ImGui::BeginChild("##CompList", ImVec2(-1, avail), true);
-
-                for (size_t i = 0; i < subComp->allCompartments.size(); ++i)
-                {
-                    Entity compEnt = subComp->allCompartments[i];
-                    auto* compData = registry.GetComponent<CompartmentComponent>(compEnt);
-
-                    char label[128];
-                    if (compData)
-                    {
-                        float floodPercent = (compData->volume > 0) ?
-                            (compData->waterVolume / compData->volume) * 100.f : 0.f;
-                        snprintf(label, sizeof(label),
-                            "[%zu] Entity #%u (%.0f%% flooded)",
-                            i, compEnt, floodPercent);
-                    }
-                    else
-                    {
-                        snprintf(label, sizeof(label), "[%zu] Entity #%u", i, compEnt);
-                    }
-
-                    bool isSelected = (m_selectedEntity == compEnt);
-                    if (isSelected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
-
-                    if (ImGui::Selectable(label, isSelected, 0, ImVec2(0, 20.0f)))
-                    {
-                        m_selectedType = SelectedType::Object;
-                        m_selectedEntity = compEnt;
-                    }
-
-                    if (isSelected) ImGui::PopStyleColor();
-                }
-
-                ImGui::EndChild();
-            }
-        }
-        else
-        {
-            ImGui::TextColored(COL_RED, "⚠️ Not a Submarine Root");
-        }
-    }
-    else
-    {
-        ImGui::TextColored(COL_TEXT_DIM, "No submarine selected");
-    }
-
-    ImGui::Spacing();
-    ImGui::Separator();
-    ImGui::Spacing();
-
-    // ══════════════════════════════════════════════════════════════════════════
-    // 🔹 СПИСОК ВСЕХ ПОДЛОДОК
-    // ══════════════════════════════════════════════════════════════════════════
-    ImGui::TextColored(COL_TEXT_DIM, "All Submarines:");
-
-    auto& subPool = registry.GetComponents<SubmarineComponent>();
-    int subCount = 0;
-
-    const float avail = ImGui::GetContentRegionAvail().y - 20.0f;
-    ImGui::BeginChild("##SubList", ImVec2(-1, avail), true);
-
-    for (auto& [entity, subComp] : subPool)
-    {
-        if (subComp.submarineRoot != entity) continue;
-
-        auto* rb = registry.GetComponent<RigidBodyComponent>(entity);
-        if (!rb) continue;
-
-        subCount++;
-
-        char label[128];
-        snprintf(label, sizeof(label), "🚢 Submarine #%u (%zu comp, %.0f kg)",
-            entity, subComp.allCompartments.size(), rb->mass);
-
-        bool isSelected = (m_selectedEntity == entity);
-        if (isSelected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
-
-        if (ImGui::Selectable(label, isSelected, 0, ImVec2(0, 20.0f)))
-        {
-            m_selectedType = SelectedType::Object;
-            m_selectedEntity = entity;
-        }
-
-        if (isSelected) ImGui::PopStyleColor();
-    }
-
-    if (subCount == 0)
-        ImGui::TextColored(COL_TEXT_DIM, "  (No submarines)");
-
-    ImGui::EndChild();
-}
-
 
 
 void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEntity)
@@ -2743,7 +2780,7 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
             {
                 if (jointComp->joint)
                 {
-                    
+
                     JointConnectionSystem::RemoveJoint(registry, *jointComp);
                 }
                 jointComp->targetEntity = INVALID_ENTITY;
@@ -2852,20 +2889,20 @@ void EditorUI::AutoCalculatePivots(ECSRegistry& registry, Entity entity, JointCo
     if (absX > absY && absX > absZ)
     {
         // По оси X
-        jointComp.pivotA.setValue(dir.x() > 0 ? rbA->shapeSize.x() : -rbA->shapeSize.x(), 0, 0);
-        jointComp.pivotB.setValue(dir.x() > 0 ? -rbB->shapeSize.x() : rbB->shapeSize.x(), 0, 0);
+        jointComp.pivotA.setValue(dir.x() > 0 ? -rbA->shapeSize.x() : rbA->shapeSize.x(), 0, 0);
+        jointComp.pivotB.setValue(dir.x() > 0 ? rbB->shapeSize.x() : -rbB->shapeSize.x(), 0, 0);
     }
     else if (absZ > absX && absZ > absY)
     {
         // По оси Z
-        jointComp.pivotA.setValue(0, 0, dir.z() > 0 ? rbA->shapeSize.z() : -rbA->shapeSize.z());
-        jointComp.pivotB.setValue(0, 0, dir.z() > 0 ? -rbB->shapeSize.z() : rbB->shapeSize.z());
+        jointComp.pivotA.setValue(0, 0, dir.z() > 0 ? -rbA->shapeSize.z() : rbA->shapeSize.z());
+        jointComp.pivotB.setValue(0, 0, dir.z() > 0 ? rbB->shapeSize.z() : -rbB->shapeSize.z());
     }
     else
     {
         // По оси Y
-        jointComp.pivotA.setValue(0, dir.y() > 0 ? rbA->shapeSize.y() : -rbA->shapeSize.y(), 0);
-        jointComp.pivotB.setValue(0, dir.y() > 0 ? -rbB->shapeSize.y() : rbB->shapeSize.y(), 0);
+        jointComp.pivotA.setValue(0, dir.y() > 0 ? -rbA->shapeSize.y() : rbA->shapeSize.y(), 0);
+        jointComp.pivotB.setValue(0, dir.y() > 0 ? rbB->shapeSize.y() : -rbB->shapeSize.y(), 0);
     }
 
     OutputDebugStringA("[AutoCalculatePivots] Done!\n");
@@ -3222,7 +3259,7 @@ Entity EditorUI::CreateEmptySubmarine(SceneManager& sceneManager, const XMFLOAT3
     rb.shapeType = RigidBodyComponent::Sphere;
     rb.shapeRadius = 2.5f;
     rb.isDynamic = true;
-    registry.AddComponent<RigidBodyComponent>(subRoot, rb);
+    registry.AddComponent<RigidBodyComponent>(subRoot, std::move(rb));
     PhysicsSystem::CreateRigidBody(registry, subRoot);
 
     // Buoyancy
@@ -3363,7 +3400,7 @@ Entity EditorUI::CreateSubmarineWithMesh(
     rb.shapeType = RigidBodyComponent::Sphere;
     rb.shapeRadius = hullRadius;
     rb.isDynamic = true;
-    registry.AddComponent<RigidBodyComponent>(subRoot, rb);
+    registry.AddComponent<RigidBodyComponent>(subRoot, std::move(rb));
     PhysicsSystem::CreateRigidBody(registry, subRoot);
 
     // Buoyancy
@@ -3421,4 +3458,61 @@ void EditorUI::UpdateBreachesOnResize(CompartmentComponent* comp, const XMFLOAT3
         float relZ = (breach.localPosition.z - oldMin.z) / oldDepth;
         breach.localPosition.z = comp->localMin.z + relZ * newDepth;
     }
+}
+
+
+
+// Рисует простую панель редактирования SubmarineCollisionSetup для выбранной сущности.
+// Требует: registry.HasComponent / GetComponent, ImGui доступен.
+void EditorUI::DrawSubmarineCollisionSetup(ECSRegistry& registry, Entity entity)
+{
+    if (!registry.HasComponent<SubmarineCollisionSetup>(entity))
+        return;
+
+    auto* scs = registry.GetComponent<SubmarineCollisionSetup>(entity);
+
+    if (!ImGui::CollapsingHeader("Submarine Collision", ImGuiTreeNodeFlags_DefaultOpen))
+        return;
+
+    // Пошаговый план (псевдокод):
+    // 1. Ошибка возникает при попытке обращения к полю useInteriorCollider через указатель SubmarineCollisionSetup* как к объекту (через точку).
+    // 2. Нужно использовать оператор -> вместо точки для доступа к члену структуры через указатель.
+    // 3. Исправить строку:
+    //    ImGui::Checkbox("Use interior collider", &scs.useInteriorCollider);
+    //    на
+    //    ImGui::Checkbox("Use interior collider", &scs->useInteriorCollider);
+
+    ImGui::Checkbox("Use interior collider", &scs->useInteriorCollider);
+    // Вкл/выкл внутреннего коллайдера
+    
+
+    // Размер (метры) — DragFloat3 удобен для быстрого редактирования
+    float size[3] = { scs->interiorSize.x, scs->interiorSize.y, scs->interiorSize.z };
+    if (ImGui::DragFloat3("Interior size (m)", size, 0.05f, 0.01f, 1000.0f, "%.3f"))
+    {
+        scs->interiorSize.x = size[0];
+        scs->interiorSize.y = size[1];
+        scs->interiorSize.z = size[2];
+    }
+
+    // Локальный оффсет
+    float offset[3] = { scs->interiorOffset.x, scs->interiorOffset.y, scs->interiorOffset.z };
+    if (ImGui::DragFloat3("Interior offset (m)", offset, 0.01f, -1000.0f, 1000.0f, "%.3f"))
+    {
+        scs->interiorOffset.x = offset[0];
+        scs->interiorOffset.y = offset[1];
+        scs->interiorOffset.z = offset[2];
+    }
+
+    // Коэффициент усадки (0.1..1.0)
+    float shrink = scs->interiorShrinkFactor;
+    if (ImGui::DragFloat("Shrink factor", &shrink, 0.005f, 0.5f, 1.0f, "%.3f"))
+    {
+        scs->interiorShrinkFactor = std::clamp(shrink, 0.1f, 1.0f);
+    }
+
+    // Быстрые пресеты
+    if (ImGui::Button("Default 0.95")) scs->interiorShrinkFactor = 0.95f;
+    ImGui::SameLine();
+    if (ImGui::Button("Slight -5%")) scs->interiorShrinkFactor = std::min(0.995f, scs->interiorShrinkFactor * 0.95f);
 }

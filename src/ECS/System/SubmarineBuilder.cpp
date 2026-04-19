@@ -201,7 +201,7 @@ Entity SubmarineBuilder::CreateBasicSubmarine(ECSRegistry& registry,
         btVector3(-compSize.z * 0.5f, 0, 0), 150000.0f);
 
     // ══════════════════════════════════════════════════════════════════════
-    // ✅ КРИТИЧНО: Добавляем физику ПОСЛЕ всех отсеков — volume уже известен!
+    // ✅ КРИТИЧНО: Добавляем физику ПОСЛЕ всех отсеков — volume уже известно!
     // ══════════════════════════════════════════════════════════════════════
     FinalizeSubmarinePhysics(registry, submarine);
 
@@ -280,11 +280,9 @@ void SubmarineBuilder::FinalizeSubmarinePhysics(ECSRegistry& registry, Entity su
         if (comp)
         {
             totalVolume += comp->volume;
-            totalMass   += 500.0f; // масса материала отсека
+            totalMass   += 500.0f;
         }
     }
-
-    // Добавляем запас объёма за корпус (+15 м³)
     totalVolume += 15.0f;
 
     char dbg[256];
@@ -293,51 +291,168 @@ void SubmarineBuilder::FinalizeSubmarinePhysics(ECSRegistry& registry, Entity su
         subComp->allCompartments.size(), totalVolume, totalMass);
     OutputDebugStringA(dbg);
 
-    // 2. RigidBodyComponent на корень (если ещё нет)
+    // 2. Читаем конфигурацию корпуса (или используем дефолт)
+    SubmarineHullConfig hullCfg{};
+    if (registry.HasComponent<SubmarineHullConfig>(submarine))
+        hullCfg = *registry.GetComponent<SubmarineHullConfig>(submarine);
+    else
+        registry.AddComponent<SubmarineHullConfig>(submarine, hullCfg);
+
+    // 3. RigidBodyComponent — GImpactMesh вместо Compound
     if (!registry.HasComponent<RigidBodyComponent>(submarine))
     {
         RigidBodyComponent rb{};
-        rb.mass            = totalMass;
-        rb.shapeType       = RigidBodyComponent::Box;
-        rb.shapeSize       = btVector3(6.0f, 2.0f, 2.0f); // примерный размер корпуса
-        rb.linearDamping   = 0.5f;
-        rb.angularDamping  = 0.8f;
-        rb.friction        = 0.1f;
-        registry.AddComponent<RigidBodyComponent>(submarine, rb);
+        rb.mass           = hullCfg.isKinematic ? 0.0f : totalMass;
+        rb.isKinematic    = hullCfg.isKinematic;
+        rb.linearDamping  = 0.5f;
+        rb.angularDamping = 0.8f;
+        rb.friction       = 0.1f;
+
+        // ═══════════════════════════════════════════════════════════════════
+        // 🔥 ИЗМЕНЕНИЕ: GImpactMesh вместо Compound из боксов
+        //    Коллизия берётся напрямую из 3D-модели — корпус, перегородки,
+        //    палубы — всё что есть в меше, всё становится коллизией.
+        //    Больше не нужно вручную описывать каждый бокс!
+        // ═══════════════════════════════════════════════════════════════════
+        rb.isCompound     = false;
+        rb.shapeType      = RigidBodyComponent::GImpactMesh;
+
+        registry.AddComponent<RigidBodyComponent>(submarine, std::move(rb));
     }
     else
     {
-        // Обновляем массу в существующем компоненте
         auto* rb = registry.GetComponent<RigidBodyComponent>(submarine);
-        rb->mass = totalMass;
+        rb->mass       = hullCfg.isKinematic ? 0.0f : totalMass;
+        rb->isCompound = false;
+        rb->shapeType  = RigidBodyComponent::GImpactMesh;
+        rb->compoundElements.clear();
     }
 
-    // 3. BuoyancyComponent на корень (если ещё нет)
+    // 4. BuoyancyComponent
     if (!registry.HasComponent<BuoyancyComponent>(submarine))
     {
         BuoyancyComponent buoy{};
         buoy.volume               = totalVolume;
         buoy.lastCalculatedVolume = totalVolume;
-        buoy.fluidDensity         = 1025.0f; // солёная вода
+        buoy.fluidDensity         = 1025.0f;
         registry.AddComponent<BuoyancyComponent>(submarine, buoy);
     }
     else
     {
-        // Обновляем объём в существующем компоненте
         auto* buoy = registry.GetComponent<BuoyancyComponent>(submarine);
         buoy->volume               = totalVolume;
         buoy->lastCalculatedVolume = totalVolume;
         buoy->fluidDensity         = 1025.0f;
     }
 
-    // 4. Создаём физическое тело — volume и mass уже финальные!
+    // 5. Создаём физическое тело
+    //    CreateRigidBody увидит shapeType == GImpactMesh и вызовет
+    //    CreateGImpactMeshShape(), который возьмёт треугольники из
+    //    MeshRendererComponent->model
     PhysicsSystem::CreateRigidBody(registry, submarine);
 
-    // 5. Кэшируем в SubmarineComponent
-    subComp->cachedTotalMass   = totalMass;
-    subComp->cachedTotalVolume = totalVolume;
-    subComp->needsPhysicsUpdate = false;
-    subComp->compartmentCountLastFrame = (int)subComp->allCompartments.size();
+    // 6. Если кинематический — настраиваем флаги Bullet
+    auto* rb = registry.GetComponent<RigidBodyComponent>(submarine);
+    if (rb && rb->body && hullCfg.isKinematic)
+    {
+        rb->body->setCollisionFlags(
+            rb->body->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
+        rb->body->setActivationState(DISABLE_DEACTIVATION);
+        OutputDebugStringA("[FinalizePhysics] Submarine set as KINEMATIC object\n");
+    }
 
-    OutputDebugStringA("[FinalizePhysics] ✅ Physics body created with correct volume!\n");
+    // 7. Кэшируем
+    subComp->cachedTotalMass              = totalMass;
+    subComp->cachedTotalVolume            = totalVolume;
+    subComp->needsPhysicsUpdate           = false;
+    subComp->compartmentCountLastFrame    = (int)subComp->allCompartments.size();
+
+    OutputDebugStringA("[FinalizePhysics] ✅ GImpactMesh hull created from model geometry!\n");
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Построить 6 стен корпуса как CompoundElements
+// Каждая стена — btBoxShape с толщиной wallThickness
+// ══════════════════════════════════════════════════════════════════════════════
+void SubmarineBuilder::BuildHullCompoundElements(
+    const SubmarineHullConfig& cfg, RigidBodyComponent& rb)
+{
+    const float hx = cfg.hullExtents.x * 0.5f; // полуширина  (X)
+    const float hy = cfg.hullExtents.y * 0.5f; // полувысота  (Y)
+    const float hz = cfg.hullExtents.z * 0.5f; // полудлина   (Z)
+    const float t = cfg.wallThickness;
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Корпус строится из 6 ТОЛСТЫХ ПЛИТ (btBoxShape), образующих полый ящик.
+    // 
+    // ВАЖНО: Внутри корпуса НЕТ коллизии — Bullet не блокирует объекты
+    // внутри compound shape снаружи-внуть. Это нормально для подлодки:
+    //   - Игрок/объекты ВНУТРИ — управляются логикой (отсеки, давление)
+    //   - Внешние объекты (дно, торпеды) — сталкиваются со стенами снаружи
+    //
+    // Схема (вид сбоку, XZ-плоскость):
+    //
+    //   ┌──[Потолок  Y+]──┐
+    //   │                 │
+    // [Лев X-]  ПУСТО  [Прав X+]
+    //   │                 │
+    //   └──[Дно     Y-]──┘
+    //   [Нос Z+]     [Корма Z-]
+    //
+    // Каждая плита: halfExt задаёт её размер, pos — центр плиты.
+    // ══════════════════════════════════════════════════════════════════════
+
+    // debugColorIndex используется PhysicsDebugRenderer для цветовой маркировки
+    // 0=дно(красный), 1=потолок(синий), 2=левая(зелёный),
+    // 3=правая(жёлтый), 4=нос(оранжевый), 5=корма(фиолетовый)
+    int colorIdx = 0;
+
+    auto addWall = [&](XMFLOAT3 pos, XMFLOAT3 halfExt, const char* label)
+        {
+            RigidBodyComponent::CompoundElement wall{};
+            wall.type = RigidBodyComponent::CompoundElement::Box;
+            wall.localPosition = pos;
+            wall.localRotation = { 0, 0, 0, 1 };
+            wall.boxOffsetMin = { -halfExt.x, -halfExt.y, -halfExt.z };
+            wall.boxOffsetMax = { halfExt.x,  halfExt.y,  halfExt.z };
+            wall.size = 1.0f;
+            wall.debugWeight = (float)colorIdx; // ← кодируем индекс цвета
+            rb.compoundElements.push_back(wall);
+
+            char buf[128];
+            sprintf_s(buf, "  [Wall %d] %-10s pos=(%.1f,%.1f,%.1f) half=(%.2f,%.2f,%.2f)\n",
+                colorIdx, label, pos.x, pos.y, pos.z,
+                halfExt.x, halfExt.y, halfExt.z);
+            OutputDebugStringA(buf);
+
+            ++colorIdx;
+        };
+
+    OutputDebugStringA("[BuildHull] Building 6-wall compound hull:\n");
+
+    // ── 0: Дно (нижняя стена, Y-) ──────────────────────────────────────────
+    // Центр: сдвинут к низу на (hy - t/2), толщина t по Y
+    addWall({ 0.0f, -hy + t * 0.5f, 0.0f }, { hx, t * 0.5f, hz }, "Bottom");
+
+    // ── 1: Потолок (верхняя стена, Y+) ────────────────────────────────────
+    addWall({ 0.0f,  hy - t * 0.5f, 0.0f }, { hx, t * 0.5f, hz }, "Top");
+
+    // ── 2: Левая стена (X-) ────────────────────────────────────────────────
+    addWall({ -hx + t * 0.5f, 0.0f, 0.0f }, { t * 0.5f, hy, hz }, "Left");
+
+    // ── 3: Правая стена (X+) ───────────────────────────────────────────────
+    addWall({ hx - t * 0.5f, 0.0f, 0.0f }, { t * 0.5f, hy, hz }, "Right");
+
+    // ── 4: Нос (передняя стена, Z+) ───────────────────────────────────────
+    addWall({ 0.0f, 0.0f,  hz - t * 0.5f }, { hx, hy, t * 0.5f }, "Bow");
+
+    // ── 5: Корма (задняя стена, Z-) ────────────────────────────────────────
+    addWall({ 0.0f, 0.0f, -hz + t * 0.5f }, { hx, hy, t * 0.5f }, "Stern");
+
+    char buf[256];
+    sprintf_s(buf,
+        "[BuildHull] Done. HullExtents=(%.1f x %.1f x %.1f), WallThickness=%.2f\n"
+        "[BuildHull] NOTE: Interior is HOLLOW — objects inside are handled by compartment logic\n",
+        cfg.hullExtents.x, cfg.hullExtents.y, cfg.hullExtents.z, t);
+    OutputDebugStringA(buf);
 }

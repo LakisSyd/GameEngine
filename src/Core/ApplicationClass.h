@@ -36,7 +36,7 @@
 #include "DebugPhysicsVisualizer.h"
 #include "ShadowMap.h"
 #include "ShadowShaderClass.h"
-#include "../../CompartmentDebugRenderer.h"
+#include "CompartmentDebugRenderer.h"
 
 const bool  FULL_SCREEN = false;
 const bool  VSYNC_ENABLED = true;
@@ -94,6 +94,12 @@ private:
     void Render3DObjectsToShadowMap(
         ID3D11DeviceContext* context,
         const XMMATRIX& lightViewProj);
+
+    void RenderCompartmentCornerHandles();
+
+    void RenderCompoundCornerHandles();
+
+    void RefreshRigidBodyExternal(ECSRegistry& registry, Entity entity, RigidBodyComponent* rb);
 
 
     ShadowMap* m_shadowMap;

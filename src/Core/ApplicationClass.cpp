@@ -10,6 +10,7 @@
 #include "SubmarineBuilder.h"
 #include "JointConnectionSystem.h"
 #include "../../SubmarineSystem.h"
+#include "PhysicsWorld.h"
 
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
@@ -159,7 +160,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     // Создаём тестовую физическую сцену
    // CreatePhysicsTestScene();
 
-    CreateTestSubmarine();
+
 
     // Создаём визуализатор отладочных контактов
     m_debugVisualizer = new DebugPhysicsVisualizer();
@@ -294,22 +295,6 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     XMMATRIX proj2 = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), 1.0f, 0.1f, 100.0f);
     mat->SetProjectionView2(view2);
     mat->SetProjectionProj2(proj2);
-
-    
-    Entity dx = m_sceneManager.SpawnLight({ 0, 0, 0 }, { 1, 1, 1, 1 });
-
-
-
-    ////////////////////////////////////////////////\\
-    
-
-
-
-
-
-
-
-
   
     return true;
 }
@@ -540,17 +525,12 @@ bool ApplicationClass::Frame(float dt)
 
     if (m_lightShader)
     {
-        // Направление света (вниз и немного вбок)
+        // В Frame() — оба блока SetDirectionalLight (для lightShader и pbrShader):
+
         XMFLOAT3 sunDirection = XMFLOAT3(0.3f, -1.0f, 0.5f);
-
-        // Цвет солнца (тёплый жёлтый)
         XMFLOAT4 sunColor = XMFLOAT4(1.0f, 0.95f, 0.8f, 1.0f);
-
-        // Ambient освещение (голубоватое небо)
-        XMFLOAT4 ambientColor = XMFLOAT4(0.15f, 0.2f, 0.3f, 0.25f); // a = сила
-
-        // Интенсивность солнца
-        float sunIntensity = 1.0f;
+        XMFLOAT4 ambientColor = XMFLOAT4(0.4f, 0.4f, 0.45f, 0.6f); // ← было 0.15/0.2/0.3/0.25
+        float     sunIntensity = 2.5f;                                 // ← было 1.0f
 
         m_lightShader->SetDirectionalLight(
             m_direct3D->GetDeviceContext(),
@@ -566,13 +546,7 @@ bool ApplicationClass::Frame(float dt)
         auto& meshPool = m_sceneManager.GetECSRegistry()
             .GetComponents<MeshRendererComponent>();
 
-        OutputDebugStringA("\n╔════════════════════════════════════════╗\n");
-        OutputDebugStringA("║  PRE-SHADOW MAP OBJECTS                 ║\n");
-        OutputDebugStringA("╚════════════════════════════════════════╝\n");
-
-        char buf[256];
-        sprintf_s(buf, "Total meshes: %zu\n", meshPool.GetCount());
-        OutputDebugStringA(buf);
+      
 
         for (auto& [ent, mesh] : meshPool)
         {
@@ -586,10 +560,7 @@ bool ApplicationClass::Frame(float dt)
 
             ShaderType st = mat->GetShader()->GetType();
 
-            sprintf_s(buf, "  entity=%u, pos=(%.1f,%.1f,%.1f), shader=%s\n",
-                ent, transform->position.x, transform->position.y, transform->position.z,
-                (st == ShaderType::Light) ? "Light" : (st == ShaderType::PBR) ? "PBR" : "Other");
-            OutputDebugStringA(buf);
+            
         }
     }
 
@@ -836,7 +807,8 @@ bool ApplicationClass::Frame(float dt)
 
    
     m_editorUI.Update(m_sceneManager);
-
+    RenderCompartmentCornerHandles();
+    RenderCompoundCornerHandles();
     // ── Обработка запросов от EditorUI ───────────────────────────────────────
     {
         auto spawnReq = m_editorUI.ConsumeSpawnRequest();
@@ -1129,8 +1101,29 @@ void ApplicationClass::Render3DObjects(
         XMMATRIX lightVP = m_shadowMap->GetLightViewProjection();
         m_pbrShader->SetShadowMap(context, m_shadowMap->GetShaderResourceView(), lightVP);
     }
+    // ── Передаём данные о трещинах в PBR шейдер для каждого объекта ──────────
+    if (m_pbrShader)
+    {
+        auto& registry = m_sceneManager.GetECSRegistry();
+        auto& meshPool = registry.GetComponents<MeshRendererComponent>();
 
-    m_sceneManager.RenderAllECS(
+        for (auto& [entity, mesh] : meshPool)
+        {
+            if (!mesh.material || !mesh.material->GetShader()) continue;
+            if (mesh.material->GetShader()->GetType() != ShaderType::PBR) continue;
+
+            auto* transform = m_sceneManager.GetObjectTransform(entity);
+            if (!transform) continue;
+
+            auto* damage = registry.GetComponent<DamageDecalComponent>(entity);
+            // damage == nullptr → SetDamageDecals сбросит crackCount=0 → нет эффекта
+            m_pbrShader->SetDamageDecals(
+                context,
+                damage,
+                transform->GetWorldMatrix());
+        }
+    }
+        m_sceneManager.RenderAllECS(
         context, view, projection,
         m_defaultMaterial,
         lightColors, lightPositions,
@@ -1268,6 +1261,9 @@ void ApplicationClass::HandleCameraMovement(float dt)
 // ============================================================================
 void ApplicationClass::HandleDragDrop()
 {
+    if (m_editorUI.IsCornerEditActive() || m_editorUI.IsEditingCompartment())
+        return;
+
     if (m_inputManager.IsDragging() && m_inputManager.IsLeftDown())
     {
         CameraClass::Ray ray = m_camera->CreatePickingRay(
@@ -1520,7 +1516,7 @@ void ApplicationClass::CreateTestSubmarine()
     subRB.angularDamping = 0.8f;
     subRB.friction = 0.1f;
 
-    registry.AddComponent<RigidBodyComponent>(subRoot, subRB);
+    registry.AddComponent<RigidBodyComponent>(subRoot, std::move(subRB));
     registry.AddComponent<BuoyancyComponent>(subRoot, BuoyancyComponent{ 1.0f, 0.5f });
     PhysicsSystem::CreateRigidBody(registry, subRoot);
 
@@ -1607,25 +1603,13 @@ void ApplicationClass::Render3DObjectsToShadowMap(
             mesh.model->GetIndexCount(), world, lightViewProj);
 
         // DEBUG: Логируем каждый объект
-        {
-            char buf[256];
-            sprintf_s(buf, "  → Shadow: entity=%u, shader=%s, pos=(%.1f, %.1f, %.1f)\n",
-                entity,
-                (st == ShaderType::Light) ? "Light" : "PBR",
-                transform->position.x, transform->position.y, transform->position.z);
-            OutputDebugStringA(buf);
-        }
+       
 
         renderedCount++;
     }
 
     // ВАЖНЫЙ ЛОГ
-    {
-        char buf[256];
-        sprintf_s(buf, "✅ Render3DObjectsToShadowMap: %d objects rendered\n\n", renderedCount);
-        OutputDebugStringA(buf);
-    }
-
+   
     // Очищаем состояние
     {
         ID3D11Buffer* nullBuffers[6] = {};
@@ -1635,4 +1619,486 @@ void ApplicationClass::Render3DObjectsToShadowMap(
         ID3D11ShaderResourceView* nullSRVs[8] = {};
         context->PSSetShaderResources(0, 8, nullSRVs);
     }
+}
+
+
+// ============================================================================
+// RenderCompartmentCornerHandles — 8 угловых ручек для AABB отсека
+// Вызывать ПОСЛЕ m_editorUI.Update() (ImGui уже начат), но ДО Render().
+// ============================================================================
+void ApplicationClass::RenderCompartmentCornerHandles()
+{
+    if (!m_editorUI.IsEditingCompartment()) return;
+
+    auto& registry = m_sceneManager.GetECSRegistry();
+    Entity compEnt = m_editorUI.GetEditingCompartmentEntity();
+    auto* comp = registry.GetComponent<CompartmentComponent>(compEnt);
+    if (!comp) return;
+
+    // ── Находим мировую матрицу корневой подлодки ─────────────────────────────
+    XMMATRIX rootWorld = XMMatrixIdentity();
+    {
+        auto* subLink = registry.GetComponent<SubmarineComponent>(compEnt);
+        if (subLink && subLink->submarineRoot != INVALID_ENTITY)
+        {
+            auto* rt = registry.GetComponent<TransformComponent>(subLink->submarineRoot);
+            if (rt) rootWorld = rt->GetWorldMatrix();
+        }
+        else
+        {
+            auto* selfT = registry.GetComponent<TransformComponent>(compEnt);
+            if (selfT) rootWorld = selfT->GetWorldMatrix();
+        }
+    }
+
+    XMMATRIX view, proj;
+    m_camera->GetViewMatrix(view);
+    m_direct3D->GetProjectionMatrix(proj);
+    XMMATRIX vp = view * proj;
+
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
+    ImGuiIO& io = ImGui::GetIO();
+    const float W = io.DisplaySize.x;
+    const float H = io.DisplaySize.y;
+
+    // ── 8 углов AABB ──────────────────────────────────────────────────────────
+    // Биты индекса: бит0=X(0→min,1→max), бит1=Y, бит2=Z
+    auto getCornerLocal = [&](int idx) -> XMFLOAT3 {
+        return {
+            (idx & 1) ? comp->localMax.x : comp->localMin.x,
+            (idx & 2) ? comp->localMax.y : comp->localMin.y,
+            (idx & 4) ? comp->localMax.z : comp->localMin.z
+        };
+        };
+
+    // Проецирует локальную точку отсека → пиксели экрана
+    auto projectPoint = [&](const XMFLOAT3& localPt) -> ImVec2 {
+        XMVECTOR v = XMLoadFloat3(&localPt);
+        XMVECTOR w = XMVector3TransformCoord(v, rootWorld);
+        XMVECTOR clip = XMVector3TransformCoord(w, vp);
+        XMFLOAT3 ndc;
+        XMStoreFloat3(&ndc, clip);
+        return ImVec2((ndc.x * 0.5f + 0.5f) * W,
+            (1.0f - (ndc.y * 0.5f + 0.5f)) * H);
+        };
+
+    // ── Рисуем рёбра AABB (12 линий) ─────────────────────────────────────────
+    static const int edges[12][2] = {
+        {0,1},{2,3},{4,5},{6,7},   // по X
+        {0,2},{1,3},{4,6},{5,7},   // по Y
+        {0,4},{1,5},{2,6},{3,7}    // по Z
+    };
+    for (auto& [a, b] : edges)
+    {
+        ImVec2 pa = projectPoint(getCornerLocal(a));
+        ImVec2 pb = projectPoint(getCornerLocal(b));
+        dl->AddLine(pa, pb, IM_COL32(80, 200, 120, 160), 1.2f);
+    }
+
+    // ── Ручки углов ───────────────────────────────────────────────────────────
+    const float HANDLE_R = 7.0f;   // радиус ручки (px)
+    const float HANDLE_HIT = 10.0f;  // радиус hit-zone
+    ImVec2 mouse = io.MousePos;
+
+    // Завершаем drag по отпусканию ЛКМ
+    if (m_editorUI.m_cornerDragActive && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+    {
+        m_editorUI.m_cornerDragActive = false;
+        m_editorUI.m_dragCornerIndex = -1;
+    }
+
+    // Обновляем drag
+    if (m_editorUI.m_cornerDragActive && m_editorUI.m_dragCornerIndex >= 0)
+    {
+        int idx = m_editorUI.m_dragCornerIndex;
+
+        // Нужно перевести перемещение мыши обратно в локальное пространство.
+        // Используем простой подход: находим ближайшую точку луча к исходному углу.
+        CameraClass::Ray ray = m_camera->CreatePickingRay(
+            (int)mouse.x, (int)mouse.y,
+            (int)W, (int)H, view, proj);
+
+        // Исходный угол в мировых координатах
+        XMFLOAT3 origLocal = getCornerLocal(idx);
+        XMVECTOR origWorld = XMVector3TransformCoord(XMLoadFloat3(&origLocal), rootWorld);
+        XMFLOAT3 origWorldF;
+        XMStoreFloat3(&origWorldF, origWorld);
+
+        // Проецируем луч на плоскость, параллельную экрану, проходящую через угол
+        XMVECTOR rayO = XMLoadFloat3(&ray.origin);
+        XMVECTOR rayD = XMLoadFloat3(&ray.direction);
+
+        // Нормаль плоскости = направление к камере (плоскость "экранная")
+        XMFLOAT3 camPos = m_camera->GetPosition();
+        XMVECTOR camFwd = XMVector3Normalize(
+            XMVectorSubtract(origWorld, XMLoadFloat3(&camPos)));
+
+        float denom = XMVectorGetX(XMVector3Dot(camFwd, rayD));
+        XMFLOAT3 newWorldF = origWorldF;
+        if (fabsf(denom) > 1e-5f)
+        {
+            float t = XMVectorGetX(XMVector3Dot(
+                XMVectorSubtract(origWorld, rayO), camFwd)) / denom;
+            XMVECTOR hitWorld = XMVectorAdd(rayO, XMVectorScale(rayD, t));
+
+            // Переводим в локальное пространство отсека
+            XMMATRIX rootWorldInv = XMMatrixInverse(nullptr, rootWorld);
+            XMVECTOR hitLocal = XMVector3TransformCoord(hitWorld, rootWorldInv);
+            XMFLOAT3 hitLocalF;
+            XMStoreFloat3(&hitLocalF, hitLocal);
+
+            // Обновляем только соответствующую грань (по битам индекса)
+            XMFLOAT3 newMin = m_editorUI.m_dragCornerStartMin;
+            XMFLOAT3 newMax = m_editorUI.m_dragCornerStartMax;
+
+            auto clampFace = [](float val, float other, bool isMax) -> float {
+                // Не даём граням пересекаться (мин. размер 0.2)
+                if (isMax) return fmaxf(val, other + 0.2f);
+                else       return fminf(val, other - 0.2f);
+                };
+
+            if (idx & 1) newMax.x = clampFace(hitLocalF.x, newMin.x, true);
+            else         newMin.x = clampFace(hitLocalF.x, newMax.x, false);
+
+            if (idx & 2) newMax.y = clampFace(hitLocalF.y, newMin.y, true);
+            else         newMin.y = clampFace(hitLocalF.y, newMax.y, false);
+
+            if (idx & 4) newMax.z = clampFace(hitLocalF.z, newMin.z, true);
+            else         newMin.z = clampFace(hitLocalF.z, newMax.z, false);
+
+            comp->localMin = newMin;
+            comp->localMax = newMax;
+            comp->RecalculateVolume();
+
+            // Синхронизируем кэш EditorUI
+            m_editorUI.UpdateCacheFromCompartment_Public(comp);
+        }
+    }
+
+    // Рисуем 8 ручек + начинаем drag
+    for (int i = 0; i < 8; ++i)
+    {
+        ImVec2 screenPt = projectPoint(getCornerLocal(i));
+
+        float dx = mouse.x - screenPt.x;
+        float dy = mouse.y - screenPt.y;
+        float dist = sqrtf(dx * dx + dy * dy);
+
+        bool hovered = (dist < HANDLE_HIT) && !m_editorUI.m_cornerDragActive;
+        bool active = (m_editorUI.m_dragCornerIndex == i && m_editorUI.m_cornerDragActive);
+
+        // Начало drag
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_editorUI.m_cornerDragActive = true;
+            m_editorUI.m_dragCornerIndex = i;
+            m_editorUI.m_dragCornerStartMin = comp->localMin;
+            m_editorUI.m_dragCornerStartMax = comp->localMax;
+        }
+
+        // Цвет: белый=обычный, жёлтый=hover, оранжевый=active
+        ImU32 col = active ? IM_COL32(255, 140, 0, 255) :
+            hovered ? IM_COL32(255, 240, 80, 255) :
+            IM_COL32(220, 220, 220, 210);
+
+        dl->AddCircleFilled(screenPt, HANDLE_R, col);
+        dl->AddCircle(screenPt, HANDLE_R + 1.0f, IM_COL32(0, 0, 0, 180), 0, 1.5f);
+
+        // Подсказка при наведении
+        if (hovered)
+        {
+            const char* axisLabels[8] = {
+                "-X-Y-Z", "+X-Y-Z", "-X+Y-Z", "+X+Y-Z",
+                "-X-Y+Z", "+X-Y+Z", "-X+Y+Z", "+X+Y+Z"
+            };
+            dl->AddRectFilled(
+                ImVec2(screenPt.x + 12, screenPt.y - 10),
+                ImVec2(screenPt.x + 12 + 60, screenPt.y + 8),
+                IM_COL32(30, 30, 30, 200), 3.0f);
+            dl->AddText(ImVec2(screenPt.x + 14, screenPt.y - 8),
+                IM_COL32(255, 255, 255, 255), axisLabels[i]);
+        }
+    }
+}
+
+
+
+void ApplicationClass::RenderCompoundCornerHandles()
+{
+    if (!m_editorUI.IsCornerEditActive()) return;
+
+    auto& registry = m_sceneManager.GetECSRegistry();
+    Entity entity = m_editorUI.GetCornerEditEntity();
+    int    elemIdx = m_editorUI.GetCornerEditElemIndex();
+
+    auto* rb = registry.GetComponent<RigidBodyComponent>(entity);
+    if (!rb || elemIdx < 0 || elemIdx >= (int)rb->compoundElements.size()) return;
+
+    auto& elem = rb->compoundElements[elemIdx];
+    if (elem.type != RigidBodyComponent::CompoundElement::Box) return;
+
+    auto* transform = registry.GetComponent<TransformComponent>(entity);
+    if (!transform) return;
+
+    XMMATRIX worldMat = transform->GetWorldMatrix();
+    XMMATRIX view, proj;
+    m_camera->GetViewMatrix(view);
+    m_direct3D->GetProjectionMatrix(proj);
+    XMMATRIX vp = view * proj;
+
+    ImDrawList* dl = ImGui::GetBackgroundDrawList();
+    ImGuiIO& io = ImGui::GetIO();
+    const float W = io.DisplaySize.x;
+    const float H = io.DisplaySize.y;
+    ImVec2      mouse = io.MousePos;
+
+    // ── Текущие границы бокса ─────────────────────────────────────────────────
+    XMFLOAT3 bMin = {
+        elem.localPosition.x + elem.boxOffsetMin.x,
+        elem.localPosition.y + elem.boxOffsetMin.y,
+        elem.localPosition.z + elem.boxOffsetMin.z
+    };
+    XMFLOAT3 bMax = {
+        elem.localPosition.x + elem.boxOffsetMax.x,
+        elem.localPosition.y + elem.boxOffsetMax.y,
+        elem.localPosition.z + elem.boxOffsetMax.z
+    };
+    XMFLOAT3 bCen = {
+        (bMin.x + bMax.x) * 0.5f,
+        (bMin.y + bMax.y) * 0.5f,
+        (bMin.z + bMax.z) * 0.5f
+    };
+
+    auto projectPt = [&](const XMFLOAT3& local) -> ImVec2 {
+        XMVECTOR w = XMVector3TransformCoord(XMLoadFloat3(&local), worldMat);
+        XMVECTOR clip = XMVector3TransformCoord(w, vp);
+        XMFLOAT3 ndc;
+        XMStoreFloat3(&ndc, clip);
+        return ImVec2((ndc.x * 0.5f + 0.5f) * W,
+            (ndc.y * -0.5f + 0.5f) * H);
+        };
+
+    // ── 8 угловых точек ───────────────────────────────────────────────────────
+    auto getCorner = [&](int idx) -> XMFLOAT3 {
+        return {
+            (idx & 1) ? bMax.x : bMin.x,
+            (idx & 2) ? bMax.y : bMin.y,
+            (idx & 4) ? bMax.z : bMin.z
+        };
+        };
+
+    // ── 6 граневых точек (центр каждой грани) — двигают ТОЛЬКО одну ось ───────
+    // Индексы 8..13: 8=-X, 9=+X, 10=-Y, 11=+Y, 12=-Z, 13=+Z
+    auto getFacePoint = [&](int faceIdx) -> XMFLOAT3 {
+        switch (faceIdx) {
+        case  8: return { bMin.x, bCen.y, bCen.z }; // -X грань
+        case  9: return { bMax.x, bCen.y, bCen.z }; // +X грань
+        case 10: return { bCen.x, bMin.y, bCen.z }; // -Y грань
+        case 11: return { bCen.x, bMax.y, bCen.z }; // +Y грань
+        case 12: return { bCen.x, bCen.y, bMin.z }; // -Z грань
+        default: return { bCen.x, bCen.y, bMax.z }; // +Z грань
+        }
+        };
+
+    // Для граневой точки: какую ось и направление менять
+    // returns {axisIndex (0=X,1=Y,2=Z), isMax}
+    struct FaceInfo { int axis; bool isMax; };
+    auto getFaceInfo = [](int faceIdx) -> FaceInfo {
+        switch (faceIdx) {
+        case  8: return { 0, false };
+        case  9: return { 0, true };
+        case 10: return { 1, false };
+        case 11: return { 1, true };
+        case 12: return { 2, false };
+        default: return { 2, true };
+        }
+        };
+
+    // ── Рёбра AABB ────────────────────────────────────────────────────────────
+    static constexpr int edges[12][2] = {
+        {0,1},{2,3},{4,5},{6,7},
+        {0,2},{1,3},{4,6},{5,7},
+        {0,4},{1,5},{2,6},{3,7}
+    };
+    for (auto& [a, b] : edges)
+        dl->AddLine(projectPt(getCorner(a)), projectPt(getCorner(b)),
+            IM_COL32(255, 160, 30, 180), 1.5f);
+
+    // ── Завершаем drag по отпусканию ЛКМ ─────────────────────────────────────
+    if (m_editorUI.m_cornerDragActive && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
+    {
+        m_editorUI.m_cornerDragActive = false;
+        m_editorUI.m_cornerDragIndex = -1;
+        RefreshRigidBodyExternal(registry, entity, rb);
+    }
+
+    // ── Обновляем drag ────────────────────────────────────────────────────────
+    if (m_editorUI.m_cornerDragActive && m_editorUI.m_cornerDragIndex >= 0)
+    {
+        int idx = m_editorUI.m_cornerDragIndex;
+
+        CameraClass::Ray ray = m_camera->CreatePickingRay(
+            (int)mouse.x, (int)mouse.y, (int)W, (int)H, view, proj);
+
+        // Берём точку привязки: угол или центр грани
+        XMFLOAT3 anchorLocal = (idx < 8) ? getCorner(idx) : getFacePoint(idx);
+        XMVECTOR anchorWorld = XMVector3TransformCoord(XMLoadFloat3(&anchorLocal), worldMat);
+
+        XMFLOAT3 camPos = m_camera->GetPosition();
+        XMVECTOR camFwd = XMVector3Normalize(
+            XMVectorSubtract(anchorWorld, XMLoadFloat3(&camPos)));
+
+        XMVECTOR rayO = XMLoadFloat3(&ray.origin);
+        XMVECTOR rayD = XMLoadFloat3(&ray.direction);
+
+        float denom = XMVectorGetX(XMVector3Dot(camFwd, rayD));
+        if (fabsf(denom) > 1e-5f)
+        {
+            float t = XMVectorGetX(XMVector3Dot(
+                XMVectorSubtract(anchorWorld, rayO), camFwd)) / denom;
+            XMVECTOR hitWorld = XMVectorAdd(rayO, XMVectorScale(rayD, t));
+
+            XMMATRIX worldInv = XMMatrixInverse(nullptr, worldMat);
+            XMFLOAT3 hitLocal;
+            XMStoreFloat3(&hitLocal, XMVector3TransformCoord(hitWorld, worldInv));
+
+            XMFLOAT3 hitOffset = {
+                hitLocal.x - elem.localPosition.x,
+                hitLocal.y - elem.localPosition.y,
+                hitLocal.z - elem.localPosition.z
+            };
+
+            XMFLOAT3 newMin = m_editorUI.m_cornerDragStartMin;
+            XMFLOAT3 newMax = m_editorUI.m_cornerDragStartMax;
+            constexpr float MIN_SIZE = 0.1f;
+
+            if (idx < 8)
+            {
+                // ── Угловая точка: меняем все 3 оси одновременно ─────────────
+                if (idx & 1) newMax.x = fmaxf(hitOffset.x, newMin.x + MIN_SIZE);
+                else         newMin.x = fminf(hitOffset.x, newMax.x - MIN_SIZE);
+                if (idx & 2) newMax.y = fmaxf(hitOffset.y, newMin.y + MIN_SIZE);
+                else         newMin.y = fminf(hitOffset.y, newMax.y - MIN_SIZE);
+                if (idx & 4) newMax.z = fmaxf(hitOffset.z, newMin.z + MIN_SIZE);
+                else         newMin.z = fminf(hitOffset.z, newMax.z - MIN_SIZE);
+            }
+            else
+            {
+                // ── Граневая точка: меняем ТОЛЬКО одну ось ───────────────────
+                auto [axis, isMax] = getFaceInfo(idx);
+                float* pMin = (axis == 0) ? &newMin.x : (axis == 1) ? &newMin.y : &newMin.z;
+                float* pMax = (axis == 0) ? &newMax.x : (axis == 1) ? &newMax.y : &newMax.z;
+                float  val = (axis == 0) ? hitOffset.x : (axis == 1) ? hitOffset.y : hitOffset.z;
+
+                if (isMax) *pMax = fmaxf(val, *pMin + MIN_SIZE);
+                else       *pMin = fminf(val, *pMax - MIN_SIZE);
+            }
+
+            elem.boxOffsetMin = newMin;
+            elem.boxOffsetMax = newMax;
+        }
+    }
+
+    // ── Рисуем ручки ─────────────────────────────────────────────────────────
+    static constexpr const char* cornerLabels[8] = {
+        "-X-Y-Z","+X-Y-Z","-X+Y-Z","+X+Y-Z",
+        "-X-Y+Z","+X-Y+Z","-X+Y+Z","+X+Y+Z"
+    };
+    static constexpr const char* faceLabels[6] = {
+        "-X", "+X", "-Y", "+Y", "-Z", "+Z"
+    };
+    // Цвета граневых ручек по осям
+    static constexpr ImU32 axisColors[3] = {
+        IM_COL32(220, 60,  60,  220),   // X — красный
+        IM_COL32(60,  220, 60,  220),   // Y — зелёный
+        IM_COL32(60,  100, 220, 220),   // Z — синий
+    };
+
+    const float CORNER_R = 6.0f;
+    const float FACE_R = 8.0f;
+    const float HIT_R = 11.0f;
+
+    // 8 угловых (белые/жёлтые/оранжевые)
+    for (int i = 0; i < 8; ++i)
+    {
+        ImVec2 sp = projectPt(getCorner(i));
+        float  dx = mouse.x - sp.x;
+        float  dy = mouse.y - sp.y;
+        bool hovered = (sqrtf(dx * dx + dy * dy) < HIT_R) && !m_editorUI.m_cornerDragActive;
+        bool active = (m_editorUI.m_cornerDragIndex == i && m_editorUI.m_cornerDragActive);
+
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_editorUI.m_cornerDragActive = true;
+            m_editorUI.m_cornerDragIndex = i;
+            m_editorUI.m_cornerDragStartMin = elem.boxOffsetMin;
+            m_editorUI.m_cornerDragStartMax = elem.boxOffsetMax;
+        }
+
+        ImU32 col = active ? IM_COL32(255, 120, 0, 255) :
+            hovered ? IM_COL32(255, 240, 80, 255) :
+            IM_COL32(220, 220, 220, 200);
+
+        dl->AddCircleFilled(sp, CORNER_R, col);
+        dl->AddCircle(sp, CORNER_R + 1.5f, IM_COL32(0, 0, 0, 160), 0, 1.5f);
+
+        if (hovered) {
+            ImVec2 tp = ImVec2(sp.x + 12.f, sp.y - 9.f);
+            dl->AddRectFilled(tp, ImVec2(tp.x + 62.f, tp.y + 17.f), IM_COL32(20, 20, 20, 210), 3.f);
+            dl->AddText(ImVec2(tp.x + 3.f, tp.y + 2.f), IM_COL32(255, 255, 255, 255), cornerLabels[i]);
+        }
+    }
+
+    // 6 граневых (цветные по осям — двигают ТОЛЬКО одну грань)
+    for (int i = 8; i < 14; ++i)
+    {
+        ImVec2 sp = projectPt(getFacePoint(i));
+        float  dx = mouse.x - sp.x;
+        float  dy = mouse.y - sp.y;
+        bool hovered = (sqrtf(dx * dx + dy * dy) < HIT_R) && !m_editorUI.m_cornerDragActive;
+        bool active = (m_editorUI.m_cornerDragIndex == i && m_editorUI.m_cornerDragActive);
+
+        if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
+        {
+            m_editorUI.m_cornerDragActive = true;
+            m_editorUI.m_cornerDragIndex = i;
+            m_editorUI.m_cornerDragStartMin = elem.boxOffsetMin;
+            m_editorUI.m_cornerDragStartMax = elem.boxOffsetMax;
+        }
+
+        auto [axis, isMax] = getFaceInfo(i);
+        ImU32 baseCol = axisColors[axis];
+        ImU32 col = active ? IM_COL32(255, 240, 80, 255) :
+            hovered ? IM_COL32(255, 255, 150, 255) :
+            baseCol;
+
+        // Граневые точки — ромб, чтобы отличались от угловых
+        dl->AddCircleFilled(sp, FACE_R, col);
+        dl->AddCircle(sp, FACE_R + 1.5f, IM_COL32(0, 0, 0, 180), 0, 2.0f);
+
+        if (hovered) {
+            ImVec2 tp = ImVec2(sp.x + 12.f, sp.y - 9.f);
+            dl->AddRectFilled(tp, ImVec2(tp.x + 32.f, tp.y + 17.f), IM_COL32(20, 20, 20, 210), 3.f);
+            dl->AddText(ImVec2(tp.x + 3.f, tp.y + 2.f), IM_COL32(255, 255, 255, 255), faceLabels[i - 8]);
+        }
+    }
+}
+
+void ApplicationClass::RefreshRigidBodyExternal(ECSRegistry& registry, Entity entity, RigidBodyComponent* rb)
+{
+    if (!rb || !rb->body) return;
+
+    // Удаляем старое тело из мира
+    auto world = PhysicsWorld::Get().GetWorld();
+    world->removeRigidBody(rb->body);
+
+    // Удаляем shape и motion state
+    delete rb->body->getMotionState();
+    btCollisionShape* oldShape = rb->body->getCollisionShape();
+    delete rb->body;
+    rb->body = nullptr;
+    if (oldShape) delete oldShape;
+
+    // Пересоздаём
+    PhysicsSystem::CreateRigidBody(registry, entity);
 }

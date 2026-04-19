@@ -3,7 +3,7 @@
 #include "Components.h"
 #include "PhysicsSystem.h"
 #include <DirectXMath.h>
-
+#include "PhysicsWorld.h"
 using namespace DirectX;
 
 class SubmarineSystem
@@ -60,8 +60,8 @@ public:
             .submarineRoot = submarineRoot
             });
 
-        // ✅ MeshRendererComponent для визуализации
-        // (опционально - можно вынести в SceneManager)
+        // ✅ ActiveComponent — без него SaveScene не найдёт этот отсек!
+        registry.AddComponent<ActiveComponent>(compartment, {});
 
         // ✅ КРИТИЧЕСКИ ВАЖНО: Добавляем в список
         rootSub->allCompartments.push_back(compartment);
@@ -91,35 +91,45 @@ public:
             return;
         }
 
-        // 🔥 Базовая масса подлодки (корпус)
-        float totalMass = 3000.0f;  // Масса корпуса
         float totalVolume = 0.0f;
 
-        // 🔥 Добавляем массу каждого отсека
         for (Entity compartmentEntity : rootSub->allCompartments)
         {
             auto* comp = registry.GetComponent<CompartmentComponent>(compartmentEntity);
             if (comp)
             {
-                totalMass += 500.0f;  // Масса материала отсека
                 totalVolume += comp->volume;
             }
         }
 
-        // 🔥 Применяем новые значения
+        totalVolume += 15.0f;  // +15 м³ за корпус
+
+        // ═══════════════════════════════════════════════════════════════
+        // КЛЮЧ: Для нейтральной плавучести масса ≈ ρ·V
+        // ρ_воды = 1025 кг/м³
+        // Хотим слегка положительную плавучесть (не тонет):
+        //   mass = ρ·V · 0.95  (5% запас плавучести)
+        // ═══════════════════════════════════════════════════════════════
+        float neutralMass = rootBuoy->fluidDensity * totalVolume;
+        float totalMass = neutralMass * 0.95f;  // Чуть легче воды → всплывает
+
         rootRb->mass = totalMass;
-        rootBuoy->volume = totalVolume + 15.0f;  // +15 м³ за корпус
-        rootBuoy->lastCalculatedVolume = rootBuoy->volume;
+        rootBuoy->volume = totalVolume;
+        rootBuoy->lastCalculatedVolume = totalVolume;
 
-        // 🔥 Кэшируем в SubmarineComponent
         rootSub->cachedTotalMass = totalMass;
-        rootSub->cachedTotalVolume = rootBuoy->volume;
+        rootSub->cachedTotalVolume = totalVolume;
 
-        OutputDebugStringA(
-            ("✅ Updated submarine physics:\n"
-                "   Total mass: " + std::to_string((int)totalMass) + " kg\n" +
-                "   Total volume: " + std::to_string(totalVolume) + " m³\n").c_str()
-        );
+        char buf[512];
+        sprintf_s(buf,
+            "✅ Updated submarine physics:\n"
+            "   Total volume: %.2f m³\n"
+            "   Neutral mass (ρ·V): %.0f kg\n"
+            "   Actual mass (95%%): %.0f kg\n"
+            "   Buoyancy margin: %.0f N\n",
+            totalVolume, neutralMass, totalMass,
+            (neutralMass - totalMass) * 9.81f);
+        OutputDebugStringA(buf);
     }
 
     // 🔧 Пересоздать физическое тело подлодки

@@ -8,6 +8,7 @@
 #include "SceneManager.h"
 #include "FileSystem.h"
 #include "ShaderManager.h"
+#include "PhysicsSystem.h"
 // ============================================================================
 // Конструктор
 // ============================================================================
@@ -115,25 +116,58 @@ void SceneManager::RenderAllECS(
     Entity selectedEntity,
     XMFLOAT3 cameraPos)
 {
-    // Собираем света из ECS
     GatherLightsForShader(lightColors, lightPositions, NUM_LIGHTS);
 
-    // ✅ FIX: Рендерим объекты, пропуская редакторные гизмо
     auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
 
+    // ── Проход 1: только непрозрачные объекты (запись в z-buffer) ────────────
     for (auto& [entity, mesh] : meshPool)
     {
         if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
-
-        // 🔥 НОВОЕ: Пропускаем редакторные гизмо источников света
         auto* light = m_registry.GetComponent<LightComponent>(entity);
         if (light && light->isEditorGizmo) continue;
-
         auto* transform = m_registry.GetComponent<TransformComponent>(entity);
         if (!transform || !mesh.model) continue;
-
         auto* mat = mesh.material ? mesh.material : defaultMaterial;
         if (!mat) continue;
+
+        // Пропускаем стеклянные объекты в первом проходе
+        if (mat->IsGlass()) continue;
+
+        // Проверяем также embedded transparent meshes
+        bool hasTransparentParts = false;
+        for (const auto& part : mesh.model->GetMeshParts())
+            if (part.isTransparent) { hasTransparentParts = true; break; }
+        if (hasTransparentParts && mat->GetShader() &&
+            mat->GetShader()->GetType() == ShaderType::PBR) continue;
+
+        XMMATRIX world = transform->GetWorldMatrix();
+        RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
+            mat, lightColors, lightPositions, fog,
+            entity == selectedEntity, cameraPos);
+    }
+
+    // ── Проход 2: прозрачные объекты (стекло) — z-buffer на чтение ──────────
+    // Отключаем запись в z-buffer чтобы стекло не перекрывало само себя
+    // и не скрывало объекты за ним
+    for (auto& [entity, mesh] : meshPool)
+    {
+        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
+        auto* light = m_registry.GetComponent<LightComponent>(entity);
+        if (light && light->isEditorGizmo) continue;
+        auto* transform = m_registry.GetComponent<TransformComponent>(entity);
+        if (!transform || !mesh.model) continue;
+        auto* mat = mesh.material ? mesh.material : defaultMaterial;
+        if (!mat) continue;
+
+        bool isTransparentObj = mat->IsGlass();
+        if (!isTransparentObj)
+        {
+            for (const auto& part : mesh.model->GetMeshParts())
+                if (part.isTransparent) { isTransparentObj = true; break;
+                }
+        }
+        if (!isTransparentObj) continue;
 
         XMMATRIX world = transform->GetWorldMatrix();
         RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
@@ -258,13 +292,26 @@ bool SceneManager::SaveScene(const std::string& filename)
     scene["version"] = 1;
     scene["objects"] = json::array();
 
-    // Итерируем по всем сущностям с MeshRendererComponent
-    auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
     int id = 0;
+
+    // ── Сохраняем объекты с мешем (обычные объекты, корни подлодок и т.д.) ──
+    auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
     for (auto& [entity, mesh] : meshPool)
     {
-        // Сохраняем только активные объекты
         if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
+        scene["objects"].push_back(SerializeObject(entity, id++));
+    }
+
+    // ── Сохраняем отсеки БЕЗ меша (логические CompartmentComponent) ──────────
+    // Отсеки могут не иметь MeshRendererComponent — они всё равно должны быть сохранены,
+    // иначе SubmarineComponent.allCompartments будет указывать на невалидные Entity.
+    auto& compPool = m_registry.GetComponents<CompartmentComponent>();
+    for (auto& [entity, comp] : compPool)
+    {
+        // Уже сохранён через meshPool — пропускаем
+        if (m_registry.HasComponent<MeshRendererComponent>(entity)) continue;
+        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
+
         scene["objects"].push_back(SerializeObject(entity, id++));
     }
 
@@ -283,198 +330,202 @@ json SceneManager::SerializeObject(Entity entity, int id)
 {
     json objJson;
     objJson["id"] = id;
+    objJson["entity_id"] = static_cast<uint32_t>(entity); // ← сохраняем оригинальный Entity ID
 
-    // Читаем реальный путь модели из кэша, а не хардкод
-    std::string modelPath = "assets/model/sphere.obj";
+    // ── Model / Texture paths ─────────────────────────────────────────────────
+    std::string modelPath   = "assets/model/sphere.obj";
     std::string texturePath = "assets/texture/stone.tga";
 
     if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
     {
-        // Ищем путь модели в кэше по указателю
         for (auto& [path, cachedModel] : m_modelCache)
         {
-            if (cachedModel == mesh->model)
-            {
-                modelPath = path;
-                break;
-            }
+            if (cachedModel == mesh->model) { modelPath = path; break; }
         }
     }
-
-    // В SerializeObject:
-    if (auto* light = m_registry.GetComponent<LightComponent>(entity))
-    {
-        objJson["is_light"] = true;
-        objJson["light_color"] = { light->color.x, light->color.y, light->color.z, light->color.w };
-        objJson["light_enabled"] = light->enabled;
-        
-    }
-    // ============================================================================
-// StaticColliderComponent
-// ============================================================================
-    if (auto* collider = m_registry.GetComponent<StaticColliderComponent>(entity))
-    {
-        objJson["has_static_collider"] = true;
-        // Сохраняем тип формы и размеры (аналогично RigidBody)
-        // Примечание: btCollisionShape* не сериализуется, воссоздаём по типу/размерам
-        objJson["collider_shape_type"] = "box"; // TODO: определить тип динамически, если нужно
-        objJson["collider_size"] = { 1.0f, 1.0f, 1.0f }; // TODO: извлечь из shape, если возможно
-    }
-
-    // ============================================================================
-    // BuoyancyComponent
-    // ============================================================================
-    if (auto* buoyancy = m_registry.GetComponent<BuoyancyComponent>(entity))
-    {
-        objJson["has_buoyancy"] = true;
-        objJson["buoyancy_fluid_density"] = buoyancy->fluidDensity;
-        objJson["buoyancy_volume"] = buoyancy->volume;
-        objJson["buoyancy_height"] = buoyancy->height;
-        objJson["buoyancy_multiplier"] = buoyancy->buoyancyMultiplier;
-        // lastCalculatedVolume — внутренний кэш, не сохраняем
-    }
-
-    // ============================================================================
-    // CompartmentComponent + BreachData
-    // ============================================================================
-    if (auto* compartment = m_registry.GetComponent<CompartmentComponent>(entity))
-    {
-        objJson["has_compartment"] = true;
-
-        // Габариты
-        objJson["compartment_local_min"] = { compartment->localMin.x, compartment->localMin.y, compartment->localMin.z };
-        objJson["compartment_local_max"] = { compartment->localMax.x, compartment->localMax.y, compartment->localMax.z };
-        objJson["compartment_volume"] = compartment->volume;
-
-        // Состояние воды
-        objJson["compartment_water_volume"] = compartment->waterVolume;
-        objJson["compartment_water_level"] = compartment->waterLevel;
-
-        // Флаги
-        objJson["compartment_is_sealed"] = compartment->isSealed;
-        objJson["compartment_has_power"] = compartment->hasPower;
-        objJson["compartment_pump_rate"] = compartment->pumpRate;
-        objJson["compartment_damage_visual"] = compartment->damageVisual;
-
-        // 🔥 Breaches — массив структур
-        json breachesJson = json::array();
-        for (const auto& breach : compartment->breaches)
-        {
-            json b;
-            b["local_position"] = { breach.localPosition.x, breach.localPosition.y, breach.localPosition.z };
-            b["size"] = breach.size;
-            b["flow_rate"] = breach.flowRate;
-            b["is_sealed"] = breach.isSealed;
-            breachesJson.push_back(b);
-        }
-        objJson["compartment_breaches"] = breachesJson;
-
-        // connectedCompartments — сохраняем как индексы сущностей (Entity — это uint32_t)
-        json connectionsJson = json::array();
-        for (Entity connected : compartment->connectedCompartments)
-        {
-            connectionsJson.push_back(static_cast<uint32_t>(connected));
-        }
-        objJson["compartment_connected"] = connectionsJson;
-    }
-
-    // ============================================================================
-    // SubmarineComponent
-    // ============================================================================
-    if (auto* sub = m_registry.GetComponent<SubmarineComponent>(entity))
-    {
-        objJson["has_submarine"] = true;
-        objJson["sub_root_entity"] = static_cast<uint32_t>(sub->submarineRoot);
-        objJson["sub_compartment_index"] = sub->compartmentIndex;
-        objJson["sub_is_detached"] = sub->isDetached;
-
-        // Список всех отсеков
-        json compartmentsJson = json::array();
-        for (Entity comp : sub->allCompartments)
-        {
-            compartmentsJson.push_back(static_cast<uint32_t>(comp));
-        }
-        objJson["sub_all_compartments"] = compartmentsJson;
-
-        // Кэшированные значения — не сохраняем, пересчитаются при загрузке
-    }
-
-    // ============================================================================
-    // PressureHullComponent
-    // ============================================================================
-    if (auto* hull = m_registry.GetComponent<PressureHullComponent>(entity))
-    {
-        objJson["has_pressure_hull"] = true;
-        objJson["hull_max_pressure"] = hull->maxPressure;
-        objJson["hull_current_health"] = hull->currentHealth;
-        objJson["hull_repair_rate"] = hull->repairRate;
-        objJson["hull_is_leaking"] = hull->isLeaking;
-        objJson["hull_leak_intensity"] = hull->leakIntensity;
-        // lastDepth/lastPressure — кэш, не сохраняем
-    }
-
-    // ============================================================================
-    // SubmarineJointComponent
-    // ============================================================================
-    if (auto* joint = m_registry.GetComponent<SubmarineJointComponent>(entity))
-    {
-        objJson["has_sub_joint"] = true;
-        objJson["sub_joint_comp_a"] = static_cast<uint32_t>(joint->compartmentA);
-        objJson["sub_joint_comp_b"] = static_cast<uint32_t>(joint->compartmentB);
-        objJson["sub_joint_break_force"] = joint->breakForce;
-        objJson["sub_joint_current_stress"] = joint->currentStress;
-        objJson["sub_joint_is_broken"] = joint->isBroken;
-        // btTypedConstraint* не сериализуется — воссоздаётся в PhysicsSystem
-    }
-
-    // ============================================================================
-    // JointConnectionComponent
-    // ============================================================================
-    if (auto* conn = m_registry.GetComponent<JointConnectionComponent>(entity))
-    {
-        objJson["has_joint_connection"] = true;
-        objJson["joint_target_entity"] = static_cast<uint32_t>(conn->targetEntity);
-        objJson["joint_pivot_a"] = { conn->pivotA.x(), conn->pivotA.y(), conn->pivotA.z() };
-        objJson["joint_pivot_b"] = { conn->pivotB.x(), conn->pivotB.y(), conn->pivotB.z() };
-        objJson["joint_break_force"] = conn->breakForce;
-        objJson["joint_disable_collisions"] = conn->disableCollisions;
-        objJson["joint_is_broken"] = conn->isBroken;
-        objJson["joint_show_gizmo"] = conn->showGizmo;
-        objJson["joint_gizmo_color"] = { conn->gizmoColor.x, conn->gizmoColor.y, conn->gizmoColor.z, conn->gizmoColor.w };
-    }
-
-    if (auto* rig = m_registry.GetComponent<RigidBodyComponent>(entity))
-    {
-        objJson["is_mass"] = rig->mass;
-        objJson["ShapeType"] = rig->shapeType;
-        objJson["ShapeSize"] = { rig->shapeSize.x(), rig->shapeSize.y(), rig->shapeSize.z()};
-
-    }
-
-    if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
-    {
-        if (mesh->material && mesh->material->GetShader())
-        {
-            // 🔥 Сохраняем тип шейдера через его метод
-            ShaderType type = mesh->material->GetShader()->GetType();
-            objJson["shader_type"] = static_cast<int>(type);
-        }
-    }
-
-
-    objJson["model_path"] = modelPath;
+    objJson["model_path"]   = modelPath;
     objJson["texture_path"] = texturePath;
 
-    // Читаем трансформацию из ECS
+    // ── TransformComponent ────────────────────────────────────────────────────
     if (auto* t = m_registry.GetComponent<TransformComponent>(entity))
     {
         objJson["position"] = { {"x", t->position.x}, {"y", t->position.y}, {"z", t->position.z} };
         objJson["rotation"] = { {"x", t->rotation.x}, {"y", t->rotation.y}, {"z", t->rotation.z} };
-        objJson["scale"] = { {"x", t->scale.x},    {"y", t->scale.y},    {"z", t->scale.z} };
+        objJson["scale"]    = { {"x", t->scale.x},    {"y", t->scale.y},    {"z", t->scale.z}    };
+    }
+
+    // ── Shader ────────────────────────────────────────────────────────────────
+    if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
+    {
+        if (mesh->material && mesh->material->GetShader())
+            objJson["shader_type"] = static_cast<int>(mesh->material->GetShader()->GetType());
+    }
+
+    // ── LightComponent ────────────────────────────────────────────────────────
+    if (auto* light = m_registry.GetComponent<LightComponent>(entity))
+    {
+        objJson["is_light"]        = true;
+        objJson["light_color"]     = { light->color.x, light->color.y, light->color.z, light->color.w };
+        objJson["light_enabled"]   = light->enabled;
+        objJson["light_radius"]    = light->radius;
+        objJson["light_offset"]    = { light->offset.x, light->offset.y, light->offset.z };
+        objJson["light_is_gizmo"]  = light->isEditorGizmo;
+        objJson["light_attached_to"] = static_cast<uint32_t>(light->attachedTo);
+    }
+
+    // ── RigidBodyComponent ────────────────────────────────────────────────────
+    if (auto* rig = m_registry.GetComponent<RigidBodyComponent>(entity))
+    {
+        objJson["has_rigidbody"]        = true;
+        objJson["rb_mass"]              = rig->mass;
+        objJson["rb_is_dynamic"]        = rig->isDynamic;
+        objJson["rb_is_kinematic"]      = rig->isKinematic;
+        objJson["rb_enable_ccd"]        = rig->enableCCD;
+        objJson["rb_linear_damping"]    = rig->linearDamping;
+        objJson["rb_angular_damping"]   = rig->angularDamping;
+        objJson["rb_friction"]          = rig->friction;
+        objJson["rb_shape_type"]        = static_cast<int>(rig->shapeType);
+        objJson["rb_shape_radius"]      = rig->shapeRadius;
+        objJson["rb_use_manual_size"]   = rig->useManualSize;
+        objJson["rb_shape_size"]        = { rig->shapeSize.x(), rig->shapeSize.y(), rig->shapeSize.z() };
+        objJson["rb_is_compound"]       = rig->isCompound;
+
+        // CompoundElements
+        json elemsJson = json::array();
+        for (const auto& elem : rig->compoundElements)
+        {
+            json e;
+            e["type"]              = static_cast<int>(elem.type);
+            e["size"]              = elem.size;
+            e["radius"]            = elem.radius;
+            e["height"]            = elem.height;
+            e["box_offset_min"]    = { elem.boxOffsetMin.x, elem.boxOffsetMin.y, elem.boxOffsetMin.z };
+            e["box_offset_max"]    = { elem.boxOffsetMax.x, elem.boxOffsetMax.y, elem.boxOffsetMax.z };
+            e["local_position"]    = { elem.localPosition.x, elem.localPosition.y, elem.localPosition.z };
+            e["local_rotation"]    = { elem.localRotation.x, elem.localRotation.y,
+                                       elem.localRotation.z, elem.localRotation.w };
+            e["radius_offset"]     = elem.radiusOffset;
+            e["height_offset_top"] = elem.heightOffsetTop;
+            e["height_offset_bot"] = elem.heightOffsetBottom;
+            e["debug_weight"]      = elem.debugWeight;
+            // editorEulerDegrees — только для UI, не сохраняем
+            elemsJson.push_back(e);
+        }
+        objJson["rb_compound_elements"] = elemsJson;
+    }
+
+    // ── SubmarineHullConfig ───────────────────────────────────────────────────
+    if (auto* hull = m_registry.GetComponent<SubmarineHullConfig>(entity))
+    {
+        objJson["has_hull_config"]       = true;
+        objJson["hull_extents"]          = { hull->hullExtents.x, hull->hullExtents.y, hull->hullExtents.z };
+        objJson["hull_wall_thickness"]   = hull->wallThickness;
+        objJson["hull_is_kinematic"]     = hull->isKinematic;
+        objJson["hull_show_debug"]       = hull->showDebugHull;
+    }
+
+    // ── StaticColliderComponent ───────────────────────────────────────────────
+    if (auto* collider = m_registry.GetComponent<StaticColliderComponent>(entity))
+    {
+        objJson["has_static_collider"] = true;
+    }
+
+    // ── BuoyancyComponent ─────────────────────────────────────────────────────
+    if (auto* buoyancy = m_registry.GetComponent<BuoyancyComponent>(entity))
+    {
+        objJson["has_buoyancy"]            = true;
+        objJson["buoyancy_fluid_density"]  = buoyancy->fluidDensity;
+        objJson["buoyancy_volume"]         = buoyancy->volume;
+        objJson["buoyancy_height"]         = buoyancy->height;
+        objJson["buoyancy_multiplier"]     = buoyancy->buoyancyMultiplier;
+    }
+
+    // ── CompartmentComponent ──────────────────────────────────────────────────
+    if (auto* comp = m_registry.GetComponent<CompartmentComponent>(entity))
+    {
+        objJson["has_compartment"]             = true;
+        objJson["compartment_local_min"]       = { comp->localMin.x, comp->localMin.y, comp->localMin.z };
+        objJson["compartment_local_max"]       = { comp->localMax.x, comp->localMax.y, comp->localMax.z };
+        objJson["compartment_volume"]          = comp->volume;
+        objJson["compartment_water_volume"]    = comp->waterVolume;
+        objJson["compartment_water_level"]     = comp->waterLevel;
+        objJson["compartment_is_sealed"]       = comp->isSealed;
+        objJson["compartment_has_power"]       = comp->hasPower;
+        objJson["compartment_pump_rate"]       = comp->pumpRate;
+        objJson["compartment_damage_visual"]   = comp->damageVisual;
+
+        json breachesJson = json::array();
+        for (const auto& breach : comp->breaches)
+        {
+            json b;
+            b["local_position"] = { breach.localPosition.x, breach.localPosition.y, breach.localPosition.z };
+            b["size"]           = breach.size;
+            b["flow_rate"]      = breach.flowRate;
+            b["is_sealed"]      = breach.isSealed;
+            breachesJson.push_back(b);
+        }
+        objJson["compartment_breaches"] = breachesJson;
+
+        json connectionsJson = json::array();
+        for (Entity connected : comp->connectedCompartments)
+            connectionsJson.push_back(static_cast<uint32_t>(connected));
+        objJson["compartment_connected"] = connectionsJson;
+    }
+
+    // ── SubmarineComponent ────────────────────────────────────────────────────
+    if (auto* sub = m_registry.GetComponent<SubmarineComponent>(entity))
+    {
+        objJson["has_submarine"]          = true;
+        objJson["sub_root_entity"]        = static_cast<uint32_t>(sub->submarineRoot);
+        objJson["sub_compartment_index"]  = sub->compartmentIndex;
+        objJson["sub_is_detached"]        = sub->isDetached;
+
+        json compartmentsJson = json::array();
+        for (Entity c : sub->allCompartments)
+            compartmentsJson.push_back(static_cast<uint32_t>(c));
+        objJson["sub_all_compartments"] = compartmentsJson;
+    }
+
+    // ── PressureHullComponent ─────────────────────────────────────────────────
+    if (auto* phull = m_registry.GetComponent<PressureHullComponent>(entity))
+    {
+        objJson["has_pressure_hull"]      = true;
+        objJson["hull_max_pressure"]      = phull->maxPressure;
+        objJson["hull_current_health"]    = phull->currentHealth;
+        objJson["hull_repair_rate"]       = phull->repairRate;
+        objJson["hull_is_leaking"]        = phull->isLeaking;
+        objJson["hull_leak_intensity"]    = phull->leakIntensity;
+    }
+
+    // ── SubmarineJointComponent ───────────────────────────────────────────────
+    if (auto* joint = m_registry.GetComponent<SubmarineJointComponent>(entity))
+    {
+        objJson["has_sub_joint"]           = true;
+        objJson["sub_joint_comp_a"]        = static_cast<uint32_t>(joint->compartmentA);
+        objJson["sub_joint_comp_b"]        = static_cast<uint32_t>(joint->compartmentB);
+        objJson["sub_joint_break_force"]   = joint->breakForce;
+        objJson["sub_joint_current_stress"]= joint->currentStress;
+        objJson["sub_joint_is_broken"]     = joint->isBroken;
+    }
+
+    // ── JointConnectionComponent ──────────────────────────────────────────────
+    if (auto* conn = m_registry.GetComponent<JointConnectionComponent>(entity))
+    {
+        objJson["has_joint_connection"]      = true;
+        objJson["joint_target_entity"]       = static_cast<uint32_t>(conn->targetEntity);
+        objJson["joint_pivot_a"]             = { conn->pivotA.x(), conn->pivotA.y(), conn->pivotA.z() };
+        objJson["joint_pivot_b"]             = { conn->pivotB.x(), conn->pivotB.y(), conn->pivotB.z() };
+        objJson["joint_break_force"]         = conn->breakForce;
+        objJson["joint_disable_collisions"]  = conn->disableCollisions;
+        objJson["joint_is_broken"]           = conn->isBroken;
+        objJson["joint_show_gizmo"]          = conn->showGizmo;
+        objJson["joint_gizmo_color"]         = { conn->gizmoColor.x, conn->gizmoColor.y,
+                                                  conn->gizmoColor.z, conn->gizmoColor.w };
     }
 
     return objJson;
 }
+
 // ============================================================================
 // LoadScene — десериализация
 // ============================================================================
@@ -503,12 +554,28 @@ bool SceneManager::LoadScene(const std::string& filename,
 
     Clear();
 
+    // ── Таблица ремаппинга: старый Entity ID → новый Entity ID ──────────────
+    std::unordered_map<uint32_t, Entity> entityRemap;
+
     if (j.contains("objects") && j["objects"].is_array())
     {
         for (const auto& objJson : j["objects"])
-            DeserializeObject(objJson, device, deviceContext);
+        {
+            Entity newEntity = DeserializeObject(objJson, device, deviceContext);
+            if (newEntity != INVALID_ENTITY && objJson.contains("entity_id"))
+            {
+                uint32_t oldId = objJson["entity_id"].get<uint32_t>();
+                entityRemap[oldId] = newEntity;
+
+                char buf[128];
+                sprintf_s(buf, "[LoadScene] Remap: old=%u → new=%u\n", oldId, newEntity);
+                OutputDebugStringA(buf);
+            }
+        }
     }
 
+    // ── Фаза 2: перебиндить все ссылки на Entity ─────────────────────────────
+    RemapEntityReferences(entityRemap);
 
     OutputDebugStringA("LoadScene: OK\n");
     return true;
@@ -521,23 +588,40 @@ bool SceneManager::LoadScene(const std::string& filename,
 Entity SceneManager::DeserializeObject(const json& j,
     ID3D11Device* device, ID3D11DeviceContext* deviceContext)
 {
-    std::string modelPath = j.value("model_path", "assets/model/sphere.obj");
+    std::string modelPath = j.value("model_path", "");
     std::string texturePath = j.value("texture_path", "assets/texture/stone.tga");
 
-    AssimpModelClass* model = GetOrCreateModel(modelPath, device, deviceContext, texturePath);
-    if (!model) model = m_mainModelFallback;
-    if (!model) return INVALID_ENTITY;
+    // Отсек без меша — только логическая сущность (Transform + Active)
+    const bool isLogicalOnly = j.value("has_compartment", false) && modelPath.empty();
 
-    float x = 0, y = 0, z = 0;
-    if (j.contains("position"))
+    Entity e = INVALID_ENTITY;
+
+    if (isLogicalOnly)
     {
-        x = j["position"].value("x", 0.0f);
-        y = j["position"].value("y", 0.0f);
-        z = j["position"].value("z", 0.0f);
+        e = m_registry.CreateEntity();
+        float x = j.contains("position") ? j["position"].value("x", 0.0f) : 0.0f;
+        float y = j.contains("position") ? j["position"].value("y", 0.0f) : 0.0f;
+        float z = j.contains("position") ? j["position"].value("z", 0.0f) : 0.0f;
+        m_registry.AddComponent<TransformComponent>(e, TransformComponent{ {x, y, z}, {0,0,0}, {1,1,1} });
+        m_registry.AddComponent<ActiveComponent>(e, {});
+    }
+    else
+    {
+        AssimpModelClass* model = modelPath.empty()
+            ? m_mainModelFallback
+            : GetOrCreateModel(modelPath, device, deviceContext, texturePath);
+        if (!model) model = m_mainModelFallback;
+        if (!model) return INVALID_ENTITY;
+
+        float x = j.contains("position") ? j["position"].value("x", 0.0f) : 0.0f;
+        float y = j.contains("position") ? j["position"].value("y", 0.0f) : 0.0f;
+        float z = j.contains("position") ? j["position"].value("z", 0.0f) : 0.0f;
+        e = SpawnObject(model, x, y, z);
     }
 
-    Entity e = SpawnObject(model, x, y, z);
+    if (e == INVALID_ENTITY) return INVALID_ENTITY;
 
+    // ── TransformComponent ────────────────────────────────────────────────────
     if (auto* t = m_registry.GetComponent<TransformComponent>(e))
     {
         if (j.contains("rotation"))
@@ -553,94 +637,111 @@ Entity SceneManager::DeserializeObject(const json& j,
             t->scale.z = j["scale"].value("z", 1.0f);
         }
     }
-    if (j.value("is_light", false))
-    {
-        LightComponent light;
 
-        if (j.contains("light_color")) {
-            auto& c = j["light_color"];
-            light.color = { c[0], c[1], c[2], c[3] };
-        }
-        light.enabled = j.value("light_enabled", true);
-        light.radius = j.value("light_radius", 10.0f);
-
-        if (j.contains("light_offset")) {
-            auto& o = j["light_offset"];
-            light.offset = { o[0], o[1], o[2] };
-        }
-
-        int attachedIdx = j.value("light_attached_to", -1);
-        light.attachedTo = (attachedIdx >= 0) ? static_cast<Entity>(attachedIdx) : INVALID_ENTITY;
-
-        light.isEditorGizmo = j.value("light_is_gizmo", false);
-
-        // 🔥 КЛЮЧЕВОЕ: Добавляем компонент в сущность 'e'
-        m_registry.AddComponent<LightComponent>(e, light);
-    }
-    if(j.contains("is_mass") && j["is_mass"].is_number())
-    {
-        RigidBodyComponent rig;
-        rig.mass = j["is_mass"].get<float>();
-
-        if (j.contains("ShapeType"))
-        {
-           rig.shapeType = j["ShapeType"];
-        }
-
-        if (j.contains("ShapeSize"))
-        {
-            auto& o = j["ShapeSize"];
-            rig.shapeSize = { o[0], o[1], o[2] };
-        }
-        
-      
-    }
-
+    // ── Shader ────────────────────────────────────────────────────────────────
     if (j.contains("shader_type"))
     {
-        int shaderTypeInt = j["shader_type"].get<int>();
-        ShaderType type = static_cast<ShaderType>(shaderTypeInt);
-
-        // Получаем шейдер по типу (например, через ShaderManager)
+        ShaderType type = static_cast<ShaderType>(j["shader_type"].get<int>());
         ShaderBaseClass* shader = ShaderManager::Get().GetShaderType(type);
-
         if (shader && device)
         {
             auto* mesh = m_registry.GetComponent<MeshRendererComponent>(e);
             if (mesh)
             {
-                // Если уже есть материал — удаляем (кроме дефолтного)
                 if (mesh->material && mesh->material != m_defaultMaterial)
                     delete mesh->material;
-
-                // Создаём новый материал
                 auto* newMat = new MaterialClass();
                 newMat->Initialize(device, L"RuntimeMaterial_Loaded");
-
-                // Копируем текстуру из дефолтного, если есть
                 if (m_defaultMaterial && m_defaultMaterial->GetMainTexture())
                     newMat->SetMainTexture(m_defaultMaterial->GetMainTexture());
-
-                // Назначаем шейдер
                 newMat->SetShader(shader);
                 mesh->material = newMat;
-
-                OutputDebugStringA("[Deserialize] Restored custom shader\n");
             }
         }
     }
 
-    if (j.value("has_static_collider", false))
+    // ── LightComponent ────────────────────────────────────────────────────────
+    if (j.value("is_light", false))
     {
-        StaticColliderComponent collider;
-        // TODO: здесь нужно воссоздать btCollisionShape по типу и размерам
-        // Например: collider.shape = new btBoxShape(btVector3(...));
-        m_registry.AddComponent<StaticColliderComponent>(e, collider);
+        LightComponent light;
+        if (j.contains("light_color"))
+        {
+            auto& c = j["light_color"];
+            light.color = { c[0], c[1], c[2], c[3] };
+        }
+        light.enabled = j.value("light_enabled", true);
+        light.radius = j.value("light_radius", 10.0f);
+        light.isEditorGizmo = j.value("light_is_gizmo", false);
+        if (j.contains("light_offset"))
+        {
+            auto& o = j["light_offset"];
+            light.offset = { o[0], o[1], o[2] };
+        }
+        light.attachedTo = static_cast<Entity>(
+            j.value("light_attached_to", static_cast<uint32_t>(INVALID_ENTITY)));
+        m_registry.AddComponent<LightComponent>(e, light);
     }
 
-    // ============================================================================
-    // BuoyancyComponent
-    // ============================================================================
+    // ── RigidBodyComponent ────────────────────────────────────────────────────
+    if (j.value("has_rigidbody", false))
+    {
+        RigidBodyComponent rig;
+        rig.mass = j.value("rb_mass", 1.0f);
+        rig.isDynamic = j.value("rb_is_dynamic", true);
+        rig.isKinematic = j.value("rb_is_kinematic", false);
+        rig.enableCCD = j.value("rb_enable_ccd", false);
+        rig.linearDamping = j.value("rb_linear_damping", 0.7f);
+        rig.angularDamping = j.value("rb_angular_damping", 0.8f);
+        rig.friction = j.value("rb_friction", 0.0f);
+        rig.shapeType = static_cast<RigidBodyComponent::ShapeType>(j.value("rb_shape_type", 0));
+        rig.shapeRadius = j.value("rb_shape_radius", 0.5f);
+        rig.useManualSize = j.value("rb_use_manual_size", false);
+        rig.isCompound = j.value("rb_is_compound", false);
+        if (j.contains("rb_shape_size"))
+        {
+            auto& s = j["rb_shape_size"];
+            rig.shapeSize = btVector3(s[0], s[1], s[2]);
+        }
+        if (j.contains("rb_compound_elements") && j["rb_compound_elements"].is_array())
+        {
+            for (const auto& ejson : j["rb_compound_elements"])
+            {
+                RigidBodyComponent::CompoundElement elem;
+                elem.type = static_cast<RigidBodyComponent::CompoundElement::ShapeType>(ejson.value("type", 0));
+                elem.size = ejson.value("size", 1.0f);
+                elem.radius = ejson.value("radius", 0.5f);
+                elem.height = ejson.value("height", 1.0f);
+                if (ejson.contains("box_offset_min")) { auto& m = ejson["box_offset_min"]; elem.boxOffsetMin = { m[0], m[1], m[2] }; }
+                if (ejson.contains("box_offset_max")) { auto& m = ejson["box_offset_max"]; elem.boxOffsetMax = { m[0], m[1], m[2] }; }
+                if (ejson.contains("local_position")) { auto& p = ejson["local_position"]; elem.localPosition = { p[0], p[1], p[2] }; }
+                if (ejson.contains("local_rotation")) { auto& r = ejson["local_rotation"]; elem.localRotation = { r[0], r[1], r[2], r[3] }; }
+                elem.radiusOffset = ejson.value("radius_offset", 0.0f);
+                elem.heightOffsetTop = ejson.value("height_offset_top", 0.0f);
+                elem.heightOffsetBottom = ejson.value("height_offset_bot", 0.0f);
+                elem.debugWeight = ejson.value("debug_weight", 1.0f);
+                rig.compoundElements.push_back(elem);
+            }
+        }
+        m_registry.AddComponent<RigidBodyComponent>(e, std::move(rig));
+        PhysicsSystem::CreateRigidBody(m_registry, e);
+    }
+
+    // ── SubmarineHullConfig ───────────────────────────────────────────────────
+    if (j.value("has_hull_config", false))
+    {
+        SubmarineHullConfig hull;
+        if (j.contains("hull_extents")) { auto& he = j["hull_extents"]; hull.hullExtents = { he[0], he[1], he[2] }; }
+        hull.wallThickness = j.value("hull_wall_thickness", 0.5f);
+        hull.isKinematic = j.value("hull_is_kinematic", false);
+        hull.showDebugHull = j.value("hull_show_debug", true);
+        m_registry.AddComponent<SubmarineHullConfig>(e, hull);
+    }
+
+    // ── StaticColliderComponent ───────────────────────────────────────────────
+    if (j.value("has_static_collider", false))
+        m_registry.AddComponent<StaticColliderComponent>(e, StaticColliderComponent{});
+
+    // ── BuoyancyComponent ─────────────────────────────────────────────────────
     if (j.value("has_buoyancy", false))
     {
         BuoyancyComponent buoyancy;
@@ -648,118 +749,74 @@ Entity SceneManager::DeserializeObject(const json& j,
         buoyancy.volume = j.value("buoyancy_volume", 10.0f);
         buoyancy.height = j.value("buoyancy_height", 5.0f);
         buoyancy.buoyancyMultiplier = j.value("buoyancy_multiplier", 1.0f);
-        buoyancy.lastCalculatedVolume = -1.0f; // сброс кэша
+        buoyancy.lastCalculatedVolume = -1.0f;
         m_registry.AddComponent<BuoyancyComponent>(e, buoyancy);
     }
 
-    // ============================================================================
-    // CompartmentComponent
-    // ============================================================================
+    // ── CompartmentComponent ──────────────────────────────────────────────────
     if (j.value("has_compartment", false))
     {
-        CompartmentComponent compartment;
-
-        // Габариты
-        if (j.contains("compartment_local_min")) {
-            auto& min = j["compartment_local_min"];
-            compartment.localMin = { min[0], min[1], min[2] };
-        }
-        if (j.contains("compartment_local_max")) {
-            auto& max = j["compartment_local_max"];
-            compartment.localMax = { max[0], max[1], max[2] };
-        }
-        compartment.volume = j.value("compartment_volume", 8.0f);
-
-        // Состояние воды
-        compartment.waterVolume = j.value("compartment_water_volume", 0.0f);
-        compartment.waterLevel = j.value("compartment_water_level", 0.0f);
-
-        // Флаги
-        compartment.isSealed = j.value("compartment_is_sealed", true);
-        compartment.hasPower = j.value("compartment_has_power", true);
-        compartment.pumpRate = j.value("compartment_pump_rate", 0.1f);
-        compartment.damageVisual = j.value("compartment_damage_visual", 0.0f);
-
-        // 🔥 Breaches
+        CompartmentComponent comp;
+        if (j.contains("compartment_local_min")) { auto& mn = j["compartment_local_min"]; comp.localMin = { mn[0], mn[1], mn[2] }; }
+        if (j.contains("compartment_local_max")) { auto& mx = j["compartment_local_max"]; comp.localMax = { mx[0], mx[1], mx[2] }; }
+        comp.volume = j.value("compartment_volume", 8.0f);
+        comp.waterVolume = j.value("compartment_water_volume", 0.0f);
+        comp.waterLevel = j.value("compartment_water_level", 0.0f);
+        comp.isSealed = j.value("compartment_is_sealed", true);
+        comp.hasPower = j.value("compartment_has_power", true);
+        comp.pumpRate = j.value("compartment_pump_rate", 0.1f);
+        comp.damageVisual = j.value("compartment_damage_visual", 0.0f);
         if (j.contains("compartment_breaches") && j["compartment_breaches"].is_array())
         {
             for (const auto& bJson : j["compartment_breaches"])
             {
                 BreachData breach;
-                if (bJson.contains("local_position")) {
-                    auto& pos = bJson["local_position"];
-                    breach.localPosition = { pos[0], pos[1], pos[2] };
-                }
+                if (bJson.contains("local_position")) { auto& p = bJson["local_position"]; breach.localPosition = { p[0], p[1], p[2] }; }
                 breach.size = bJson.value("size", 0.5f);
                 breach.flowRate = bJson.value("flow_rate", 0.0f);
                 breach.isSealed = bJson.value("is_sealed", false);
-                compartment.breaches.push_back(breach);
+                comp.breaches.push_back(breach);
             }
         }
-
-        // connectedCompartments — восстанавливаем Entity из uint32_t
         if (j.contains("compartment_connected") && j["compartment_connected"].is_array())
         {
             for (const auto& entJson : j["compartment_connected"])
-            {
-                Entity connected = static_cast<Entity>(entJson.get<uint32_t>());
-                compartment.connectedCompartments.push_back(connected);
-            }
+                comp.connectedCompartments.push_back(static_cast<Entity>(entJson.get<uint32_t>()));
         }
-
-        // Кэш размеров
-        compartment.CacheSize();
-
-        m_registry.AddComponent<CompartmentComponent>(e, compartment);
+        comp.CacheSize();
+        m_registry.AddComponent<CompartmentComponent>(e, comp);
     }
 
-    // ============================================================================
-    // SubmarineComponent
-    // ============================================================================
+    // ── SubmarineComponent ────────────────────────────────────────────────────
     if (j.value("has_submarine", false))
     {
         SubmarineComponent sub;
         sub.submarineRoot = static_cast<Entity>(j.value("sub_root_entity", static_cast<uint32_t>(INVALID_ENTITY)));
         sub.compartmentIndex = j.value("sub_compartment_index", 0);
         sub.isDetached = j.value("sub_is_detached", false);
-
         if (j.contains("sub_all_compartments") && j["sub_all_compartments"].is_array())
         {
-            for (const auto& entJson : j["sub_all_compartments"])
-            {
-                Entity comp = static_cast<Entity>(entJson.get<uint32_t>());
-                sub.allCompartments.push_back(comp);
-            }
+            for (const auto& ej : j["sub_all_compartments"])
+                sub.allCompartments.push_back(static_cast<Entity>(ej.get<uint32_t>()));
         }
-
-        // Сброс кэшей — пересчитаются в системе
-        sub.cachedTotalMass = 0.0f;
-        sub.cachedTotalVolume = 0.0f;
         sub.needsPhysicsUpdate = true;
         sub.compartmentCountLastFrame = -1;
-
         m_registry.AddComponent<SubmarineComponent>(e, sub);
     }
 
-    // ============================================================================
-    // PressureHullComponent
-    // ============================================================================
+    // ── PressureHullComponent ─────────────────────────────────────────────────
     if (j.value("has_pressure_hull", false))
     {
-        PressureHullComponent hull;
-        hull.maxPressure = j.value("hull_max_pressure", 202000.0f);
-        hull.currentHealth = j.value("hull_current_health", 100.0f);
-        hull.repairRate = j.value("hull_repair_rate", 5.0f);
-        hull.isLeaking = j.value("hull_is_leaking", false);
-        hull.leakIntensity = j.value("hull_leak_intensity", 0.0f);
-        hull.lastDepth = 0.0f;
-        hull.lastPressure = 0.0f;
-        m_registry.AddComponent<PressureHullComponent>(e, hull);
+        PressureHullComponent phull;
+        phull.maxPressure = j.value("hull_max_pressure", 202000.0f);
+        phull.currentHealth = j.value("hull_current_health", 100.0f);
+        phull.repairRate = j.value("hull_repair_rate", 5.0f);
+        phull.isLeaking = j.value("hull_is_leaking", false);
+        phull.leakIntensity = j.value("hull_leak_intensity", 0.0f);
+        m_registry.AddComponent<PressureHullComponent>(e, phull);
     }
 
-    // ============================================================================
-    // SubmarineJointComponent
-    // ============================================================================
+    // ── SubmarineJointComponent ───────────────────────────────────────────────
     if (j.value("has_sub_joint", false))
     {
         SubmarineJointComponent joint;
@@ -768,51 +825,33 @@ Entity SceneManager::DeserializeObject(const json& j,
         joint.breakForce = j.value("sub_joint_break_force", 50000.0f);
         joint.currentStress = j.value("sub_joint_current_stress", 0.0f);
         joint.isBroken = j.value("sub_joint_is_broken", false);
-        joint.joint = nullptr; // btTypedConstraint воссоздаётся в PhysicsSystem
+        joint.joint = nullptr;
         m_registry.AddComponent<SubmarineJointComponent>(e, joint);
     }
 
-    // ============================================================================
-    // JointConnectionComponent
-    // ============================================================================
+    // ── JointConnectionComponent ──────────────────────────────────────────────
     if (j.value("has_joint_connection", false))
     {
         JointConnectionComponent conn;
         conn.targetEntity = static_cast<Entity>(j.value("joint_target_entity", static_cast<uint32_t>(INVALID_ENTITY)));
-
-        if (j.contains("joint_pivot_a")) {
-            auto& a = j["joint_pivot_a"];
-            conn.pivotA = btVector3(a[0], a[1], a[2]);
-        }
-        if (j.contains("joint_pivot_b")) {
-            auto& b = j["joint_pivot_b"];
-            conn.pivotB = btVector3(b[0], b[1], b[2]);
-        }
-
+        if (j.contains("joint_pivot_a")) { auto& a = j["joint_pivot_a"]; conn.pivotA = btVector3(a[0], a[1], a[2]); }
+        if (j.contains("joint_pivot_b")) { auto& b = j["joint_pivot_b"]; conn.pivotB = btVector3(b[0], b[1], b[2]); }
         conn.breakForce = j.value("joint_break_force", 150000.0f);
         conn.disableCollisions = j.value("joint_disable_collisions", true);
         conn.isBroken = j.value("joint_is_broken", false);
         conn.showGizmo = j.value("joint_show_gizmo", true);
-
-        if (j.contains("joint_gizmo_color")) {
-            auto& c = j["joint_gizmo_color"];
-            conn.gizmoColor = { c[0], c[1], c[2], c[3] };
-        }
-
-        conn.joint = nullptr; // воссоздаётся позже
+        if (j.contains("joint_gizmo_color")) { auto& c = j["joint_gizmo_color"]; conn.gizmoColor = { c[0], c[1], c[2], c[3] }; }
+        conn.joint = nullptr;
         m_registry.AddComponent<JointConnectionComponent>(e, conn);
     }
 
-    // 🔥 FIX: Назначаем defaultMaterial ТОЛЬКО если у объекта ещё нет материала
+    // ── DefaultMaterial fallback ──────────────────────────────────────────────
     if (m_defaultMaterial)
     {
         if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(e))
-        {
-            if (!mesh->material)  // ← Важно: не перезаписываем уже назначенный!
+            if (!mesh->material)
                 mesh->material = m_defaultMaterial;
-        }
     }
-
 
     return e;
 }
@@ -1126,4 +1165,79 @@ void SceneManager::UpdateLights()
             };
         }
     }
+}
+
+void SceneManager::RemapEntityReferences(
+    const std::unordered_map<uint32_t, Entity>& remap)
+{
+    auto remapEntity = [&](Entity old) -> Entity
+        {
+            auto it = remap.find(static_cast<uint32_t>(old));
+            if (it != remap.end()) return it->second;
+
+            // ⚠️ ID не найден в таблице — значит объект не был сохранён
+            char buf[128];
+            sprintf_s(buf, "[Remap] WARNING: old entity %u not found in remap table!\n",
+                static_cast<uint32_t>(old));
+            OutputDebugStringA(buf);
+            return INVALID_ENTITY;
+        };
+
+    // ── SubmarineComponent ────────────────────────────────────────────────────
+    auto& subPool = m_registry.GetComponents<SubmarineComponent>();
+    for (auto& [entity, sub] : subPool)
+    {
+        char buf[256];
+        sprintf_s(buf, "[Remap] SubComp on entity=%u: root=%u, compartments=%zu\n",
+            entity, static_cast<uint32_t>(sub.submarineRoot),
+            sub.allCompartments.size());
+        OutputDebugStringA(buf);
+
+        sub.submarineRoot = remapEntity(sub.submarineRoot);
+
+        for (Entity& c : sub.allCompartments)
+        {
+            uint32_t oldId = static_cast<uint32_t>(c);
+            c = remapEntity(c);
+            sprintf_s(buf, "[Remap]   compartment old=%u → new=%u, hasComp=%s\n",
+                oldId, static_cast<uint32_t>(c),
+                (c != INVALID_ENTITY && m_registry.HasComponent<CompartmentComponent>(c))
+                ? "YES" : "NO");
+            OutputDebugStringA(buf);
+        }
+    }
+
+    // ── CompartmentComponent.connectedCompartments ────────────────────────────
+    auto& compPool = m_registry.GetComponents<CompartmentComponent>();
+    for (auto& [entity, comp] : compPool)
+    {
+        for (Entity& c : comp.connectedCompartments)
+            c = remapEntity(c);
+    }
+
+    // ── LightComponent.attachedTo ─────────────────────────────────────────────
+    auto& lightPool = m_registry.GetComponents<LightComponent>();
+    for (auto& [entity, light] : lightPool)
+    {
+        if (light.attachedTo != INVALID_ENTITY)
+            light.attachedTo = remapEntity(light.attachedTo);
+    }
+
+    // ── SubmarineJointComponent ───────────────────────────────────────────────
+    auto& jointPool = m_registry.GetComponents<SubmarineJointComponent>();
+    for (auto& [entity, joint] : jointPool)
+    {
+        joint.compartmentA = remapEntity(joint.compartmentA);
+        joint.compartmentB = remapEntity(joint.compartmentB);
+    }
+
+    // ── JointConnectionComponent ──────────────────────────────────────────────
+    auto& connPool = m_registry.GetComponents<JointConnectionComponent>();
+    for (auto& [entity, conn] : connPool)
+    {
+        if (conn.targetEntity != INVALID_ENTITY)
+            conn.targetEntity = remapEntity(conn.targetEntity);
+    }
+
+    OutputDebugStringA("[LoadScene] Entity remapping complete\n");
 }

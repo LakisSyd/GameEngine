@@ -53,7 +53,8 @@ struct RigidBodyComponent
     float angularFactor = 0.5f;
     float friction = 0.0f;
     bool isKinematic = false;
-
+    btCollisionShape* shape = nullptr;
+    bool needsCollisionRebuild = true;
     XMFLOAT3 lastSyncedPosition = { 0, 0, 0 };
     XMFLOAT3 lastSyncedRotation = { 0, 0, 0 };
 
@@ -64,7 +65,9 @@ struct RigidBodyComponent
         Capsule,
         Plane,
         ConvexHull,
-        TriangleMesh
+        TriangleMesh,
+        GImpactMesh,
+        VHACD// Dynamic concave mesh — allows objects inside (container collision)
     };
 
     ShapeType shapeType = Box;
@@ -76,9 +79,17 @@ struct RigidBodyComponent
     std::vector<btConvexHullShape*> convexHulls;
 
     bool isCompound = false;
-    
+
     struct CompoundElement {
-        enum ShapeType { Box, Sphere, Cylinder, Capsule };
+        enum ShapeType {
+            Box,           // 0 → "Box"
+            Sphere,        // 1 → "Sphere"
+            Cylinder,      // 2 → "Cylinder"
+            Capsule,       // 3 → "Capsule"
+            ConvexHull,    // 4 → "ConvexHull"
+            VHACD          // 5 → "VHACD" ← должен быть ПОСЛЕДНИМ!
+        };
+
         ShapeType type = Box;
 
         // Размеры
@@ -96,60 +107,177 @@ struct RigidBodyComponent
         float heightOffsetTop = 0.0f;
         float heightOffsetBottom = 0.0f;
 
+        XMFLOAT3 editorEulerDegrees = { 0.0f, 0.0f, 0.0f };
+        bool editorEulerDirty = true; // true = нужно пересчитать из localRo
+
         // Для отладки/веса (физический вес считает сам Bullet через инерцию, 
         // но это поле может пригодиться для логики игры)
         float debugWeight = 1.0f;
+
+        // 🔥 Для VHACD-элементов: ссылка на модель для декомпозиции
+        AssimpModelClass* vhacdModel = nullptr;
+        // 🔥 Для VHACD-элементов: масштаб для коллизии
+        XMFLOAT3 vhacdScale = { 1.0f, 1.0f, 1.0f };
+
+
+
+        // Параметры качества (можно вынести в отдельную структуру, если много)
+        uint32_t vhacdResolution = 800;          // детализация вокселей
+        uint32_t vhacdMaxHulls = 6;               // макс. количество выпуклых частей
+        uint32_t vhacdMaxVertsPerHull = 32;        // вершин на часть
+        float vhacdVolumeError = 0.05f;              // допустимая погрешность в %
+
+        // Статус (для отображения в редакторе)
+        int vhacdLastHullCount = 0;                 // сколько халлов сгенерировано в последний раз
+        bool vhacdGenerationPending = false;
+
     };
-    
-     std::vector<CompoundElement> compoundElements;
 
-     ~RigidBodyComponent()
-     {
-         if (body)
-         {
-             // 1. Сначала получаем форму
-             btCollisionShape* shape = body->getCollisionShape();
+    std::vector<CompoundElement> compoundElements;
 
-             // 2. Удаляем тело и motion state
-             delete body->getMotionState();
-             delete body;
-             body = nullptr;
+    // ── Запрет копирования ────────────────────────────────────────────────────
+    RigidBodyComponent() = default;
+    RigidBodyComponent(const RigidBodyComponent&) = delete;
+    RigidBodyComponent& operator=(const RigidBodyComponent&) = delete;
+    btRigidBody* interiorBody = nullptr;
+    btCollisionShape* interiorShape = nullptr;
 
-             // 3. ВАЖНО: Если это составная форма, она САМА удалит свои части.
-             // Нам нужно удалить только саму compound форму, но НЕ её детей.
-             if (shape && shape->getShapeType() == COMPOUND_SHAPE_PROXYTYPE)
-             {
-                 delete shape;
-                 // Не удаляем convexHulls/triangleMesh вручную, если они были добавлены в compound!
-                 // Очищаем векторы, чтобы не было висячих указателей, но без delete.
-                 convexHulls.clear();
-                 if (triangleMesh) { delete triangleMesh; triangleMesh = nullptr; }
-             }
-             else
-             {
-                 // Если это обычная форма, удаляем её стандартно
-                 if (shape) delete shape;
+    // ── Move-семантика ────────────────────────────────────────────────────────
+    RigidBodyComponent(RigidBodyComponent&& other) noexcept
+        : body(other.body)
+        , mass(other.mass)
+        , isDynamic(other.isDynamic)
+        , enableCCD(other.enableCCD)
+        , ccdMotionThreshold(other.ccdMotionThreshold)
+        , linearDamping(other.linearDamping)
+        , angularDamping(other.angularDamping)
+        , angularFactor(other.angularFactor)
+        , friction(other.friction)
+        , isKinematic(other.isKinematic)
+        , lastSyncedPosition(other.lastSyncedPosition)
+        , lastSyncedRotation(other.lastSyncedRotation)
+        , shapeType(other.shapeType)
+        , shapeSize(other.shapeSize)
+        , shapeRadius(other.shapeRadius)
+        , useManualSize(other.useManualSize)
+        , triangleMesh(other.triangleMesh)
+        , convexHulls(std::move(other.convexHulls))
+        , isCompound(other.isCompound)
+        , compoundElements(std::move(other.compoundElements))
+        , interiorBody(other.interiorBody)
+        , interiorShape(other.interiorShape)
+    {
+        // Обнуляем указатели у источника — деструктор источника НЕ удалит ресурсы
+        other.body = nullptr;
+        other.triangleMesh = nullptr;
+        other.interiorBody = nullptr;
+        other.interiorShape = nullptr;
+    }
 
-                 // Очищаем ручные ресурсы для обычных форм
-                 if (triangleMesh) { delete triangleMesh; triangleMesh = nullptr; }
-                 for (auto* hull : convexHulls)
-                 {
-                     if (hull) delete hull;
-                 }
-                 convexHulls.clear();
-             }
-         }
-         else
-         {
-             // Если тела нет (ошибка создания), но ресурсы есть - чистим их вручную
-             if (triangleMesh) { delete triangleMesh; triangleMesh = nullptr; }
-             for (auto* hull : convexHulls)
-             {
-                 if (hull) delete hull;
-             }
-             convexHulls.clear();
-         }
-     }
+    RigidBodyComponent& operator=(RigidBodyComponent&& other) noexcept
+    {
+        if (this == &other) return *this;
+
+        // Сначала освобождаем текущие ресурсы
+        DestroyResources();
+
+        body = other.body;
+        mass = other.mass;
+        isDynamic = other.isDynamic;
+        enableCCD = other.enableCCD;
+        ccdMotionThreshold = other.ccdMotionThreshold;
+        linearDamping = other.linearDamping;
+        angularDamping = other.angularDamping;
+        angularFactor = other.angularFactor;
+        friction = other.friction;
+        isKinematic = other.isKinematic;
+        lastSyncedPosition = other.lastSyncedPosition;
+        lastSyncedRotation = other.lastSyncedRotation;
+        shapeType = other.shapeType;
+        shapeSize = other.shapeSize;
+        shapeRadius = other.shapeRadius;
+        useManualSize = other.useManualSize;
+        triangleMesh = other.triangleMesh;
+        convexHulls = std::move(other.convexHulls);
+        isCompound = other.isCompound;
+        compoundElements = std::move(other.compoundElements);
+        interiorBody = other.interiorBody;
+        interiorShape = other.interiorShape;
+
+        other.body = nullptr;
+        other.triangleMesh = nullptr;
+        other.interiorBody = nullptr;
+        other.interiorShape = nullptr;
+
+        return *this;
+    }
+
+    ~RigidBodyComponent()
+    {
+        DestroyResources();
+    }
+
+private:
+    void DestroyResources()
+    {
+        if (body)
+        {
+            btCollisionShape* shapeLocal = body->getCollisionShape();
+
+            delete body->getMotionState();
+            delete body;
+            body = nullptr;
+
+            // Удаляем связанную форму, если это compound (оригинальная логика)
+            if (shapeLocal && shapeLocal->getShapeType() == COMPOUND_SHAPE_PROXYTYPE)
+            {
+                delete shapeLocal;
+                convexHulls.clear();
+                if (triangleMesh) { delete triangleMesh; triangleMesh = nullptr; }
+            }
+            else
+            {
+                if (shapeLocal) delete shapeLocal;
+                if (triangleMesh) { delete triangleMesh; triangleMesh = nullptr; }
+                for (auto* hull : convexHulls)
+                    if (hull) delete hull;
+                convexHulls.clear();
+            }
+
+            // Если есть interiorBody, удаляем его тоже
+            if (interiorBody)
+            {
+                // interiorBody может иметь свою motionState
+                delete interiorBody->getMotionState();
+                delete interiorBody;
+                interiorBody = nullptr;
+            }
+            if (interiorShape)
+            {
+                delete interiorShape;
+                interiorShape = nullptr;
+            }
+        }
+        else
+        {
+            if (triangleMesh) { delete triangleMesh; triangleMesh = nullptr; }
+            for (auto* hull : convexHulls)
+                if (hull) delete hull;
+            convexHulls.clear();
+
+            if (interiorBody)
+            {
+                delete interiorBody->getMotionState();
+                delete interiorBody;
+                interiorBody = nullptr;
+            }
+            if (interiorShape)
+            {
+                delete interiorShape;
+                interiorShape = nullptr;
+            }
+        }
+    }
 };
 
 struct StaticColliderComponent
@@ -168,6 +296,60 @@ struct BuoyancyComponent
 
     // 🔥 НОВОЕ: Отслеживание изменений для пересчета физики
     float lastCalculatedVolume = -1.0f;  // -1 = не инициализировано
+};
+
+
+struct DoorComponent
+{
+    // Отсеки по обе стороны двери
+    Entity compartmentA = INVALID_ENTITY;
+    Entity compartmentB = INVALID_ENTITY;
+
+    // Состояние двери
+    bool isOpen = false; // открыта ли дверь
+    bool isBroken = false; // сломана — заблокирована в открытом положении
+
+    // Скорость потока воды через открытую дверь (м³/с)
+    // Чем больше — тем быстрее выравнивается уровень между отсеками
+    float flowRate = 1.0f;
+
+    // Требуется ли питание для открытия/закрытия (электрические затворы)
+    bool requiresPower = false;
+
+    // Анимационный прогресс открытия [0.0 = закрыта, 1.0 = полностью открыта]
+    // FloodingSystem использует его как множитель flowRate
+    float openProgress = 0.0f;
+
+    // Скорость анимации открытия/закрытия (единиц в секунду)
+    float openSpeed = 2.0f;
+
+    // ── Вспомогательные методы ────────────────────────────────────────────────
+
+    // Открыть дверь (с учётом питания и поломки)
+    bool TryOpen(bool hasPower)
+    {
+        if (isBroken) return true; // сломана — уже открыта
+        if (requiresPower && !hasPower) return false;
+        isOpen = true;
+        return true;
+    }
+
+    // Закрыть дверь
+    bool TryClose(bool hasPower)
+    {
+        if (isBroken) return false; // сломана — не закрыть
+        if (requiresPower && !hasPower) return false;
+        isOpen = false;
+        return true;
+    }
+
+    // Текущий множитель потока с учётом анимации
+    float GetEffectiveFlowRate() const
+    {
+        if (isBroken || isOpen)
+            return flowRate * openProgress;
+        return 0.0f;
+    }
 };
 
 struct BreachData
@@ -241,6 +423,25 @@ struct CompartmentComponent
         return ContainsPoint(worldPos, worldToLocal);
     }
 };
+// ══════════════════════════════════════════════════════════════════════════════
+// Конфигурация физического корпуса подлодки (толстые стены через btCompoundShape)
+// Настраивается через редактор. Применяется в FinalizeSubmarinePhysics.
+// ══════════════════════════════════════════════════════════════════════════════
+struct SubmarineHullConfig
+{
+    // Полный внешний размер корпуса (X=ширина, Y=высота, Z=длина)
+    XMFLOAT3 hullExtents = { 3.0f, 2.5f, 10.0f };
+
+    // Толщина стен (мин. 0.5м для предотвращения туннелирования)
+    float wallThickness = 0.5f;
+
+    // Подлодка кинематическая (true) или динамическая (false)
+    bool isKinematic = false;
+
+    // Визуализировать физический корпус в редакторе
+    bool showDebugHull = true;
+};
+
 
 struct SubmarineComponent
 {
@@ -256,6 +457,7 @@ struct SubmarineComponent
     // 🔥 НОВОЕ: Флаги для отслеживания изменений
     bool needsPhysicsUpdate = false;
     int compartmentCountLastFrame = -1;
+    Entity proxyEntity = INVALID_ENTITY;
 };
 
 struct PressureHullComponent
@@ -303,4 +505,54 @@ struct JointConnectionComponent
 
     bool showGizmo = true;
     XMFLOAT4 gizmoColor = { 1.0f, 1.0f, 0.0f, 1.0f };
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Повреждения меша — трещины рисуются прямо в PBR шейдере как decal.
+// Каждая запись = одна трещина в ЛОКАЛЬНЫХ координатах отсека.
+// ══════════════════════════════════════════════════════════════════════════════
+struct DamageDecalComponent
+{
+    static constexpr int MAX_CRACKS = 8; // максимум совпадает с cbuffer в шейдере
+
+    struct CrackEntry
+    {
+        XMFLOAT3 localPosition = { 0,0,0 }; // позиция в пространстве меша
+        float    radius = 0.5f;       // радиус трещины (м)
+        float    intensity = 0.0f;       // 0=нет, 1=максимум (зависит от flowRate)
+        float    rotation = 0.0f;       // угол поворота текстуры трещины (рандом)
+        float    _pad[2] = {};         // выравнивание до 32 байт для cbuffer
+    };
+
+    std::vector<CrackEntry> cracks;
+
+    // Синхронизировать с BreachData отсека
+    void SyncFromBreaches(const CompartmentComponent& comp)
+    {
+        cracks.resize(comp.breaches.size());
+        for (size_t i = 0; i < comp.breaches.size(); ++i)
+        {
+            auto& b = comp.breaches[i];
+            auto& c = cracks[i];
+            c.localPosition = b.localPosition;
+            c.radius = b.size * 1.5f;
+            c.intensity = b.isSealed ? 0.0f : std::min(1.0f, b.flowRate * 0.8f);
+        }
+    }
+};
+
+// Добавить новый простой компонент для настройки "интерьера" подлодки
+struct SubmarineCollisionSetup
+{
+    // Внешний размер внутренней коробки (м). Рекомендуется чуть меньше визуального корпуса.
+    XMFLOAT3 interiorSize = { 2.8f, 2.3f, 9.5f };
+
+    // Локальный оффсет внутр. бокса относительно корневой трансформации подлодки
+    XMFLOAT3 interiorOffset = { 0.0f, 0.0f, 0.0f };
+
+    // Использовать ли этот внутренний коллайдер
+    bool useInteriorCollider = true;
+
+    // Коэффициент усадки (0.9–0.98) — задайте 0.95 для ~5% меньше корпуса
+    float interiorShrinkFactor = 0.95f;
 };
