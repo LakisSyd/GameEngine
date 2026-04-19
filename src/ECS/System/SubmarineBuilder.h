@@ -46,6 +46,8 @@ public:
 
     static void FinalizeSubmarinePhysics(ECSRegistry& registry, Entity submarine);
 
+   static void BuildHullCompoundElements(const SubmarineHullConfig& cfg, RigidBodyComponent& rb);
+
     // Получить геометрию модели
     static CompartmentGeometry CalculateGeometryFromModel(AssimpModelClass* model);
 

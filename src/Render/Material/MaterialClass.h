@@ -99,6 +99,13 @@ public:
     void SetProjectionProj2(const XMMATRIX& proj) { m_proj2 = proj; }
     XMMATRIX GetProjectionProj2() const { return m_proj2; }
 
+    // ── Glass / Transparency ─────────────────────────────────────────────────
+    // isGlass = true → PBR шейдер рендерит как стекло (прозрачно, чистый Fresnel)
+    // glassOpacity = 0.0 полностью прозрачное, 1.0 = непрозрачное
+    void  SetGlass(bool glass, float opacity = 0.15f) { m_isGlass = glass; m_glassOpacity = opacity; }
+    bool  IsGlass()        const { return m_isGlass; }
+    float GetGlassOpacity() const { return m_glassOpacity; }
+
 private:
 
     XMMATRIX m_projectorProjection = XMMatrixIdentity(); // новое поле
@@ -126,4 +133,8 @@ private:
 
     XMMATRIX m_view2 = XMMatrixIdentity();
     XMMATRIX m_proj2 = XMMatrixIdentity();
+
+    // ── Glass ────────────────────────────────────────────────────────────────
+    bool  m_isGlass      = false;
+    float m_glassOpacity = 0.15f;  // базовая прозрачность стекла (0=невидимое, 1=непрозрачное)
 };

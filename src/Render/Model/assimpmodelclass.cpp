@@ -2,6 +2,7 @@
 #include <iostream>
 #include <Windows.h> // Для ZeroMemory, GetTempPathA/GetTempFileNameA
 #include <fstream>
+#include <GltfMaterial.h>
 
 AssimpModelClass::AssimpModelClass() : m_scene(nullptr), m_Texture(nullptr), m_totalIndexCount(0)
 {
@@ -49,7 +50,7 @@ ID3D11ShaderResourceView* AssimpModelClass::LoadEmbeddedTexture(ID3D11Device* de
     else
     {
         // Не-сжатая RGBA, нужно записать как PNG — но проще сформировать BMP/PNG требует кодек.
-        // Попробуем записать как raw RGBA и затем загрузить вручную — но stbi не умеет raw без заголовка.
+        // Попробуем записать как raw RGBA и затем загружать вручную — но stbi не умеет raw без заголовка.
         // Поэтому в этом упрощении не пытаемся поддерживать raw неподдерживаемые форматы:
         // возвращаем nullptr — но чаще в GLB встроены сжатые (png/jpg).
         writeOk = false;
@@ -191,7 +192,7 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
     m_scene = m_importer.ReadFile(modelPath,
         aiProcess_Triangulate |
         aiProcess_FlipUVs |
-        aiProcess_GenNormals |
+        aiProcess_GenSmoothNormals |
         aiProcess_CalcTangentSpace);
     if (!m_scene || (m_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !m_scene->mRootNode)
     {
@@ -199,6 +200,18 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
         MessageBoxA(NULL, err.c_str(), "Assimp Load Error", MB_OK);
         return false;
     }
+
+    std::string path(modelPath);
+    if (path.size() >= 4) {
+        std::string ext = path.substr(path.size() - 4);
+        // Приводим к нижнему регистру для надёжности
+        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+        m_isEmbeddedFormat = (ext == ".glb" || ext == ".gltf");
+    }
+    else {
+        m_isEmbeddedFormat = false;
+    }
+
 
     OutputDebugStringA(("Assimp: Model loaded successfully. Meshes count: " + std::to_string(m_scene->mNumMeshes) + "\n").c_str());
 
@@ -349,7 +362,116 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
                         OutputDebugStringA(("Created 1x1 roughness SRV for mesh " + std::to_string(i) + "\n").c_str());
                     }
                 }
+                {
+                    // Читаем alphaMode (glTF: "OPAQUE", "MASK", "BLEND")
+                    aiString alphaMode;
+                    mat->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode);
+                    std::string alphaModeStr = alphaMode.C_Str();
+
+                    // Читаем opacity (0..1)
+                    float opacity = 1.0f;
+                    aiGetMaterialFloat(mat, AI_MATKEY_OPACITY, &opacity);
+
+                    // Читаем transmission (glTF: KHR_materials_transmission)
+                    // Правильный ключ: AI_MATKEY_TRANSMISSION_FACTOR = "$mat.transmission.factor"
+                    float transmission = 0.0f;
+                    aiGetMaterialFloat(mat, AI_MATKEY_TRANSMISSION_FACTOR, &transmission);
+
+                    part.isTransparent = (alphaModeStr == "BLEND") || (opacity < 0.999f) || (transmission > 0.01f);
+                    part.opacity = opacity;
+
+                    // ── Определяем стекло ────────────────────────────────────
+                    float metallicFactor = 0.0f;
+                    aiGetMaterialFloat(mat, AI_MATKEY_METALLIC_FACTOR, &metallicFactor);
+
+                    // IOR: пробуем стандартный ключ Assimp (классические форматы)
+                    float ior = 1.0f;
+                    aiGetMaterialFloat(mat, AI_MATKEY_REFRACTI, &ior);
+
+                    // Проверяем имя материала на наличие "glass"
+                    aiString matName;
+                    mat->Get(AI_MATKEY_NAME, matName);
+                    std::string matNameStr = matName.C_Str();
+                    std::string matNameLower = matNameStr;
+                    for (auto& c : matNameLower) c = static_cast<char>(tolower(c));
+                    bool nameIsGlass = (matNameLower.find("glass") != std::string::npos);
+
+                    // ── Логика определения стекла ────────────────────────────
+                    // 1) Прозрачный + (высокий metallic или transmission)
+                    bool isGlassOriginal = part.isTransparent && (metallicFactor > 0.5f || transmission > 0.01f);
+                    // 2) Имя содержит "glass" (Blender glass trick: metallic=1)
+                    bool isGlassByName   = nameIsGlass;
+                    // 3) IOR > 1.0 + высокий metallic
+                    bool isGlassByIOR    = (ior > 1.01f) && (metallicFactor > 0.5f);
+                    // 4) Высокий metallic + Render Method Blended (Blender ставит alphaMode=BLEND)
+                    bool isGlassByMetal  = (metallicFactor > 0.9f) && (alphaModeStr == "BLEND");
+
+                    part.isGlass = isGlassOriginal || isGlassByName || isGlassByIOR || isGlassByMetal;
+
+                    // Если стекло обнаружено — принудительно помечаем прозрачным
+                    if (part.isGlass && !part.isTransparent)
+                    {
+                        part.isTransparent = true;
+                    }
+                    // Назначаем разумную прозрачность для стекла
+                    if (part.isGlass && part.opacity > 0.5f)
+                    {
+                        part.opacity = 0.12f; // Чистое стекло: почти прозрачное
+                    }
+
+                    char dbg[512];
+                    sprintf_s(dbg, "Mesh #%u: name='%s' alphaMode='%s' opacity=%.3f metallic=%.3f "
+                        "transmission=%.3f ior=%.3f isTransparent=%d isGlass=%d "
+                        "(byOriginal=%d byName=%d byIOR=%d byMetal=%d)\n",
+                        i, matNameStr.c_str(), alphaModeStr.c_str(), opacity, metallicFactor,
+                        transmission, ior,
+                        (int)part.isTransparent, (int)part.isGlass,
+                        (int)isGlassOriginal, (int)isGlassByName,
+                        (int)isGlassByIOR, (int)isGlassByMetal);
+                    OutputDebugStringA(dbg);
+                }
             }
+
+           
+                for (unsigned int m = 0; m < m_scene->mNumMeshes; ++m)
+                {
+                    aiMesh* mesh = m_scene->mMeshes[m];
+                    if (mesh->mNumBones == 0) continue;
+
+                    for (unsigned int b = 0; b < mesh->mNumBones; ++b)
+                    {
+                        aiBone* bone = mesh->mBones[b];
+                        if (m_boneMap.find(bone->mName.C_Str()) == m_boneMap.end())
+                        {
+                            int boneIndex = m_maxBones++;
+                            m_boneMap[bone->mName.C_Str()] = boneIndex;
+                            // ✅ Создаём XMFLOAT4X4 и записываем в него единичную матрицу
+                            XMFLOAT4X4 identityMatrix;
+                            XMStoreFloat4x4(&identityMatrix, XMMatrixIdentity());
+                            m_boneMatrices.push_back(identityMatrix);
+                        }
+
+                        int boneIndex = m_boneMap[bone->mName.C_Str()];
+
+                        for (unsigned int w = 0; w < bone->mNumWeights; ++w)
+                        {
+                            unsigned int vertexID = bone->mWeights[w].mVertexId;
+                            float weight = bone->mWeights[w].mWeight;
+
+                            // Находим свободный слот (до 4 костей)
+                            for (int slot = 0; slot < 4; ++slot)
+                            {
+                                if (m_meshParts[m].vertexBuffer == nullptr) break; // Защита
+                                // Тут нужно обратиться к вершинам, которые ты создавал выше.
+                                // Лучше сохранить vertices[] в локальную переменную перед созданием VB
+                                // Пример доступа (адаптируй под свой код):
+                                // vertices[vertexID].boneIDs[slot] = boneIndex;
+                                // vertices[vertexID].boneWeights[slot] = weight;
+                                break;
+                            }
+                        }
+                    }
+                }
 
         // Добавляем созданный part в список мешей
         m_meshParts.push_back(part);
@@ -385,6 +507,8 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
     float radius;
     GetBoundingBox(&min, &max);
     GetBoundingSphere(&center, &radius);
+
+    LoadAnimations(m_scene);
 
     return true;
 
@@ -864,7 +988,7 @@ void AssimpModelClass::GetRawTriangles(std::vector<XMFLOAT3>& outTriangles) cons
         const aiMesh* mesh = m_scene->mMeshes[i];
         if (!mesh || !mesh->HasPositions() || !mesh->HasFaces()) continue;
 
-        for (unsigned int f = 0; f < mesh->mNumFaces; ++f)
+        for (unsigned int f = 0; f < mesh->mNumFaces; f++)
         {
             const aiFace& face = mesh->mFaces[f];
             if (face.mNumIndices != 3) continue; // только треугольники
@@ -876,4 +1000,320 @@ void AssimpModelClass::GetRawTriangles(std::vector<XMFLOAT3>& outTriangles) cons
             }
         }
     }
+}
+
+void AssimpModelClass::LoadBones(const aiScene* scene)
+{
+    m_boneMap.clear();
+    m_boneOffsets.clear();
+    m_boneMatrices.clear();
+    m_maxBones = 0;
+
+    for (unsigned int m = 0; m < scene->mNumMeshes; ++m)
+    {
+        aiMesh* mesh = scene->mMeshes[m];
+
+        for (unsigned int b = 0; b < mesh->mNumBones; ++b)
+        {
+            aiBone* bone = mesh->mBones[b];
+            std::string boneName = bone->mName.C_Str();
+
+            // Регистрируем новую кость
+            if (m_boneMap.find(boneName) == m_boneMap.end())
+            {
+                int boneIndex = m_maxBones++;
+                m_boneMap[boneName] = boneIndex;
+
+                // Инициализируем финальную матрицу (единичную)
+                XMFLOAT4X4 identity;
+                XMStoreFloat4x4(&identity, XMMatrixIdentity());
+                m_boneMatrices.push_back(identity);
+
+                // Сохраняем offset matrix (inverse bind pose)
+                m_boneOffsets.push_back(ConvertMatrix(bone->mOffsetMatrix));
+            }
+
+            int boneIndex = m_boneMap[boneName];
+
+            // ⚠️ ВЕСА ВЕРШИН: это нужно делать ДО создания vertex buffer!
+            // Здесь мы только логируем — реальное заполнение делай в цикле создания vertices[]
+            for (unsigned int w = 0; w < bone->mNumWeights; ++w)
+            {
+                // unsigned int vertexID = bone->mWeights[w].mVertexId;
+                // float weight = bone->mWeights[w].mWeight;
+                // vertices[vertexID].AddBoneData(boneIndex, weight); // Твой метод
+            }
+        }
+    }
+
+    OutputDebugStringA(("Loaded " + std::to_string(m_maxBones) + " bones\n").c_str());
+}
+
+void AssimpModelClass::LoadAnimations(const aiScene* scene)
+{
+    m_animations.clear();
+
+    for (unsigned int i = 0; i < scene->mNumAnimations; ++i)
+    {
+        aiAnimation* anim = scene->mAnimations[i];
+        Animation newAnim;
+
+        newAnim.name = anim->mName.C_Str();
+        newAnim.duration = (float)anim->mDuration;
+        newAnim.ticksPerSecond = (anim->mTicksPerSecond == 0.0) ? 24.0f : (float)anim->mTicksPerSecond;
+
+        for (unsigned int c = 0; c < anim->mNumChannels; ++c)
+        {
+            aiNodeAnim* channel = anim->mChannels[c];
+            BoneAnimation boneAnim;
+
+            boneAnim.name = channel->mNodeName.C_Str();
+
+            // Позиции
+            for (unsigned int k = 0; k < channel->mNumPositionKeys; ++k)
+            {
+                KeyPosition kp;
+                kp.position = XMFLOAT3(
+                    channel->mPositionKeys[k].mValue.x,
+                    channel->mPositionKeys[k].mValue.y,
+                    channel->mPositionKeys[k].mValue.z
+                );
+                kp.timeStamp = (float)channel->mPositionKeys[k].mTime;
+                boneAnim.positions.push_back(kp);
+            }
+
+            // Вращения (кватернионы)
+            for (unsigned int k = 0; k < channel->mNumRotationKeys; ++k)
+            {
+                KeyRotation kr;
+                kr.orientation = XMFLOAT4(
+                    channel->mRotationKeys[k].mValue.x,
+                    channel->mRotationKeys[k].mValue.y,
+                    channel->mRotationKeys[k].mValue.z,
+                    channel->mRotationKeys[k].mValue.w
+                );
+                kr.timeStamp = (float)channel->mRotationKeys[k].mTime;
+                boneAnim.rotations.push_back(kr);
+            }
+
+            // Масштаб
+            for (unsigned int k = 0; k < channel->mNumScalingKeys; ++k)
+            {
+                KeyScale ks;
+                ks.scale = XMFLOAT3(
+                    channel->mScalingKeys[k].mValue.x,
+                    channel->mScalingKeys[k].mValue.y,
+                    channel->mScalingKeys[k].mValue.z
+                );
+                ks.timeStamp = (float)channel->mScalingKeys[k].mTime;
+                boneAnim.scales.push_back(ks);
+            }
+
+            newAnim.channels.push_back(boneAnim);
+        }
+
+        m_animations.push_back(newAnim);
+        OutputDebugStringA(("Loaded animation: " + newAnim.name + "\n").c_str());
+    }
+}
+XMFLOAT4X4 AssimpModelClass::InterpolatePosition(const std::vector<KeyPosition>& keys, float animTime)
+{
+    if (keys.empty()) {
+        XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
+        return identity;
+    }
+    if (keys.size() == 1) {
+        XMMATRIX mat = XMMatrixTranslation(keys[0].position.x, keys[0].position.y, keys[0].position.z);
+        XMFLOAT4X4 result; XMStoreFloat4x4(&result, mat);
+        return result;
+    }
+
+    // Находим два ключа, между которыми лежит animTime
+    int idx = 0;
+    while (idx < (int)keys.size() - 1 && keys[idx + 1].timeStamp <= animTime)
+        ++idx;
+
+    const KeyPosition& k1 = keys[idx];
+    const KeyPosition& k2 = keys[(idx + 1) % keys.size()];
+
+    float dt = k2.timeStamp - k1.timeStamp;
+    if (dt < 0.0001f) dt = 1.0f;
+    float factor = (animTime - k1.timeStamp) / dt;
+    factor = std::clamp(factor, 0.0f, 1.0f);
+
+    XMFLOAT3 interp;
+    interp.x = k1.position.x + factor * (k2.position.x - k1.position.x);
+    interp.y = k1.position.y + factor * (k2.position.y - k1.position.y);
+    interp.z = k1.position.z + factor * (k2.position.z - k1.position.z);
+
+    XMMATRIX mat = XMMatrixTranslation(interp.x, interp.y, interp.z);
+    XMFLOAT4X4 result; XMStoreFloat4x4(&result, mat);
+    return result;
+}
+
+
+XMFLOAT4X4 AssimpModelClass::InterpolateRotation(const std::vector<AssimpModelClass::KeyRotation>& keys, float animTime)
+{
+    if (keys.empty()) {
+        XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
+        return identity;
+    }
+    if (keys.size() == 1) {
+        XMMATRIX mat = XMMatrixRotationQuaternion(XMLoadFloat4(&keys[0].orientation));
+        XMFLOAT4X4 result; XMStoreFloat4x4(&result, mat);
+        return result;
+    }
+
+    int idx = 0;
+    while (idx < (int)keys.size() - 1 && keys[idx + 1].timeStamp <= animTime)
+        ++idx;
+
+    const KeyRotation& k1 = keys[idx];
+    const KeyRotation& k2 = keys[(idx + 1) % keys.size()];
+
+    float dt = k2.timeStamp - k1.timeStamp;
+    if (dt < 0.0001f) dt = 1.0f;
+    float factor = (animTime - k1.timeStamp) / dt;
+    factor = std::clamp(factor, 0.0f, 1.0f);
+
+    XMVECTOR q1 = XMLoadFloat4(&k1.orientation);
+    XMVECTOR q2 = XMLoadFloat4(&k2.orientation);
+    XMVECTOR interp = XMQuaternionSlerp(q1, q2, factor);
+
+    XMMATRIX mat = XMMatrixRotationQuaternion(interp);
+    XMFLOAT4X4 result; XMStoreFloat4x4(&result, mat);
+    return result;
+}
+
+// ── Интерполяция масштаба ──────────────────────────────────────────────
+XMFLOAT4X4 AssimpModelClass::InterpolateScale(const std::vector<KeyScale>& keys, float animTime)
+{
+    if (keys.empty()) {
+        XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
+        return identity;
+    }
+    if (keys.size() == 1) {
+        XMMATRIX mat = XMMatrixScaling(keys[0].scale.x, keys[0].scale.y, keys[0].scale.z);
+        XMFLOAT4X4 result; XMStoreFloat4x4(&result, mat);
+        return result;
+    }
+
+    int idx = 0;
+    while (idx < (int)keys.size() - 1 && keys[idx + 1].timeStamp <= animTime)
+        ++idx;
+
+    const KeyScale& k1 = keys[idx];
+    const KeyScale& k2 = keys[(idx + 1) % keys.size()];
+
+    float dt = k2.timeStamp - k1.timeStamp;
+    if (dt < 0.0001f) dt = 1.0f;
+    float factor = (animTime - k1.timeStamp) / dt;
+    factor = std::clamp(factor, 0.0f, 1.0f);
+
+    XMFLOAT3 interp;
+    interp.x = k1.scale.x + factor * (k2.scale.x - k1.scale.x);
+    interp.y = k1.scale.y + factor * (k2.scale.y - k1.scale.y);
+    interp.z = k1.scale.z + factor * (k2.scale.z - k1.scale.z);
+
+    XMMATRIX mat = XMMatrixScaling(interp.x, interp.y, interp.z);
+    XMFLOAT4X4 result; XMStoreFloat4x4(&result, mat);
+    return result;
+}
+
+XMFLOAT4X4 AssimpModelClass::InterpolateTransform(const BoneAnimation& channel, float animTime)
+{
+    XMFLOAT4X4 posMat = InterpolatePosition(channel.positions, animTime);
+    XMFLOAT4X4 rotMat = InterpolateRotation(channel.rotations, animTime);
+    XMFLOAT4X4 scaleMat = InterpolateScale(channel.scales, animTime);
+
+    // Порядок: Scale → Rotate → Translate
+    XMMATRIX s = XMLoadFloat4x4(&scaleMat);
+    XMMATRIX r = XMLoadFloat4x4(&rotMat);
+    XMMATRIX t = XMLoadFloat4x4(&posMat);
+
+    XMMATRIX result = s * r * t;
+    XMFLOAT4X4 out; XMStoreFloat4x4(&out, result);
+    return out;
+}
+
+void AssimpModelClass::ReadNodeHierarchy(const aiNode* node,
+    const XMFLOAT4X4& parentTransform, const Animation& anim, float animTime)
+{
+    std::string nodeName(node->mName.C_Str());
+
+    // Текущая трансформация узла (из сцены)
+    XMMATRIX nodeTransform = XMLoadFloat4x4(&ConvertMatrix(node->mTransformation));
+
+    // Если эта кость анимируется — переопределяем трансформ ключевыми кадрами
+    auto it = m_boneMap.find(nodeName);
+    if (it != m_boneMap.end())
+    {
+        int boneIdx = it->second;
+
+        // Находим канал анимации для этой кости
+        for (const auto& channel : anim.channels)
+        {
+            if (channel.name == nodeName)
+            {
+                XMFLOAT4X4 interp = InterpolateTransform(channel, animTime);
+                nodeTransform = XMLoadFloat4x4(&interp);
+                break;
+            }
+        }
+    }
+
+    // Глобальная трансформация = родитель * локальная
+    XMMATRIX parentMat = XMLoadFloat4x4(&parentTransform);
+    XMMATRIX globalTransform = nodeTransform * parentMat;
+
+    // Если это кость — вычисляем финальную матрицу для шейдера
+    if (it != m_boneMap.end())
+    {
+        int boneIdx = it->second;
+        XMMATRIX offsetMat = XMLoadFloat4x4(&m_boneOffsets[boneIdx]);
+
+        // Финальная матрица = глобальная * offset (inverse bind)
+        XMMATRIX finalMat = globalTransform * offsetMat;
+        XMStoreFloat4x4(&m_boneMatrices[boneIdx], finalMat);
+    }
+
+    // Рекурсия по детям
+    for (unsigned int i = 0; i < node->mNumChildren; ++i)
+    {
+        XMFLOAT4X4 globalFloat;
+        XMStoreFloat4x4(&globalFloat, globalTransform);
+        ReadNodeHierarchy(node->mChildren[i], globalFloat, anim, animTime);
+    }
+}
+
+void AssimpModelClass::UpdateAnimation(float currentTime, int animIndex)
+{
+    if (m_animations.empty() || animIndex >= (int)m_animations.size())
+        return;
+
+    const Animation& anim = m_animations[animIndex];
+
+    // Нормализуем время (циклическое воспроизведение)
+    float ticksPerSecond = (anim.ticksPerSecond > 0.0f) ? anim.ticksPerSecond : 24.0f;
+    float timeInSeconds = currentTime * ticksPerSecond;
+    float animTime = fmod(timeInSeconds, anim.duration);
+
+    // Запускаем рекурсивную сборку матриц от корня
+    if (m_scene && m_scene->mRootNode)
+    {
+        XMFLOAT4X4 identity;
+        XMStoreFloat4x4(&identity, XMMatrixIdentity());
+        ReadNodeHierarchy(m_scene->mRootNode, identity, anim, animTime);
+    }
+}
+
+XMFLOAT4X4 AssimpModelClass::ConvertMatrix(const aiMatrix4x4& from)
+{
+    XMFLOAT4X4 to;
+    // Assimp: row-major, DirectX: по умолчанию тоже (если не менял компилятор)
+    to._11 = from.a1; to._12 = from.a2; to._13 = from.a3; to._14 = from.a4;
+    to._21 = from.b1; to._22 = from.b2; to._23 = from.b3; to._24 = from.b4;
+    to._31 = from.c1; to._32 = from.c2; to._33 = from.c3; to._34 = from.c4;
+    to._41 = from.d1; to._42 = from.d2; to._43 = from.d3; to._44 = from.d4;
+    return to;
 }

@@ -8,8 +8,19 @@ Texture2D albedoMap    : register(t0);
 Texture2D normalMap    : register(t1);
 Texture2D metalnessMap : register(t2);
 Texture2D roughnessMap : register(t3);
+Texture2D crackMap : register(t6); // маска трещины: R=mask, G=roughness offset
 
-// 🔥 FIX: Добавляем shadow map (те же слоты, что у light.ps)
+// ── Буфер повреждений (decal трещин) — слот b7 ───────────────────────────────
+cbuffer DamageBuffer : register(b7)
+{
+    // xyz = позиция трещины в world space, w = радиус
+    float4 crackPositions[8];
+    // x = intensity (0=нет, 1=max), y = rotation, zw = pad
+    float4 crackParams[8];
+    int    crackCount;
+    float3 _damPad;
+};
+// Shadow map
 Texture2D shadowMap : register(t7);
 SamplerComparisonState shadowSampler : register(s7);
 
@@ -27,7 +38,6 @@ cbuffer LightPositionBuffer : register(b1)
 
 #include "src/Render/Shader/Vs/fog_common.hlsli"
 
-// 🔥 FIX: b3 = SelectedBuffer (как у light.ps, единый стандарт)
 cbuffer SelectedBuffer : register(b3)
 {
     float selectedFactor;
@@ -41,17 +51,15 @@ cbuffer DirectionalLightBuffer : register(b4)
     float4 dirLightAmbient;
 };
 
-// 🔥 FIX: b5 = ShadowBuffer (как у light.ps, единый стандарт)
 cbuffer ShadowBuffer : register(b5)
 {
     matrix lightViewProj;
 };
 
-// 🔥 FIX: PBRParamsBuffer перенесён на b6 (не конфликтует ни с чем)
 cbuffer PBRParamsBuffer : register(b6)
 {
     float3 cameraPos;
-    float  padding;
+    float  glassOpacity;   // 0 = стекло полностью прозрачное, 1 = непрозрачное (было: padding)
 };
 
 struct PixelInputType
@@ -64,10 +72,11 @@ struct PixelInputType
     float3 worldPos              : TEXCOORD5;
     float3 lightVec[NUM_LIGHTS]  : TEXCOORD6;
     float  fogFactor             : FOG;
+    bool   isFrontFace           : SV_IsFrontFace;
 };
 
 // ════════════════════════════════════════════════════════════
-// 🌑 РАСЧЁТ ТЕНЕЙ (скопирован из light.ps)
+// РАСЧЁТ ТЕНЕЙ
 // ════════════════════════════════════════════════════════════
 float CalculateShadow(float3 worldPos)
 {
@@ -87,8 +96,8 @@ float CalculateShadow(float3 worldPos)
 
     float shadow = 0.0f;
     float texelSize = 1.0f / 2048.0f;
-    float bias = 0.01f;  // 🔥 УВЕЛИЧИЛИ с 0.005f до 0.01f (или даже 0.015f)
-    
+    float bias = 0.01f;
+
     [unroll]
     for (int x = -1; x <= 1; x++)
     {
@@ -102,6 +111,10 @@ float CalculateShadow(float3 worldPos)
     }
     return shadow / 9.0f;
 }
+
+// ════════════════════════════════════════════════════════════
+// PBR функции (Cook-Torrance)
+// ════════════════════════════════════════════════════════════
 float DistributionGGX(float3 N, float3 H, float roughness)
 {
     float a      = roughness * roughness;
@@ -133,17 +146,40 @@ float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
 
 float4 PBRPixelShader(PixelInputType input) : SV_TARGET
 {
-    float3 albedo    = albedoMap   .Sample(SampleType, input.tex).rgb;
-    float  metalness = metalnessMap.Sample(SampleType, input.tex).r;
-    float  roughness = max(roughnessMap.Sample(SampleType, input.tex).r, 0.04f);
+    float4 albedoSample = albedoMap.Sample(SampleType, input.tex);
+    float3 albedo = albedoSample.rgb;
+    // alpha из текстуры используем только для масок (не для стекла)
+    float  texAlpha = albedoSample.a;
 
-    // 1. Получаем базовую нормаль
+    float4 mrSample  = metalnessMap.Sample(SampleType, input.tex);
+    float  metalness = mrSample.b;
+
+    // ════════════════════════════════════════════════════════
+    // ОПРЕДЕЛЯЕМ СТЕКЛО по glassOpacity из константного буфера:
+    //   glassOpacity = 0.0  → стекло (прозрачный материал)
+    //   glassOpacity = 1.0  → обычный непрозрачный PBR
+    // glassOpacity задаётся из MaterialClass::SetGlass(true, opacity)
+    // ════════════════════════════════════════════════════════
+    bool  isGlass   = (glassOpacity < 0.99f);
+    float baseAlpha = isGlass ? glassOpacity : texAlpha;
+
+    // Roughness: для стекла принудительно очень низкий (0.02-0.05)
+    float rawRoughness = mrSample.g;
+    float roughness;
+    if (isGlass)
+    {
+        // Если нет roughness текстуры (fallback = белый = 1.0), форсируем 0.02
+        // Иначе клампим до максимума 0.05 для чистого стекла
+        roughness = (rawRoughness > 0.5f) ? 0.02f : min(rawRoughness, 0.05f);
+    }
+    else
+    {
+        roughness = max(rawRoughness, 0.04f);
+    }
+
     float3 N = normalize(input.normal);
 
-    // Normal map logic
     float3 ns = normalMap.Sample(SampleType, input.tex).xyz;
-    
-    // Применяем карту нормалей только если она есть
     if (length(ns - float3(0.5f, 0.5f, 1.0f)) > 0.05f)
     {
         ns = ns * 2.0f - 1.0f;
@@ -153,54 +189,164 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
         N = normalize(mul(ns, TBN));
     }
 
-    // ════════════════════════════════════════════════════════════
-    // 🔥 FIX: ДВУСТОРОННИЙ РЕНДЕРИНГ (Double Sided)
-    // ════════════════════════════════════════════════════════════
-    // Вычисляем вектор от позиции пикселя к камере
-    float3 viewDir = normalize(cameraPos - input.worldPos);
-    
-    // Если скалярное произведение нормали и взгляда отрицательное,
-    // значит мы смотрим на заднюю грань (нормаль смотрит от нас).
-    // Инвертируем нормаль для корректного расчета освещения.
-    if (dot(N, viewDir) < 0.0f)
-    {
-        N = -N;
-        
-        // Опционально: если у вас есть карта нормалей с деталями, 
-        // для идеальной точности можно инвертировать и компонент Z карты нормалей,
-        // но инверсии итоговой нормали N обычно достаточно для освещения.
-    }
-    // ════════════════════════════════════════════════════════════
+    float3 V = normalize(cameraPos - input.worldPos);
+    if (!input.isFrontFace) N = -N;
 
-    // Далее расчет теней и освещения идет как обычно, но уже с правильной нормалью
+    // F0: стекло = диэлектрик IOR~1.5 → F0 = 0.04
+    float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metalness);
+
     float shadowFactor = CalculateShadow(input.worldPos);
-    
-    float3 dirLightDir = normalize(-dirLightDirection.xyz);
-    float NdotL = saturate(dot(N, dirLightDir));
-    
-    shadowFactor *= step(0.0f, NdotL);
-    
-    float dirIntensity = NdotL * dirLightDirection.w;
-    float3 dirDiffuse = dirIntensity * dirLightColor.rgb * shadowFactor;
-    
-    float3 ambientLight = dirLightAmbient.rgb * dirLightAmbient.w;
+    float3 Lo = float3(0.0f, 0.0f, 0.0f);
 
-    float3 Lo = ambientLight + dirDiffuse;
+    // ── Направленный свет ──────────────────────────────────────────────────
+    {
+        float3 L = normalize(-dirLightDirection.xyz);
+        float3 H = normalize(V + L);
+        float NdotL = saturate(dot(N, L));
+        if (NdotL > 0.0f)
+        {
+            float  NDF = DistributionGGX(N, H, roughness);
+            float  G   = GeometrySmith(N, V, L, roughness);
+            float3 F   = FresnelSchlick(saturate(dot(H, V)), F0);
+            float3 numerator   = NDF * G * F;
+            float  denominator = 4.0f * max(dot(N, V), 0.001f) * NdotL;
+            float3 specular    = numerator / max(denominator, 0.001f);
+            float3 kD = (1.0f - F) * (1.0f - metalness);
+            // Стекло: диффуз масштабируем по прозрачности
+            if (isGlass) kD *= baseAlpha;
+            float3 radiance = dirLightColor.rgb * dirLightDirection.w;
+            Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowFactor;
+        }
+    }
 
+    // ── Точечные источники света ──────────────────────────────────────────
     for (int i = 0; i < NUM_LIGHTS; i++)
     {
         if (diffuseColor[i].w < 0.001f) continue;
-        float3 L         = input.lightVec[i];
-        float  intensity = saturate(dot(N, L));
-        float3 lightColor = diffuseColor[i].rgb * diffuseColor[i].w;
-        Lo += lightColor * intensity;
+        float3 L = normalize(input.lightVec[i]);
+        float3 H = normalize(V + L);
+        float NdotL = saturate(dot(N, L));
+        if (NdotL > 0.0f)
+        {
+            float  NDF = DistributionGGX(N, H, roughness);
+            float  G   = GeometrySmith(N, V, L, roughness);
+            float3 F   = FresnelSchlick(saturate(dot(H, V)), F0);
+            float3 numerator   = NDF * G * F;
+            float  denominator = 4.0f * max(dot(N, V), 0.001f) * NdotL;
+            float3 specular    = numerator / max(denominator, 0.001f);
+            float3 kD = (1.0f - F) * (1.0f - metalness);
+            if (isGlass) kD *= baseAlpha;
+            float3 radiance = diffuseColor[i].rgb * diffuseColor[i].w;
+            Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+        }
     }
 
-    float3 color = Lo * albedo;
+    // ── Ambient ──────────────────────────────────────────────────────────────
+    float3 ambientLight = dirLightAmbient.rgb * max(dirLightAmbient.w, 0.0f);
+    if (dot(ambientLight, float3(1,1,1)) < 0.001f)
+        ambientLight = float3(0.15f, 0.15f, 0.15f);
+
+    float NdotV = max(dot(N, V), 0.0f);
+    float3 F_ambient = FresnelSchlick(NdotV, F0);
+    float3 kD_ambient = (1.0f - F_ambient) * (1.0f - metalness);
+
+    // Диффузный ambient: для стекла подавляем (оно прозрачное — почти не рассеивает)
+    float3 ambient_diffuse = kD_ambient * albedo * ambientLight
+                           * (isGlass ? (baseAlpha * baseAlpha) : 1.0f);
+
+    // Зеркальный ambient: Fresnel-отражение (для стекла — это и есть его главный эффект)
+    float3 specularTint     = lerp(float3(1.0f, 1.0f, 1.0f), albedo, metalness);
+    float  roughnessBias    = roughness * roughness;
+    float3 ambient_specular = F_ambient * specularTint * ambientLight
+                            * lerp(1.0f, 0.1f, roughnessBias);
+
+    float3 ambient = ambient_diffuse + ambient_specular;
+    float3 color   = ambient + Lo;
+
+    // ── Tone mapping + Gamma ─────────────────────────────────────────────────
+    color = (color * (2.51f * color + 0.03f)) / (color * (2.43f * color + 0.59f) + 0.14f);
     color = pow(saturate(color), 1.0f / 2.2f);
 
-    float4 finalColor = float4(color, 1.0f);
+    // ════════════════════════════════════════════════════════
+    // ФИНАЛЬНАЯ ПРОЗРАЧНОСТЬ
+    // ════════════════════════════════════════════════════════
+    float finalAlpha;
+    if (isGlass)
+    {
+        // Fresnel-эффект: края стекла более непрозрачны (реалистичный эффект)
+        float fresnelEdge = pow(saturate(1.0f - NdotV), 4.0f);
+        // Основа: baseAlpha (0.1-0.3 для чистого стекла)
+        // + усиление на краях через Fresnel
+        finalAlpha = saturate(baseAlpha + fresnelEdge * 0.5f);
 
+        // Лёгкий tint стекла цветом albedo только если albedo не нейтральный
+        float albedoLum = dot(albedo, float3(0.299f, 0.587f, 0.114f));
+        float tintStrength = saturate(1.0f - albedoLum) * 0.4f;
+        color = lerp(color, color * albedo, tintStrength);
+    }
+    else
+    {
+        finalAlpha = texAlpha;
+    }
+
+
+      // ════════════════════════════════════════════════════════
+    // ТРЕЩИНЫ — накладываем crack decal поверх albedo
+    // Для каждой трещины: если worldPos близко к crackPosition →
+    // смешиваем crack-текстуру, темним albedo, повышаем roughness
+    // ════════════════════════════════════════════════════════
+    float totalCrackMask = 0.0f;
+
+    [unroll]
+    for (int ci = 0; ci < crackCount && ci < 8; ci++)
+    {
+        float3 crackWorldPos = crackPositions[ci].xyz;
+        float  crackRadius   = crackPositions[ci].w;
+        float  crackIntensity = crackParams[ci].x;
+        float  crackRotation  = crackParams[ci].y;
+
+        if (crackIntensity < 0.001f) continue;
+
+        // Расстояние от пикселя до центра трещины
+        float dist = length(input.worldPos - crackWorldPos);
+
+        // Нормализованное расстояние [0=центр, 1=граница]
+        float normDist = saturate(dist / max(crackRadius, 0.001f));
+
+        // Плавный переход от центра к краю (1 = в центре, 0 = снаружи)
+        float falloff = saturate(1.0f - normDist * normDist);
+
+        if (falloff < 0.001f) continue;
+
+        // UV для crack-текстуры: проецируем worldPos на плоскость нормали
+        // Используем XZ проекцию с поворотом
+        float2 crackUV;
+        float  sinR = sin(crackRotation);
+        float  cosR = cos(crackRotation);
+        float2 planarXZ = float2(input.worldPos.x - crackWorldPos.x,
+                                 input.worldPos.z - crackWorldPos.z);
+        crackUV.x = (planarXZ.x * cosR - planarXZ.y * sinR) / crackRadius * 0.5f + 0.5f;
+        crackUV.y = (planarXZ.x * sinR + planarXZ.y * cosR) / crackRadius * 0.5f + 0.5f;
+
+        float4 crackSample = crackMap.Sample(SampleType, crackUV);
+        float  crackMask   = crackSample.r * falloff * crackIntensity;
+
+        totalCrackMask = saturate(totalCrackMask + crackMask);
+    }
+
+    // Применяем трещину: темним albedo, повышаем roughness, добавляем синеватый "мокрый" оттенок
+    if (totalCrackMask > 0.001f)
+    {
+        float3 crackColor = float3(0.04f, 0.04f, 0.06f); // тёмно-синий (мокрый металл)
+        color    = lerp(color, color * crackColor, totalCrackMask * 0.85f);
+        // roughness уже посчитан выше — визуально он уже в Lo/ambient
+        // просто ещё добавляем тёмный ореол
+    }
+
+
+    float4 finalColor = float4(color, finalAlpha);
+
+    // ── Выделение объекта в редакторе ────────────────────────────────────────
     if (selectedFactor > 1.5f)
     {
         float edge = 0.5f - saturate(dot(N, float3(0, 0, 1)));

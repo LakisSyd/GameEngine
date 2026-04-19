@@ -1,5 +1,7 @@
 ﻿#pragma once
 #include <btBulletDynamicsCommon.h>
+#include <BulletCollision/Gimpact/btGImpactCollisionAlgorithm.h>
+#include <BulletCollision/Gimpact/btGImpactShape.h>
 #include <memory>
 
 class PhysicsWorld
@@ -25,6 +27,12 @@ public:
         );
 
         m_dynamicsWorld->setGravity(btVector3(0, -9.81f, 0));
+
+        // ═══════════════════════════════════════════════════════════════
+        // 🔥 REGISTER GImpact algorithm for dynamic concave mesh collision
+        // Without this, btGImpactMeshShape won't detect collisions!
+        // ═══════════════════════════════════════════════════════════════
+        btGImpactCollisionAlgorithm::registerAlgorithm(m_dispatcher.get());
 
         // ═══════════════════════════════════════════════════════════════
         // 🔥 FIX: Увеличиваем итерации солвера для стабильных джойнтов.

@@ -88,6 +88,8 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
         }
 #endif
 
+
+
         // ══════════════════════════════════════════════════════════════════════
         // 2. ОТКАЧКА НАСОСАМИ (если есть питание)
         // ══════════════════════════════════════════════════════════════════════
@@ -97,27 +99,7 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
             totalOutflow = comp.pumpRate;  // м³/с
         }
 
-        // ══════════════════════════════════════════════════════════════════════
-        // 3. ПЕРЕТЕКАНИЕ ВОДЫ В СОСЕДНИЕ ОТСЕКИ (если не герметичен)
-        // ══════════════════════════════════════════════════════════════════════
-        if (!comp.isSealed)
-        {
-            for (Entity neighborEntity : comp.connectedCompartments)
-            {
-                auto* neighborComp = registry.GetComponent<CompartmentComponent>(neighborEntity);
-                if (!neighborComp) continue;
-
-                float levelDiff = comp.waterLevel - neighborComp->waterLevel;
-                if (fabs(levelDiff) > 0.01f)
-                {
-                    float flowSpeed = 0.5f;
-                    float flow = levelDiff * flowSpeed * deltaTime;
-
-                    comp.waterVolume -= flow;
-                    neighborComp->waterVolume += flow;
-                }
-            }
-        }
+      
 
         // ══════════════════════════════════════════════════════════════════════
         // 4. ОБНОВЛЯЕМ ОБЪЕМ ВОДЫ
@@ -138,6 +120,84 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
         {
             comp.waterLevel = 0.0f;
         }
+
+        // ── Синхронизируем DamageDecalComponent с пробоинами ─────────────────
+        if (!registry.HasComponent<DamageDecalComponent>(entity))
+            registry.AddComponent<DamageDecalComponent>(entity, DamageDecalComponent{});
+
+        auto* decal = registry.GetComponent<DamageDecalComponent>(entity);
+        decal->SyncFromBreaches(comp);
+    }
+
+    auto& doorPool = registry.GetComponents<DoorComponent>();
+
+    for (auto& [doorEntity, door] : doorPool)
+    {
+        // Анимируем openProgress
+        if (door.isOpen || door.isBroken)
+            door.openProgress = min(1.0f, door.openProgress + door.openSpeed * deltaTime);
+        else
+            door.openProgress = max(0.0f, door.openProgress - door.openSpeed * deltaTime);
+
+        // Если дверь закрыта — пропускаем
+        if (door.openProgress <= 0.0f) continue;
+
+        // Берём оба отсека
+        auto* compA = registry.GetComponent<CompartmentComponent>(door.compartmentA);
+        auto* compB = registry.GetComponent<CompartmentComponent>(door.compartmentB);
+        if (!compA || !compB) continue;
+
+        // Сообщающиеся сосуды
+        float levelDiff = compA->waterLevel - compB->waterLevel;
+        if (std::fabs(levelDiff) < 0.001f) continue;
+
+        float flow = door.GetEffectiveFlowRate() * levelDiff * deltaTime;
+
+        // Защита от переполнения и отрицательных значений
+        flow = std::clamp(flow, 0.0f, compA->waterVolume);
+        flow = std::min(flow, compB->volume - compB->waterVolume);
+
+        compA->waterVolume -= flow;
+        compB->waterVolume += flow;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+   // 6. ОБНОВЛЯЕМ ПЛАВУЧЕСТЬ КОРНЯ ПОДЛОДКИ
+   //    Вода в отсеках вытесняет воздух → уменьшается выталкивающая сила
+   //    buoy.volume = базовый объём - суммарный объём воды в отсеках
+   // ══════════════════════════════════════════════════════════════════════
+    auto& subRootPool = registry.GetComponents<SubmarineComponent>();
+
+    for (auto& [entity, subComp] : subRootPool)
+    {
+        // Берём только корни подлодок
+        if (subComp.submarineRoot != entity) continue;
+
+        auto* buoy = registry.GetComponent<BuoyancyComponent>(entity);
+        if (!buoy) continue;
+
+        // Суммируем воду во всех отсеках
+        float totalWaterVolume = 0.0f;
+        for (Entity compEntity : subComp.allCompartments)
+        {
+            auto* comp = registry.GetComponent<CompartmentComponent>(compEntity);
+            if (comp)
+                totalWaterVolume += comp->waterVolume;
+        }
+
+        // Базовый объём кэшируем при первом кадре
+        if (buoy->lastCalculatedVolume > 0.0f)
+        {
+            // Эффективный объём = базовый - вода (не меньше 0)
+            buoy->volume = fmaxf(0.0f, buoy->lastCalculatedVolume - totalWaterVolume);
+        }
+
+#ifdef _DEBUG
+        char buf[256];
+        sprintf_s(buf, "[Buoyancy] Root=%u | Water=%.2f m³ | EffVolume=%.2f m³\n",
+            entity, totalWaterVolume, buoy->volume);
+        OutputDebugStringA(buf);
+#endif
     }
 }
 

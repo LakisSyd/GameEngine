@@ -13,9 +13,16 @@ public:
             pool->Remove(e);
     }
 
-    template<typename T>
+    // copy-версия — только для копируемых типов
+    template<typename T, typename = std::enable_if_t<std::is_copy_constructible_v<T>>>
     void AddComponent(Entity e, const T& comp) {
         GetOrCreatePool<T>().Add(e, comp);
+    }
+
+    // move-версия — для всех типов (в т.ч. некопируемых, как RigidBodyComponent)
+    template<typename T>
+    void AddComponent(Entity e, T&& comp) {
+        GetOrCreatePool<T>().Add(e, std::forward<T>(comp));
     }
 
     template<typename T>
