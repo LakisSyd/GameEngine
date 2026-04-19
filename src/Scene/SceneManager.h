@@ -91,6 +91,8 @@ public:
    
     void UpdateLights();
 
+    void RemapEntityReferences(const std::unordered_map<uint32_t, Entity>& remap);
+
    
 
     // Convenience setters for individual light properties (used by EditorUI)

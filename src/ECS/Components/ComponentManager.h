@@ -26,8 +26,20 @@ public:
         return it != m_components.end() ? &it->second : nullptr;
     }
 
-    // ƒобавить или перезаписать компонент
-    void Add(Entity e, const T& comp) { m_components[e] = comp; }
+    // Move-верси€ Ч работает дл€ ¬—≈’ типов (в т.ч. некопируемых)
+    void Add(Entity e, T&& comp)
+    {
+        m_components.erase(e);                          // удал€ем старый (если есть)
+        m_components.emplace(e, std::move(comp));       // вставл€ем через move
+    }
+
+    // Copy-верси€ Ч только дл€ типов с copy-constructor
+    template<typename U = T, typename = std::enable_if_t<std::is_copy_constructible_v<U>>>
+    void Add(Entity e, const U& comp)
+    {
+        m_components.erase(e);
+        m_components.emplace(e, comp);                  // copy Ч только дл€ copyable T
+    }
 
     // ”далить компонент (вызываетс€ из ECSRegistry::DestroyEntity)
     void Remove(Entity e) override { m_components.erase(e); }

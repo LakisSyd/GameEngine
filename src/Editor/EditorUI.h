@@ -1,5 +1,4 @@
-﻿// EditorUI.h
-#pragma once
+﻿#pragma once
 #include <imgui.h>
 #include <string>
 #include <array>
@@ -7,7 +6,7 @@
 #include "GameSettings.h"
 #include "FileSystem.h"
 #include "ShaderManager.h"
-#include "../../PhysicsDebugRenderer.h"
+#include "PhysicsDebugRenderer.h"
 
 class EditorUI
 {
@@ -94,7 +93,7 @@ public:
         m_loadRequest.pending = false;
         return req;
     }
-    
+
 
     PhysicsDebugSettings& GetPhysicsDebugSettings() { return m_debugSettings; }
 
@@ -142,7 +141,7 @@ private:
 
     static constexpr float BASE_WIDTH = 1920.0f;
     static constexpr float BASE_HEIGHT = 1280.0f;
-    static constexpr float SIDEBAR_WIDTH_RATIO = 300.0f / BASE_WIDTH;
+    static constexpr float SIDEBAR_WIDTH_RATIO = 500.0f / BASE_WIDTH;
     static constexpr float PREVIEW_WIDTH_RATIO = 280.0f / BASE_WIDTH;
     static constexpr float PREVIEW_HEIGHT_RATIO = 210.0f / BASE_HEIGHT;
 
@@ -174,7 +173,6 @@ private:
 
     void RenderPhysicsSettings(SceneManager& sceneManager);
 
-    void RenderSubmarineBuilder(SceneManager& sceneManager);
 
     void RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEntity);
 
@@ -182,7 +180,7 @@ private:
 
     void RenderCompartmentEditor(SceneManager& sceneManager);
 
-  
+
 
     // Content Browser
     void RenderContentBrowser();
@@ -243,7 +241,10 @@ private:
     bool enableCCD;
 
     // В классе EditorUI, в private-секцию:
-  
+
+
+    
+
 
 
     // Для визуального редактирования отсеков
@@ -251,16 +252,44 @@ private:
     Entity m_editingCompartment = INVALID_ENTITY;
     XMFLOAT3 m_compartmentCenter = { 0, 0, 0 };  // Кэш центра для редактора
     XMFLOAT3 m_compartmentSize = { 2, 2, 2 };     // Кэш размера для редактора
+    public:
+    int  m_dragCornerIndex = -1;       // какой угол тянем (0..7)
+    bool m_cornerDragActive = false;    // в процессе перетаскивания?
+    XMFLOAT3 m_dragCornerStartMin = {};  // localMin в момент начала drag
+    XMFLOAT3 m_dragCornerStartMax = {};  // localM
+    void UpdateCompartmentFromCache(CompartmentComponent* comp);
+   
+    
+   
 
+    // Corner edit — доступ для ApplicationClass
+    bool  IsCornerEditActive()    const { return m_cornerEditActive; }
+    Entity GetCornerEditEntity()  const { return m_cornerEditEntity; }
+    int   GetCornerEditElemIndex() const { return m_cornerEditElemIndex; }
+   
+    bool   m_cornerEditActive = false;  // включён ли режим угловых ручек
+    Entity m_cornerEditEntity = INVALID_ENTITY; // какая entity редактируется
+    int    m_cornerEditElemIndex = -1;     // индекс compound элемента
+    int    m_cornerDragIndex = -1;     // какой угол тянем (-1 = нет)
+  
+    XMFLOAT3 m_cornerDragStartMin = {};
+    XMFLOAT3 m_cornerDragStartMax = {};
+ 
+
+    // Синхронизация кэша из внешнего кода (ApplicationClass → corner drag)
+    void UpdateCacheFromCompartment_Public(const CompartmentComponent* comp) { UpdateCacheFromCompartment(comp); }
+    private:
     // Вспомогательные методы
     void StartCompartmentEdit(Entity compartment);
-    void UpdateCompartmentFromCache(CompartmentComponent* comp);
+   
     Entity CreateEmptySubmarine(SceneManager& sceneManager, const XMFLOAT3& position);
+
     void CreateCompleteSubmarine(SceneManager& sceneManager, const XMFLOAT3& position, int numCompartments);
     Entity AddCompartmentToSubmarine(SceneManager& sceneManager, Entity submarineRoot, const XMFLOAT3& localOffset, const XMFLOAT3& size, float mass);
     Entity AddCompartmentWithMesh(SceneManager& sceneManager, Entity submarineRoot, const XMFLOAT3& localOffset, const XMFLOAT3& size, float mass, const char* modelPath);
     Entity CreateSubmarineWithMesh(SceneManager& sceneManager, const XMFLOAT3& position, const char* modelPath, float hullRadius, float hullMass);
     void UpdateBreachesOnResize(CompartmentComponent* comp, const XMFLOAT3& oldMin, const XMFLOAT3& oldMax);
+    void DrawSubmarineCollisionSetup(ECSRegistry& registry, Entity entity);
     void UpdateCacheFromCompartment(const CompartmentComponent* comp);
     void RenderCompartmentGizmo(ECSRegistry& registry, const XMMATRIX& view, const XMMATRIX& projection);
 };

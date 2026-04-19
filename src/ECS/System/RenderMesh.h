@@ -34,7 +34,7 @@ inline void RenderMesh(
     XMFLOAT4             lightPositions[],
     const Settings::FogSettings& fog,
     bool                 selected = false,
-    XMFLOAT3             cameraPos = { 0.0f, 0.0f, 0.0f })  // ← новый параметр
+    XMFLOAT3             cameraPos = { 0.0f, 0.0f, 0.0f })
 {
     if (!model || !material) return;
 
@@ -63,33 +63,29 @@ inline void RenderMesh(
         auto* s = static_cast<LightShaderClass*>(shader);
         s->SetSelectedFactor(context, selected ? 2.0f : 1.0f);
 
-        // --- НАДЕЖНЫЙ GET TEXTURE SRV ---
+        // Приоритет: 1) материал (редактор), 2) part.texture, 3) model->GetTexture()
         auto getTexSRV = [&](ID3D11ShaderResourceView* embedded) -> ID3D11ShaderResourceView*
             {
-             //   if (embedded) return embedded; //Вот если это срабатывало мой текстура каменя не ставилась цвет сферы был просто белый
-
-                // 1. Слот 0 из материала (если назначено в редакторе)
+                // 1. Слот 0 из материала (назначен в редакторе) — наивысший приоритет
                 if (auto* t0 = material->GetTexture(0))
                 {
                     auto* srv = t0->GetTexture();
                     if (srv) return srv;
                 }
-
-                // 2. MainTexture (например, m_defaultTexture)
+                // 2. MainTexture из материала
                 if (auto* main = material->GetMainTexture())
                 {
                     auto* srv = main->GetTexture();
                     if (srv) return srv;
                 }
-
-                // 3. Не проверяем модель здесь, проверим ниже после вызова getTexSRV
+                // 3. Вшитая текстура меша (из GLB)
+                if (embedded) return embedded;
 
                 return nullptr;
             };
 
         const auto& parts = model->GetMeshParts();
 
-        // Проверяем, есть ли ВСЁГО ОДНА встроенная текстура (не только part.texture, но и другие)
         bool hasEmbedded = false;
         for (const auto& part : parts)
         {
@@ -113,19 +109,15 @@ inline void RenderMesh(
                 context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
                 ID3D11ShaderResourceView* srv = getTexSRV(part.texture);
-                if (!srv) // <<<--- ДОБАВЛЕНО: проверка fallback из модели
+                if (!srv)
                 {
                     srv = model->GetTexture();
-                    if (srv)
-                    {
-                        OutputDebugStringA("LightShader (part): Using fallback texture from model.\n");
-                    }
                 }
 
                 if (!srv)
                 {
                     OutputDebugStringA("LightShader (part): SRV is NULL! Skipping render for this part.\n");
-                    continue; // пропускаем, чтобы не вызвать падение
+                    continue;
                 }
 
                 s->Render(context, part.indexCount,
@@ -139,19 +131,15 @@ inline void RenderMesh(
         else
         {
             ID3D11ShaderResourceView* textureSRV = getTexSRV(nullptr);
-            if (!textureSRV) // <<<--- ДОБАВЛЕНО: проверка fallback из модели
+            if (!textureSRV)
             {
                 textureSRV = model->GetTexture();
-                if (textureSRV)
-                {
-                    OutputDebugStringA("LightShader: Using fallback texture from model.\n");
-                }
             }
 
             if (!textureSRV)
             {
                 OutputDebugStringA("LightShader: Final fallback SRV is NULL! Object will be invisible/white.\n");
-                break; // не рендерим
+                break;
             }
 
             s->Render(context, model->GetIndexCount(),
@@ -168,16 +156,59 @@ inline void RenderMesh(
         auto* s = static_cast<PBRShaderClass*>(shader);
         const float selectedFactor = selected ? 2.0f : 1.0f;
 
-        // Слоты: 0=albedo, 1=normal, 2=metalness, 3=roughness
+        const bool  matIsGlass = material->IsGlass();
+        const float matGlassAlpha = material->GetGlassOpacity();
+
+        // Приоритет: 1) материал (редактор), 2) вшитая текстура меша, 3) nullptr (fallback в шейдере)
         auto getTexSRV = [&](int slot, ID3D11ShaderResourceView* embedded) -> ID3D11ShaderResourceView*
             {
-                if (embedded) return embedded;
-                if (auto* t = material->GetTexture((size_t)slot)) return t->GetTexture();
+                // Для слота 0 (albedo) — сначала проверяем материал
+                if (auto* t = material->GetTexture((size_t)slot))
+                {
+                    auto* srv = t->GetTexture();
+                    if (srv) return srv;
+                }
                 if (slot == 0)
                 {
-                    if (auto* t = material->GetMainTexture()) return t->GetTexture();
+                    if (auto* t = material->GetMainTexture())
+                    {
+                        auto* srv = t->GetTexture();
+                        if (srv) return srv;
+                    }
                 }
+                // Затем — вшитая текстура меша
+                if (embedded) return embedded;
                 return nullptr;
+            };
+
+        static ID3D11BlendState* s_glassBlendState = nullptr;
+
+        auto enableGlassBlend = [&]()
+            {
+                if (!s_glassBlendState)
+                {
+                    ID3D11Device* device = nullptr;
+                    context->GetDevice(&device);
+                    if (device)
+                    {
+                        D3D11_BLEND_DESC bd = {};
+                        bd.RenderTarget[0].BlendEnable = TRUE;
+                        bd.RenderTarget[0].SrcBlend = D3D11_BLEND_SRC_ALPHA;
+                        bd.RenderTarget[0].DestBlend = D3D11_BLEND_INV_SRC_ALPHA;
+                        bd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+                        bd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+                        bd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ZERO;
+                        bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+                        bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+                        device->CreateBlendState(&bd, &s_glassBlendState);
+                        device->Release();
+                    }
+                }
+                if (s_glassBlendState)
+                {
+                    float bf[4] = {};
+                    context->OMSetBlendState(s_glassBlendState, bf, 0xFFFFFFFF);
+                }
             };
 
         const auto& parts = model->GetMeshParts();
@@ -201,17 +232,31 @@ inline void RenderMesh(
                 context->IASetIndexBuffer(part.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
                 context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
+                const bool needsBlend = matIsGlass || part.isTransparent;
+                if (needsBlend) enableGlassBlend();
+
+                const float partOpacity = matIsGlass ? matGlassAlpha
+                    : (part.isTransparent ? part.opacity : 1.0f);
+
+                // Если материал помечен как стекло (вручную или из GLB) —
+                // игнорируем вшитые metalness/roughness (Metallic=1 из Blender glass trick)
+                const bool isGlassPart = matIsGlass || part.isGlass;
+
                 ID3D11ShaderResourceView* albedoSRV = getTexSRV(0, part.texture);
-                ID3D11ShaderResourceView* normalSRV = getTexSRV(1, part.normalMap);
-                ID3D11ShaderResourceView* metalSRV = getTexSRV(2, part.metalness);
-                ID3D11ShaderResourceView* roughSRV = getTexSRV(3, part.roughness);
+                ID3D11ShaderResourceView* normalSRV = isGlassPart ? nullptr : getTexSRV(1, part.normalMap);
+                ID3D11ShaderResourceView* metalSRV  = isGlassPart ? nullptr : getTexSRV(2, part.metalness);
+                ID3D11ShaderResourceView* roughSRV  = isGlassPart ? nullptr : getTexSRV(3, part.roughness);
 
                 s->Render(context, part.indexCount,
                     world, view, projection,
                     albedoSRV, normalSRV, metalSRV, roughSRV,
                     lightColors, lightPositions,
                     cameraPos,
-                    selectedFactor);
+                    selectedFactor,
+                    isGlassPart ? partOpacity : 1.0f);
+
+                if (needsBlend)
+                    context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
 
                 ID3D11ShaderResourceView* nullSRVs[4] = { nullptr, nullptr, nullptr, nullptr };
                 context->PSSetShaderResources(0, 4, nullSRVs);
@@ -219,17 +264,24 @@ inline void RenderMesh(
         }
         else
         {
+            if (matIsGlass) enableGlassBlend();
+
             ID3D11ShaderResourceView* albedoSRV = getTexSRV(0, nullptr);
             ID3D11ShaderResourceView* normalSRV = getTexSRV(1, nullptr);
-            ID3D11ShaderResourceView* metalSRV = getTexSRV(2, nullptr);
-            ID3D11ShaderResourceView* roughSRV = getTexSRV(3, nullptr);
+            // Если стекло — не передаём metalness/roughness (шейдер использует fallback = 0/1)
+            ID3D11ShaderResourceView* metalSRV = matIsGlass ? nullptr : getTexSRV(2, nullptr);
+            ID3D11ShaderResourceView* roughSRV = matIsGlass ? nullptr : getTexSRV(3, nullptr);
 
             s->Render(context, model->GetIndexCount(),
                 world, view, projection,
                 albedoSRV, normalSRV, metalSRV, roughSRV,
                 lightColors, lightPositions,
                 cameraPos,
-                selectedFactor);
+                selectedFactor,
+                matIsGlass ? matGlassAlpha : 1.0f);
+
+            if (matIsGlass)
+                context->OMSetBlendState(nullptr, nullptr, 0xFFFFFFFF);
 
             ID3D11ShaderResourceView* nullSRVs[4] = { nullptr, nullptr, nullptr, nullptr };
             context->PSSetShaderResources(0, 4, nullSRVs);
@@ -240,23 +292,19 @@ inline void RenderMesh(
     case ShaderType::Projection:
     {
         auto* s = static_cast<projectionShaderClass*>(shader);
-        // Получаем текстуру проекции из материала (можно использовать слот 2)
         ID3D11ShaderResourceView* projectionTex = nullptr;
-        if (auto* tex = material->GetTexture(2))  // или другой слот
+        if (auto* tex = material->GetTexture(2))
             projectionTex = tex->GetTexture();
 
-        // Основная текстура (albedo) обычно в слоте 0 или 1
         ID3D11ShaderResourceView* colorTex = nullptr;
         if (auto* tex = material->GetTexture(0))
             colorTex = tex->GetTexture();
 
-        // Параметры освещения можно взять из переданных массивов (например, первый источник)
         XMFLOAT4 ambient = { 0.1f, 0.1f, 0.1f, 1.0f };
-        XMFLOAT4 diffuse = lightColors[0];   // используем первый свет
-        XMFLOAT3 lightDir = { 0.0f, -1.0f, 0.0f }; // направление света, нужно хранить в системе
+        XMFLOAT4 diffuse = lightColors[0];
+        XMFLOAT3 lightDir = { 0.0f, -1.0f, 0.0f };
 
-        // Матрицы второй камеры (проектора) — должны быть заданы в материале или глобально
-        XMMATRIX view2 = material->GetProjectionView2();   // нужно добавить методы в MaterialClass
+        XMMATRIX view2 = material->GetProjectionView2();
         XMMATRIX proj2 = material->GetProjectionProj2();
 
         s->Render(context, model->GetIndexCount(),
@@ -265,7 +313,6 @@ inline void RenderMesh(
             colorTex, projectionTex,
             ambient, diffuse, lightDir);
 
-        // Очищаем шейдерные ресурсы (по аналогии с другими шейдерами)
         ID3D11ShaderResourceView* nullSRVs[2] = { nullptr, nullptr };
         context->PSSetShaderResources(0, 2, nullSRVs);
         break;
@@ -275,21 +322,18 @@ inline void RenderMesh(
         auto* s = static_cast<TextureShaderClass*>(shader);
         ID3D11ShaderResourceView* fallbackSRV = nullptr;
 
-        // 1. Попробуем взять текстуру из Material (MainTexture или slot 0)
-        if (auto* t = material->GetMainTexture())
+        // Приоритет: материал → модель
+        if (auto* t = material->GetTexture(0))
             fallbackSRV = t->GetTexture();
-        if (!fallbackSRV && material->GetTexture(0))
-            fallbackSRV = material->GetTexture(0)->GetTexture();
-
-        // 2. Если всё ещё null — используем fallback из модели (m_Texture)
-        if (!fallbackSRV && model->GetTexture())
+        if (!fallbackSRV)
+            if (auto* t = material->GetMainTexture())
+                fallbackSRV = t->GetTexture();
+        if (!fallbackSRV)
             fallbackSRV = model->GetTexture();
 
-        // 3. КРИТИЧЕСКИ ВАЖНО: если fallbackSRV == nullptr, не рендерим (или рисуем цветом)
         if (!fallbackSRV)
         {
             OutputDebugStringA("TextureShader: No valid SRV found! Skipping render.\n");
-            // Можно вместо этого вызвать Render с цветом (например, grey), но лучше логировать.
             break;
         }
 
@@ -312,8 +356,6 @@ inline void RenderMesh(
                 context->IASetIndexBuffer(part.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
                 context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-                // Для TextureShader — всегда используем fallbackSRV, НЕ part.texture!
-                // Потому что TextureShader не знает про PBR-карты.
                 s->Render(context, part.indexCount, world, view, projection, fallbackSRV);
 
                 ID3D11ShaderResourceView* nullSRV = nullptr;
@@ -322,7 +364,6 @@ inline void RenderMesh(
         }
         else
         {
-            // Одиночный рендер — используем fallbackSRV
             s->Render(context, model->GetIndexCount(),
                 world, view, projection, fallbackSRV);
 
@@ -380,8 +421,9 @@ inline void RenderMesh(
                 context->IASetIndexBuffer(part.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
                 context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-                ID3D11ShaderResourceView* srv0 = part.texture ? part.texture : fallbackBaseSRV;
-                ID3D11ShaderResourceView* srv1 = part.normalMap ? part.normalMap : fallbackNormalSRV;
+                // Приоритет материала над вшитыми текстурами
+                ID3D11ShaderResourceView* srv0 = fallbackBaseSRV ? fallbackBaseSRV : part.texture;
+                ID3D11ShaderResourceView* srv1 = fallbackNormalSRV ? fallbackNormalSRV : part.normalMap;
 
                 s->Render(context, part.indexCount,
                     world, view, projection, srv0, srv1,
@@ -431,7 +473,7 @@ inline void RenderMesh(
                 context->IASetIndexBuffer(part.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
                 context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-                ID3D11ShaderResourceView* srv = part.texture ? part.texture : fallbackSRV;
+                ID3D11ShaderResourceView* srv = fallbackSRV ? fallbackSRV : part.texture;
                 s->Render(context, part.indexCount,
                     world, view, projection, srv, fogStart, fogEnd);
 
@@ -473,7 +515,7 @@ inline void RenderMesh(
                 context->IASetIndexBuffer(part.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
                 context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-                ID3D11ShaderResourceView* srv = part.texture ? part.texture : fallbackSRV;
+                ID3D11ShaderResourceView* srv = fallbackSRV ? fallbackSRV : part.texture;
                 s->Render(context, part.indexCount,
                     world, view, projection, srv, material->GetClipPlane());
 
