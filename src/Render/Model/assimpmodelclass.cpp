@@ -474,47 +474,6 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
                 }
             }
 
-           
-                for (unsigned int m = 0; m < m_scene->mNumMeshes; ++m)
-                {
-                    aiMesh* mesh = m_scene->mMeshes[m];
-                    if (mesh->mNumBones == 0) continue;
-
-                    for (unsigned int b = 0; b < mesh->mNumBones; ++b)
-                    {
-                        aiBone* bone = mesh->mBones[b];
-                        if (m_boneMap.find(bone->mName.C_Str()) == m_boneMap.end())
-                        {
-                            int boneIndex = m_maxBones++;
-                            m_boneMap[bone->mName.C_Str()] = boneIndex;
-                            // ✅ Создаём XMFLOAT4X4 и записываем в него единичную матрицу
-                            XMFLOAT4X4 identityMatrix;
-                            XMStoreFloat4x4(&identityMatrix, XMMatrixIdentity());
-                            m_boneMatrices.push_back(identityMatrix);
-                        }
-
-                        int boneIndex = m_boneMap[bone->mName.C_Str()];
-
-                        for (unsigned int w = 0; w < bone->mNumWeights; ++w)
-                        {
-                            unsigned int vertexID = bone->mWeights[w].mVertexId;
-                            float weight = bone->mWeights[w].mWeight;
-
-                            // Находим свободный слот (до 4 костей)
-                            for (int slot = 0; slot < 4; ++slot)
-                            {
-                                if (m_meshParts[m].vertexBuffer == nullptr) break; // Защита
-                                // Тут нужно обратиться к вершинам, которые ты создавал выше.
-                                // Лучше сохранить vertices[] в локальную переменную перед созданием VB
-                                // Пример доступа (адаптируй под свой код):
-                                // vertices[vertexID].boneIDs[slot] = boneIndex;
-                                // vertices[vertexID].boneWeights[slot] = weight;
-                                break;
-                            }
-                        }
-                    }
-                }
-
         // Добавляем созданный part в список мешей
         m_meshParts.push_back(part);
         OutputDebugStringA(("Mesh #" + std::to_string(i) + " created successfully.\n").c_str());
