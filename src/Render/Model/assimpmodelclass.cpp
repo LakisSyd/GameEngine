@@ -218,6 +218,9 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
     m_totalIndexCount = 0;
     m_meshParts.clear();
 
+    // 🔥 ЗАГРУЖАЕМ КОСТИ ПЕРЕД СОЗДАНИЕМ МЕШЕЙ
+    LoadBones(m_scene);
+
     // 2. Проход по всем мешам -> создаём VB/IB
     for (unsigned int i = 0; i < m_scene->mNumMeshes; i++)
     {
@@ -264,6 +267,44 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
             {
                 vertex.tangent = XMFLOAT3(0.0f, 0.0f, 0.0f);
                 vertex.binormal = XMFLOAT3(0.0f, 0.0f, 0.0f);
+            }
+
+            // 🔥 ИНИЦИАЛИЗАЦИЯ ВЕСОВ КОСТЕЙ
+            for (int b = 0; b < 4; ++b) {
+                vertex.boneIDs[b] = -1;
+                vertex.boneWeights[b] = 0.0f;
+            }
+
+            // 🔥 ЗАПОЛНЯЕМ ВЕСА КОСТЕЙ ИЗ ДАННЫХ ASSIMP
+            for (unsigned int b = 0; b < mesh->mNumBones; ++b)
+            {
+                aiBone* bone = mesh->mBones[b];
+                for (unsigned int w = 0; w < bone->mNumWeights; ++w)
+                {
+                    if (bone->mWeights[w].mVertexId == j)
+                    {
+                        int boneIndex = m_boneMap[bone->mName.C_Str()];
+                        float weight = bone->mWeights[w].mWeight;
+
+                        // Ищем свободный слот или заменяем наименьший вес
+                        for (int slot = 0; slot < 4; ++slot)
+                        {
+                            if (vertex.boneIDs[slot] == -1)
+                            {
+                                vertex.boneIDs[slot] = boneIndex;
+                                vertex.boneWeights[slot] = weight;
+                                break;
+                            }
+                            else if (vertex.boneWeights[slot] < weight)
+                            {
+                                vertex.boneIDs[slot] = boneIndex;
+                                vertex.boneWeights[slot] = weight;
+                                break;
+                            }
+                        }
+                        break; // Переходим к следующей кости для этой вершины
+                    }
+                }
             }
 
             vertices.push_back(vertex);
@@ -1031,17 +1072,6 @@ void AssimpModelClass::LoadBones(const aiScene* scene)
 
                 // Сохраняем offset matrix (inverse bind pose)
                 m_boneOffsets.push_back(ConvertMatrix(bone->mOffsetMatrix));
-            }
-
-            int boneIndex = m_boneMap[boneName];
-
-            // ⚠️ ВЕСА ВЕРШИН: это нужно делать ДО создания vertex buffer!
-            // Здесь мы только логируем — реальное заполнение делай в цикле создания vertices[]
-            for (unsigned int w = 0; w < bone->mNumWeights; ++w)
-            {
-                // unsigned int vertexID = bone->mWeights[w].mVertexId;
-                // float weight = bone->mWeights[w].mWeight;
-                // vertices[vertexID].AddBoneData(boneIndex, weight); // Твой метод
             }
         }
     }
