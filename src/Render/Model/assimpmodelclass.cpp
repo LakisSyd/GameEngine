@@ -3,6 +3,7 @@
 #include <Windows.h> // Для ZeroMemory, GetTempPathA/GetTempFileNameA
 #include <fstream>
 #include <GltfMaterial.h>
+#include <algorithm>
 
 AssimpModelClass::AssimpModelClass() : m_scene(nullptr), m_Texture(nullptr), m_totalIndexCount(0)
 {
@@ -654,7 +655,9 @@ void AssimpModelClass::RenderAll(ID3D11DeviceContext* deviceContext,
                 deviceContext->PSSetShaderResources(3, 1, &part.roughness);
 
             // Рендерим
-            shader->RenderShader(deviceContext, part.indexCount);
+            shader->Render(deviceContext, part.indexCount, world, view, proj,
+                part.texture, part.normalMap, part.metalness, part.roughness,
+                nullptr, nullptr, XMFLOAT3(0,0,0), 1.0f, 1.0f);
         }
         else
         {
@@ -1401,6 +1404,12 @@ void AssimpModelClass::SetBoneMatrices(ID3D11DeviceContext* deviceContext)
     if (m_boneMatrices.empty())
         return;
 
+    // 🔥 Получаем устройство из контекста
+    ID3D11Device* device = nullptr;
+    deviceContext->GetDevice(&device);
+    if (!device)
+        return;
+
     // 🔥 Создаём константный буфер для матриц костей, если ещё не создан
     if (!m_boneMatrixBuffer)
     {
@@ -1410,12 +1419,17 @@ void AssimpModelClass::SetBoneMatrices(ID3D11DeviceContext* deviceContext)
         cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
-        HRESULT hr = deviceContext->GetDevice()->CreateBuffer(&cbDesc, nullptr, &m_boneMatrixBuffer);
+        HRESULT hr = device->CreateBuffer(&cbDesc, nullptr, &m_boneMatrixBuffer);
+        device->Release();
         if (FAILED(hr))
         {
             OutputDebugStringA("ERROR: Failed to create bone matrix buffer!\n");
             return;
         }
+    }
+    else
+    {
+        device->Release();
     }
 
     // 🔥 Обновляем буфер матрицами костей
@@ -1426,7 +1440,7 @@ void AssimpModelClass::SetBoneMatrices(ID3D11DeviceContext* deviceContext)
         XMFLOAT4X4* boneMatrices = reinterpret_cast<XMFLOAT4X4*>(mappedResource.pData);
         
         // Копируем матрицы костей в буфер
-        size_t numBones = (std::min)(m_boneMatrices.size(), static_cast<size_t>(128));
+        size_t numBones = std::min(m_boneMatrices.size(), static_cast<size_t>(128));
         for (size_t i = 0; i < numBones; ++i)
         {
             boneMatrices[i] = m_boneMatrices[i];
