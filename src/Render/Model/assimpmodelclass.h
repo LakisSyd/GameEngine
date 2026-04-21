@@ -8,8 +8,10 @@
 #include <assimp/postprocess.h>
 #include "TextureClass.h"
 #include <unordered_map>
+#include <algorithm>
 
 class TextureShaderClass;
+class PBRShaderClass;
 
 using namespace DirectX;
 using namespace std;
@@ -56,7 +58,7 @@ public:
 
     void Render(ID3D11DeviceContext* deviceContext);
     void RenderAll(ID3D11DeviceContext* deviceContext,
-        TextureShaderClass* shader,
+        PBRShaderClass* shader,
         XMMATRIX world, XMMATRIX view, XMMATRIX proj);
 
     static aiColor4D GetPBRColorFromMaterial(const aiMaterial* mat, aiTextureType type);

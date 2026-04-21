@@ -613,7 +613,7 @@ void AssimpModelClass::Render(ID3D11DeviceContext* deviceContext)
 }
 
 void AssimpModelClass::RenderAll(ID3D11DeviceContext* deviceContext,
-    TextureShaderClass* shader,
+    PBRShaderClass* shader,
     XMMATRIX world, XMMATRIX view, XMMATRIX proj)
 {
     if (m_meshParts.empty()) return;
@@ -1426,7 +1426,7 @@ void AssimpModelClass::SetBoneMatrices(ID3D11DeviceContext* deviceContext)
         XMFLOAT4X4* boneMatrices = reinterpret_cast<XMFLOAT4X4*>(mappedResource.pData);
         
         // Копируем матрицы костей в буфер
-        size_t numBones = min(m_boneMatrices.size(), 128);
+        size_t numBones = (std::min)(m_boneMatrices.size(), static_cast<size_t>(128));
         for (size_t i = 0; i < numBones; ++i)
         {
             boneMatrices[i] = m_boneMatrices[i];

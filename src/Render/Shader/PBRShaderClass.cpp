@@ -118,6 +118,22 @@ void PBRShaderClass::Shutdown()
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+void PBRShaderClass::SetMatrixBuffers(
+    ID3D11DeviceContext* context,
+    XMMATRIX world,
+    XMMATRIX view,
+    XMMATRIX projection)
+{
+    if (!context) return;
+
+    MatrixBuffer mb;
+    mb.world = XMMatrixTranspose(world);
+    mb.view = XMMatrixTranspose(view);
+    mb.projection = XMMatrixTranspose(projection);
+    UpdateConstantBuffer(context, m_matrixBuffer, mb, 0, true);
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 bool PBRShaderClass::Render(
     ID3D11DeviceContext* context,
     int                  indexCount,
