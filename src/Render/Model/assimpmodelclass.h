@@ -106,6 +106,7 @@ public:
     const std::vector<Animation>& GetAnimations() const { return m_animations; }
     const std::vector<XMFLOAT4X4>& GetBoneMatrices() const { return m_boneMatrices; }
     void UpdateAnimation(float currentTime, int animIndex = 0);
+    void SetBoneMatrices(ID3D11DeviceContext* deviceContext);
 
 private:
 
@@ -116,6 +117,7 @@ private:
     const aiScene* m_scene;                          // Уже есть у тебя
     int m_maxBones = 0;
     std::vector<XMFLOAT4X4> m_boneOffsets;  // Индекс = boneIndex
+    ID3D11Buffer* m_boneMatrixBuffer = nullptr;     // Константный буфер для матриц костей
     // Вспомогательные
     
     XMFLOAT4X4 ConvertMatrix(const aiMatrix4x4& from);

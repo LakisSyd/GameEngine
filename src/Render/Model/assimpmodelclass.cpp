@@ -590,6 +590,13 @@ void AssimpModelClass::Shutdown()
         delete m_Texture;
         m_Texture = nullptr;
     }
+
+    // 🔥 Освобождаем буфер матриц костей
+    if (m_boneMatrixBuffer)
+    {
+        m_boneMatrixBuffer->Release();
+        m_boneMatrixBuffer = nullptr;
+    }
 }
 
 void AssimpModelClass::Render(ID3D11DeviceContext* deviceContext)
@@ -603,6 +610,58 @@ void AssimpModelClass::Render(ID3D11DeviceContext* deviceContext)
     deviceContext->IASetVertexBuffers(0, 1, &m_meshParts[0].vertexBuffer, &stride, &offset);
     deviceContext->IASetIndexBuffer(m_meshParts[0].indexBuffer, DXGI_FORMAT_R32_UINT, 0);
     deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+}
+
+void AssimpModelClass::RenderAll(ID3D11DeviceContext* deviceContext,
+    TextureShaderClass* shader,
+    XMMATRIX world, XMMATRIX view, XMMATRIX proj)
+{
+    if (m_meshParts.empty()) return;
+
+    unsigned int stride = sizeof(VertexType);
+    unsigned int offset = 0;
+
+    // 🔥 Обновляем анимацию (если есть)
+    if (HasAnimations())
+    {
+        static float animationTime = 0.0f;
+        animationTime += 0.016f; // ~60 FPS
+        UpdateAnimation(animationTime, 0);
+        SetBoneMatrices(deviceContext);
+    }
+
+    // Рендерим все mesh parts
+    for (const auto& part : m_meshParts)
+    {
+        deviceContext->IASetVertexBuffers(0, 1, &part.vertexBuffer, &stride, &offset);
+        deviceContext->IASetIndexBuffer(part.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+        deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        // Устанавливаем текстуры
+        if (shader)
+        {
+            // Передаём матрицы в шейдер
+            shader->SetMatrixBuffers(deviceContext, world, view, proj);
+
+            // Устанавливаем текстуры для PBR
+            if (part.texture)
+                deviceContext->PSSetShaderResources(0, 1, &part.texture);
+            if (part.normalMap)
+                deviceContext->PSSetShaderResources(1, 1, &part.normalMap);
+            if (part.metalness)
+                deviceContext->PSSetShaderResources(2, 1, &part.metalness);
+            if (part.roughness)
+                deviceContext->PSSetShaderResources(3, 1, &part.roughness);
+
+            // Рендерим
+            shader->RenderShader(deviceContext, part.indexCount);
+        }
+        else
+        {
+            // Fallback: просто рендерим без шейдера
+            deviceContext->DrawIndexed(part.indexCount, 0, 0);
+        }
+    }
 }
 
 int AssimpModelClass::GetIndexCount()
@@ -1334,6 +1393,49 @@ void AssimpModelClass::UpdateAnimation(float currentTime, int animIndex)
         XMFLOAT4X4 identity;
         XMStoreFloat4x4(&identity, XMMatrixIdentity());
         ReadNodeHierarchy(m_scene->mRootNode, identity, anim, animTime);
+    }
+}
+
+void AssimpModelClass::SetBoneMatrices(ID3D11DeviceContext* deviceContext)
+{
+    if (m_boneMatrices.empty())
+        return;
+
+    // 🔥 Создаём константный буфер для матриц костей, если ещё не создан
+    if (!m_boneMatrixBuffer)
+    {
+        D3D11_BUFFER_DESC cbDesc = {};
+        cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+        cbDesc.ByteWidth = sizeof(XMFLOAT4X4) * 128;  // Максимум 128 костей
+        cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+        HRESULT hr = deviceContext->GetDevice()->CreateBuffer(&cbDesc, nullptr, &m_boneMatrixBuffer);
+        if (FAILED(hr))
+        {
+            OutputDebugStringA("ERROR: Failed to create bone matrix buffer!\n");
+            return;
+        }
+    }
+
+    // 🔥 Обновляем буфер матрицами костей
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HRESULT hr = deviceContext->Map(m_boneMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (SUCCEEDED(hr))
+    {
+        XMFLOAT4X4* boneMatrices = reinterpret_cast<XMFLOAT4X4*>(mappedResource.pData);
+        
+        // Копируем матрицы костей в буфер
+        size_t numBones = min(m_boneMatrices.size(), 128);
+        for (size_t i = 0; i < numBones; ++i)
+        {
+            boneMatrices[i] = m_boneMatrices[i];
+        }
+        
+        deviceContext->Unmap(m_boneMatrixBuffer, 0);
+
+        // 🔥 Устанавливаем буфер в слот b8 (как указано в pbr.vs)
+        deviceContext->VSSetConstantBuffers(8, 1, &m_boneMatrixBuffer);
     }
 }
 
