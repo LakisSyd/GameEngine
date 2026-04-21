@@ -1129,7 +1129,7 @@ void ApplicationClass::Render3DObjects(
         lightColors, lightPositions,
         m_sceneManager.GetFogSettings(),
         selectedEntity,
-        camPos);
+        camPos, TimeManager::UnscaledDeltaTime());
 
     // После рендера желательно очистить слот 7, чтобы другие проходы не видели shadow map случайно
     {
@@ -1165,7 +1165,7 @@ void ApplicationClass::Render3DObjectsExcluding(
         m_defaultMaterial,
         lightColors, lightPositions,
         m_sceneManager.GetFogSettings(),
-        excludeEntity);
+        excludeEntity, TimeManager::UnscaledDeltaTime());
 }
 
 // ============================================================================

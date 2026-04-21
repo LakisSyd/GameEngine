@@ -114,7 +114,8 @@ void SceneManager::RenderAllECS(
     XMFLOAT4 lightPositions[],
     const Settings::FogSettings& fog,
     Entity selectedEntity,
-    XMFLOAT3 cameraPos)
+    XMFLOAT3 cameraPos,
+    float deltaTime)
 {
     GatherLightsForShader(lightColors, lightPositions, NUM_LIGHTS);
 
@@ -144,7 +145,7 @@ void SceneManager::RenderAllECS(
         XMMATRIX world = transform->GetWorldMatrix();
         RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
             mat, lightColors, lightPositions, fog,
-            entity == selectedEntity, cameraPos);
+            entity == selectedEntity, cameraPos, deltaTime);
     }
 
     // ── Проход 2: прозрачные объекты (стекло) — z-buffer на чтение ──────────
@@ -172,7 +173,7 @@ void SceneManager::RenderAllECS(
         XMMATRIX world = transform->GetWorldMatrix();
         RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
             mat, lightColors, lightPositions, fog,
-            entity == selectedEntity, cameraPos);
+            entity == selectedEntity, cameraPos, deltaTime);
     }
 }
 
@@ -192,7 +193,8 @@ void SceneManager::RenderAllECSExcluding(
     XMFLOAT4             lightColors[],
     XMFLOAT4             lightPositions[],
     const Settings::FogSettings& fog,
-    Entity               excludeEntity)
+    Entity               excludeEntity,
+    float                deltaTime)
 {
    
         // 🔥 НОВОЕ: Собираем света из ECS (как в RenderAllECS)
@@ -217,7 +219,7 @@ void SceneManager::RenderAllECSExcluding(
 
         XMMATRIX world = transform->GetWorldMatrix();
         RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
-            mat, lightColors, lightPositions, fog, false);
+            mat, lightColors, lightPositions, fog, false, XMFLOAT3(), deltaTime);
     }
 }
 

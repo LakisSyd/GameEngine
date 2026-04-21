@@ -142,7 +142,7 @@ public:
         XMFLOAT4        lightColors[],
         XMFLOAT4        lightPositions[],
         const Settings::FogSettings& fog,
-        Entity selectedEntity = INVALID_ENTITY, XMFLOAT3 cameraPos = { 0.0f, 0.0f, 0.0f });
+        Entity selectedEntity = INVALID_ENTITY, XMFLOAT3 cameraPos = { 0.0f, 0.0f, 0.0f }, float deltaTime = 0.0f);
 
     void RenderAllECSExcluding(
         ID3D11DeviceContext* context,
@@ -152,7 +152,7 @@ public:
         XMFLOAT4        lightColors[],
         XMFLOAT4        lightPositions[],
         const Settings::FogSettings& fog,
-        Entity excludeEntity = INVALID_ENTITY);
+        Entity excludeEntity = INVALID_ENTITY, float deltaTime = 0.0f);
 
     // =========================================================================
     // Light-сферы (только для редактора, не часть ECS)
