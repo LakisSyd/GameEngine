@@ -114,7 +114,8 @@ void SceneManager::RenderAllECS(
     XMFLOAT4 lightPositions[],
     const Settings::FogSettings& fog,
     Entity selectedEntity,
-    XMFLOAT3 cameraPos)
+    XMFLOAT3 cameraPos,
+    float deltaTime)
 {
     GatherLightsForShader(lightColors, lightPositions, NUM_LIGHTS);
 
@@ -144,7 +145,7 @@ void SceneManager::RenderAllECS(
         XMMATRIX world = transform->GetWorldMatrix();
         RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
             mat, lightColors, lightPositions, fog,
-            entity == selectedEntity, cameraPos);
+            entity == selectedEntity, cameraPos, deltaTime);
     }
 
     // ── Проход 2: прозрачные объекты (стекло) — z-buffer на чтение ──────────
@@ -164,7 +165,8 @@ void SceneManager::RenderAllECS(
         if (!isTransparentObj)
         {
             for (const auto& part : mesh.model->GetMeshParts())
-                if (part.isTransparent) { isTransparentObj = true; break;
+                if (part.isTransparent) {
+                    isTransparentObj = true; break;
                 }
         }
         if (!isTransparentObj) continue;
@@ -172,7 +174,7 @@ void SceneManager::RenderAllECS(
         XMMATRIX world = transform->GetWorldMatrix();
         RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
             mat, lightColors, lightPositions, fog,
-            entity == selectedEntity, cameraPos);
+            entity == selectedEntity, cameraPos, deltaTime);
     }
 }
 
@@ -192,10 +194,11 @@ void SceneManager::RenderAllECSExcluding(
     XMFLOAT4             lightColors[],
     XMFLOAT4             lightPositions[],
     const Settings::FogSettings& fog,
-    Entity               excludeEntity)
+    Entity               excludeEntity,
+    float                deltaTime)
 {
-   
-        // 🔥 НОВОЕ: Собираем света из ECS (как в RenderAllECS)
+
+    // 🔥 НОВОЕ: Собираем света из ECS (как в RenderAllECS)
     GatherLightsForShader(lightColors, lightPositions, NUM_LIGHTS);
 
     // Итерируем вручную чтобы пропустить excludeEntity
@@ -217,7 +220,7 @@ void SceneManager::RenderAllECSExcluding(
 
         XMMATRIX world = transform->GetWorldMatrix();
         RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
-            mat, lightColors, lightPositions, fog, false);
+            mat, lightColors, lightPositions, fog, false, XMFLOAT3(), deltaTime);
     }
 }
 
@@ -333,7 +336,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
     objJson["entity_id"] = static_cast<uint32_t>(entity); // ← сохраняем оригинальный Entity ID
 
     // ── Model / Texture paths ─────────────────────────────────────────────────
-    std::string modelPath   = "assets/model/sphere.obj";
+    std::string modelPath = "assets/model/sphere.obj";
     std::string texturePath = "assets/texture/stone.tga";
 
     if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
@@ -343,7 +346,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
             if (cachedModel == mesh->model) { modelPath = path; break; }
         }
     }
-    objJson["model_path"]   = modelPath;
+    objJson["model_path"] = modelPath;
     objJson["texture_path"] = texturePath;
 
     // ── TransformComponent ────────────────────────────────────────────────────
@@ -351,7 +354,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
     {
         objJson["position"] = { {"x", t->position.x}, {"y", t->position.y}, {"z", t->position.z} };
         objJson["rotation"] = { {"x", t->rotation.x}, {"y", t->rotation.y}, {"z", t->rotation.z} };
-        objJson["scale"]    = { {"x", t->scale.x},    {"y", t->scale.y},    {"z", t->scale.z}    };
+        objJson["scale"] = { {"x", t->scale.x},    {"y", t->scale.y},    {"z", t->scale.z} };
     }
 
     // ── Shader ────────────────────────────────────────────────────────────────
@@ -364,50 +367,50 @@ json SceneManager::SerializeObject(Entity entity, int id)
     // ── LightComponent ────────────────────────────────────────────────────────
     if (auto* light = m_registry.GetComponent<LightComponent>(entity))
     {
-        objJson["is_light"]        = true;
-        objJson["light_color"]     = { light->color.x, light->color.y, light->color.z, light->color.w };
-        objJson["light_enabled"]   = light->enabled;
-        objJson["light_radius"]    = light->radius;
-        objJson["light_offset"]    = { light->offset.x, light->offset.y, light->offset.z };
-        objJson["light_is_gizmo"]  = light->isEditorGizmo;
+        objJson["is_light"] = true;
+        objJson["light_color"] = { light->color.x, light->color.y, light->color.z, light->color.w };
+        objJson["light_enabled"] = light->enabled;
+        objJson["light_radius"] = light->radius;
+        objJson["light_offset"] = { light->offset.x, light->offset.y, light->offset.z };
+        objJson["light_is_gizmo"] = light->isEditorGizmo;
         objJson["light_attached_to"] = static_cast<uint32_t>(light->attachedTo);
     }
 
     // ── RigidBodyComponent ────────────────────────────────────────────────────
     if (auto* rig = m_registry.GetComponent<RigidBodyComponent>(entity))
     {
-        objJson["has_rigidbody"]        = true;
-        objJson["rb_mass"]              = rig->mass;
-        objJson["rb_is_dynamic"]        = rig->isDynamic;
-        objJson["rb_is_kinematic"]      = rig->isKinematic;
-        objJson["rb_enable_ccd"]        = rig->enableCCD;
-        objJson["rb_linear_damping"]    = rig->linearDamping;
-        objJson["rb_angular_damping"]   = rig->angularDamping;
-        objJson["rb_friction"]          = rig->friction;
-        objJson["rb_shape_type"]        = static_cast<int>(rig->shapeType);
-        objJson["rb_shape_radius"]      = rig->shapeRadius;
-        objJson["rb_use_manual_size"]   = rig->useManualSize;
-        objJson["rb_shape_size"]        = { rig->shapeSize.x(), rig->shapeSize.y(), rig->shapeSize.z() };
-        objJson["rb_is_compound"]       = rig->isCompound;
+        objJson["has_rigidbody"] = true;
+        objJson["rb_mass"] = rig->mass;
+        objJson["rb_is_dynamic"] = rig->isDynamic;
+        objJson["rb_is_kinematic"] = rig->isKinematic;
+        objJson["rb_enable_ccd"] = rig->enableCCD;
+        objJson["rb_linear_damping"] = rig->linearDamping;
+        objJson["rb_angular_damping"] = rig->angularDamping;
+        objJson["rb_friction"] = rig->friction;
+        objJson["rb_shape_type"] = static_cast<int>(rig->shapeType);
+        objJson["rb_shape_radius"] = rig->shapeRadius;
+        objJson["rb_use_manual_size"] = rig->useManualSize;
+        objJson["rb_shape_size"] = { rig->shapeSize.x(), rig->shapeSize.y(), rig->shapeSize.z() };
+        objJson["rb_is_compound"] = rig->isCompound;
 
         // CompoundElements
         json elemsJson = json::array();
         for (const auto& elem : rig->compoundElements)
         {
             json e;
-            e["type"]              = static_cast<int>(elem.type);
-            e["size"]              = elem.size;
-            e["radius"]            = elem.radius;
-            e["height"]            = elem.height;
-            e["box_offset_min"]    = { elem.boxOffsetMin.x, elem.boxOffsetMin.y, elem.boxOffsetMin.z };
-            e["box_offset_max"]    = { elem.boxOffsetMax.x, elem.boxOffsetMax.y, elem.boxOffsetMax.z };
-            e["local_position"]    = { elem.localPosition.x, elem.localPosition.y, elem.localPosition.z };
-            e["local_rotation"]    = { elem.localRotation.x, elem.localRotation.y,
+            e["type"] = static_cast<int>(elem.type);
+            e["size"] = elem.size;
+            e["radius"] = elem.radius;
+            e["height"] = elem.height;
+            e["box_offset_min"] = { elem.boxOffsetMin.x, elem.boxOffsetMin.y, elem.boxOffsetMin.z };
+            e["box_offset_max"] = { elem.boxOffsetMax.x, elem.boxOffsetMax.y, elem.boxOffsetMax.z };
+            e["local_position"] = { elem.localPosition.x, elem.localPosition.y, elem.localPosition.z };
+            e["local_rotation"] = { elem.localRotation.x, elem.localRotation.y,
                                        elem.localRotation.z, elem.localRotation.w };
-            e["radius_offset"]     = elem.radiusOffset;
+            e["radius_offset"] = elem.radiusOffset;
             e["height_offset_top"] = elem.heightOffsetTop;
             e["height_offset_bot"] = elem.heightOffsetBottom;
-            e["debug_weight"]      = elem.debugWeight;
+            e["debug_weight"] = elem.debugWeight;
             // editorEulerDegrees — только для UI, не сохраняем
             elemsJson.push_back(e);
         }
@@ -417,11 +420,11 @@ json SceneManager::SerializeObject(Entity entity, int id)
     // ── SubmarineHullConfig ───────────────────────────────────────────────────
     if (auto* hull = m_registry.GetComponent<SubmarineHullConfig>(entity))
     {
-        objJson["has_hull_config"]       = true;
-        objJson["hull_extents"]          = { hull->hullExtents.x, hull->hullExtents.y, hull->hullExtents.z };
-        objJson["hull_wall_thickness"]   = hull->wallThickness;
-        objJson["hull_is_kinematic"]     = hull->isKinematic;
-        objJson["hull_show_debug"]       = hull->showDebugHull;
+        objJson["has_hull_config"] = true;
+        objJson["hull_extents"] = { hull->hullExtents.x, hull->hullExtents.y, hull->hullExtents.z };
+        objJson["hull_wall_thickness"] = hull->wallThickness;
+        objJson["hull_is_kinematic"] = hull->isKinematic;
+        objJson["hull_show_debug"] = hull->showDebugHull;
     }
 
     // ── StaticColliderComponent ───────────────────────────────────────────────
@@ -433,35 +436,35 @@ json SceneManager::SerializeObject(Entity entity, int id)
     // ── BuoyancyComponent ─────────────────────────────────────────────────────
     if (auto* buoyancy = m_registry.GetComponent<BuoyancyComponent>(entity))
     {
-        objJson["has_buoyancy"]            = true;
-        objJson["buoyancy_fluid_density"]  = buoyancy->fluidDensity;
-        objJson["buoyancy_volume"]         = buoyancy->volume;
-        objJson["buoyancy_height"]         = buoyancy->height;
-        objJson["buoyancy_multiplier"]     = buoyancy->buoyancyMultiplier;
+        objJson["has_buoyancy"] = true;
+        objJson["buoyancy_fluid_density"] = buoyancy->fluidDensity;
+        objJson["buoyancy_volume"] = buoyancy->volume;
+        objJson["buoyancy_height"] = buoyancy->height;
+        objJson["buoyancy_multiplier"] = buoyancy->buoyancyMultiplier;
     }
 
     // ── CompartmentComponent ──────────────────────────────────────────────────
     if (auto* comp = m_registry.GetComponent<CompartmentComponent>(entity))
     {
-        objJson["has_compartment"]             = true;
-        objJson["compartment_local_min"]       = { comp->localMin.x, comp->localMin.y, comp->localMin.z };
-        objJson["compartment_local_max"]       = { comp->localMax.x, comp->localMax.y, comp->localMax.z };
-        objJson["compartment_volume"]          = comp->volume;
-        objJson["compartment_water_volume"]    = comp->waterVolume;
-        objJson["compartment_water_level"]     = comp->waterLevel;
-        objJson["compartment_is_sealed"]       = comp->isSealed;
-        objJson["compartment_has_power"]       = comp->hasPower;
-        objJson["compartment_pump_rate"]       = comp->pumpRate;
-        objJson["compartment_damage_visual"]   = comp->damageVisual;
+        objJson["has_compartment"] = true;
+        objJson["compartment_local_min"] = { comp->localMin.x, comp->localMin.y, comp->localMin.z };
+        objJson["compartment_local_max"] = { comp->localMax.x, comp->localMax.y, comp->localMax.z };
+        objJson["compartment_volume"] = comp->volume;
+        objJson["compartment_water_volume"] = comp->waterVolume;
+        objJson["compartment_water_level"] = comp->waterLevel;
+        objJson["compartment_is_sealed"] = comp->isSealed;
+        objJson["compartment_has_power"] = comp->hasPower;
+        objJson["compartment_pump_rate"] = comp->pumpRate;
+        objJson["compartment_damage_visual"] = comp->damageVisual;
 
         json breachesJson = json::array();
         for (const auto& breach : comp->breaches)
         {
             json b;
             b["local_position"] = { breach.localPosition.x, breach.localPosition.y, breach.localPosition.z };
-            b["size"]           = breach.size;
-            b["flow_rate"]      = breach.flowRate;
-            b["is_sealed"]      = breach.isSealed;
+            b["size"] = breach.size;
+            b["flow_rate"] = breach.flowRate;
+            b["is_sealed"] = breach.isSealed;
             breachesJson.push_back(b);
         }
         objJson["compartment_breaches"] = breachesJson;
@@ -475,10 +478,10 @@ json SceneManager::SerializeObject(Entity entity, int id)
     // ── SubmarineComponent ────────────────────────────────────────────────────
     if (auto* sub = m_registry.GetComponent<SubmarineComponent>(entity))
     {
-        objJson["has_submarine"]          = true;
-        objJson["sub_root_entity"]        = static_cast<uint32_t>(sub->submarineRoot);
-        objJson["sub_compartment_index"]  = sub->compartmentIndex;
-        objJson["sub_is_detached"]        = sub->isDetached;
+        objJson["has_submarine"] = true;
+        objJson["sub_root_entity"] = static_cast<uint32_t>(sub->submarineRoot);
+        objJson["sub_compartment_index"] = sub->compartmentIndex;
+        objJson["sub_is_detached"] = sub->isDetached;
 
         json compartmentsJson = json::array();
         for (Entity c : sub->allCompartments)
@@ -489,37 +492,37 @@ json SceneManager::SerializeObject(Entity entity, int id)
     // ── PressureHullComponent ─────────────────────────────────────────────────
     if (auto* phull = m_registry.GetComponent<PressureHullComponent>(entity))
     {
-        objJson["has_pressure_hull"]      = true;
-        objJson["hull_max_pressure"]      = phull->maxPressure;
-        objJson["hull_current_health"]    = phull->currentHealth;
-        objJson["hull_repair_rate"]       = phull->repairRate;
-        objJson["hull_is_leaking"]        = phull->isLeaking;
-        objJson["hull_leak_intensity"]    = phull->leakIntensity;
+        objJson["has_pressure_hull"] = true;
+        objJson["hull_max_pressure"] = phull->maxPressure;
+        objJson["hull_current_health"] = phull->currentHealth;
+        objJson["hull_repair_rate"] = phull->repairRate;
+        objJson["hull_is_leaking"] = phull->isLeaking;
+        objJson["hull_leak_intensity"] = phull->leakIntensity;
     }
 
     // ── SubmarineJointComponent ───────────────────────────────────────────────
     if (auto* joint = m_registry.GetComponent<SubmarineJointComponent>(entity))
     {
-        objJson["has_sub_joint"]           = true;
-        objJson["sub_joint_comp_a"]        = static_cast<uint32_t>(joint->compartmentA);
-        objJson["sub_joint_comp_b"]        = static_cast<uint32_t>(joint->compartmentB);
-        objJson["sub_joint_break_force"]   = joint->breakForce;
-        objJson["sub_joint_current_stress"]= joint->currentStress;
-        objJson["sub_joint_is_broken"]     = joint->isBroken;
+        objJson["has_sub_joint"] = true;
+        objJson["sub_joint_comp_a"] = static_cast<uint32_t>(joint->compartmentA);
+        objJson["sub_joint_comp_b"] = static_cast<uint32_t>(joint->compartmentB);
+        objJson["sub_joint_break_force"] = joint->breakForce;
+        objJson["sub_joint_current_stress"] = joint->currentStress;
+        objJson["sub_joint_is_broken"] = joint->isBroken;
     }
 
     // ── JointConnectionComponent ──────────────────────────────────────────────
     if (auto* conn = m_registry.GetComponent<JointConnectionComponent>(entity))
     {
-        objJson["has_joint_connection"]      = true;
-        objJson["joint_target_entity"]       = static_cast<uint32_t>(conn->targetEntity);
-        objJson["joint_pivot_a"]             = { conn->pivotA.x(), conn->pivotA.y(), conn->pivotA.z() };
-        objJson["joint_pivot_b"]             = { conn->pivotB.x(), conn->pivotB.y(), conn->pivotB.z() };
-        objJson["joint_break_force"]         = conn->breakForce;
-        objJson["joint_disable_collisions"]  = conn->disableCollisions;
-        objJson["joint_is_broken"]           = conn->isBroken;
-        objJson["joint_show_gizmo"]          = conn->showGizmo;
-        objJson["joint_gizmo_color"]         = { conn->gizmoColor.x, conn->gizmoColor.y,
+        objJson["has_joint_connection"] = true;
+        objJson["joint_target_entity"] = static_cast<uint32_t>(conn->targetEntity);
+        objJson["joint_pivot_a"] = { conn->pivotA.x(), conn->pivotA.y(), conn->pivotA.z() };
+        objJson["joint_pivot_b"] = { conn->pivotB.x(), conn->pivotB.y(), conn->pivotB.z() };
+        objJson["joint_break_force"] = conn->breakForce;
+        objJson["joint_disable_collisions"] = conn->disableCollisions;
+        objJson["joint_is_broken"] = conn->isBroken;
+        objJson["joint_show_gizmo"] = conn->showGizmo;
+        objJson["joint_gizmo_color"] = { conn->gizmoColor.x, conn->gizmoColor.y,
                                                   conn->gizmoColor.z, conn->gizmoColor.w };
     }
 

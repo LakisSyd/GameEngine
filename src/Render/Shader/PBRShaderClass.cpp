@@ -50,15 +50,17 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
 
     D3D11_INPUT_ELEMENT_DESC layout[] =
     {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-        { "TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_SINT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // boneIDs (int4)
-        { "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // boneWeights (float4)
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+        { "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,    0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // offset 12
+        { "NORMAL",   0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 20, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // offset 20
+        { "TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // offset 32
+        { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // offset 44
+
+        // НОВОЕ: Веса костей - ПРОВЕРЬТЕ OFFSET!
+        { "TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_SINT,   0, 56, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // boneIDs - offset 56
+        { "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT,  0, 72, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // boneWeights - offset 72
     };
-    if (!CreateInputLayout(device, layout, 5, vsBlob)) { vsBlob->Release(); psBlob->Release(); return false; }
+    if (!CreateInputLayout(device, layout, _countof(layout), vsBlob)) { vsBlob->Release(); psBlob->Release(); return false; }
     vsBlob->Release(); psBlob->Release();
 
     // ── Constant buffers ──────────────────────────────────────────────────────
@@ -115,6 +117,22 @@ void PBRShaderClass::Shutdown()
 
     // m_crackTextureSRV НЕ освобождаем — владеет ApplicationClass
     ShaderBaseClass::Shutdown();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+void PBRShaderClass::SetMatrixBuffers(
+    ID3D11DeviceContext* context,
+    XMMATRIX world,
+    XMMATRIX view,
+    XMMATRIX projection)
+{
+    if (!context) return;
+
+    MatrixBuffer mb;
+    mb.world = XMMatrixTranspose(world);
+    mb.view = XMMatrixTranspose(view);
+    mb.projection = XMMatrixTranspose(projection);
+    UpdateConstantBuffer(context, m_matrixBuffer, mb, 0, true);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -187,6 +205,12 @@ bool PBRShaderClass::Render(
     // ── Очистка слотов ────────────────────────────────────────────────────────
     ID3D11ShaderResourceView* nullSRVs[8] = {};
     context->PSSetShaderResources(0, 8, nullSRVs);
+
+    if (!albedo)
+    {
+        OutputDebugStringA("WARNING: Albedo texture is NULL!\n");
+        // Создайте белую текстуру-заглушку
+    }
 
     return true;
 }
