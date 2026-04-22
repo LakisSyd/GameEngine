@@ -41,6 +41,9 @@ public:
     // Устанавливается один раз из ApplicationClass после загрузки текстуры
     void SetCrackTexture(ID3D11ShaderResourceView* srv) { m_crackTextureSRV = srv; }
 
+    // Метод для установки матриц (используется при анимации)
+    void SetMatrixBuffers(ID3D11DeviceContext* context, XMMATRIX world, XMMATRIX view, XMMATRIX projection);
+
     ShaderType GetType() const override { return ShaderType::PBR; }
 
     ID3D11ShaderResourceView* GetDefaultNormalSRV()    const { return m_defaultNormalSRV; }

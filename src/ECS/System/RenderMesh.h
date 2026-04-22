@@ -34,12 +34,27 @@ inline void RenderMesh(
     XMFLOAT4             lightPositions[],
     const Settings::FogSettings& fog,
     bool                 selected = false,
-    XMFLOAT3             cameraPos = { 0.0f, 0.0f, 0.0f })
+    XMFLOAT3             cameraPos = { 0.0f, 0.0f, 0.0f },
+    float                deltaTime = 0.0f)
 {
     if (!model || !material) return;
 
     auto* shader = material->GetShader();
     if (!shader) return;
+
+    // Обновляем анимацию если модель имеет кости и это PBR шейдер
+    static float animationTime = 0.0f;
+    if (deltaTime > 0.0f && model->HasAnimations() && shader->GetType() == ShaderType::PBR)
+    {
+        animationTime += deltaTime;
+        model->UpdateAnimation(animationTime, 0);
+    }
+
+    // Передаём матрицы костей в шейдер перед рендерингом
+    if (model->HasAnimations() && shader->GetType() == ShaderType::PBR)
+    {
+        model->SetBoneMatrices(context);
+    }
 
     model->Render(context);
 
@@ -244,8 +259,8 @@ inline void RenderMesh(
 
                 ID3D11ShaderResourceView* albedoSRV = getTexSRV(0, part.texture);
                 ID3D11ShaderResourceView* normalSRV = isGlassPart ? nullptr : getTexSRV(1, part.normalMap);
-                ID3D11ShaderResourceView* metalSRV  = isGlassPart ? nullptr : getTexSRV(2, part.metalness);
-                ID3D11ShaderResourceView* roughSRV  = isGlassPart ? nullptr : getTexSRV(3, part.roughness);
+                ID3D11ShaderResourceView* metalSRV = isGlassPart ? nullptr : getTexSRV(2, part.metalness);
+                ID3D11ShaderResourceView* roughSRV = isGlassPart ? nullptr : getTexSRV(3, part.roughness);
 
                 s->Render(context, part.indexCount,
                     world, view, projection,

@@ -3,7 +3,8 @@
 #include <Windows.h> // Для ZeroMemory, GetTempPathA/GetTempFileNameA
 #include <fstream>
 #include <GltfMaterial.h>
-
+#include <algorithm>
+#include "PBRShaderClass.h"
 AssimpModelClass::AssimpModelClass() : m_scene(nullptr), m_Texture(nullptr), m_totalIndexCount(0)
 {
 }
@@ -218,6 +219,9 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
     m_totalIndexCount = 0;
     m_meshParts.clear();
 
+    // 🔥 ЗАГРУЖАЕМ КОСТИ ПЕРЕД СОЗДАНИЕМ МЕШЕЙ
+    LoadBones(m_scene);
+
     // 2. Проход по всем мешам -> создаём VB/IB
     for (unsigned int i = 0; i < m_scene->mNumMeshes; i++)
     {
@@ -266,7 +270,92 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
                 vertex.binormal = XMFLOAT3(0.0f, 0.0f, 0.0f);
             }
 
+            // 🔥 ИНИЦИАЛИЗАЦИЯ ВЕСОВ КОСТЕЙ
+            for (int b = 0; b < 4; ++b) {
+                vertex.boneIDs[b] = -1;
+                vertex.boneWeights[b] = 0.0f;
+            }
+
+            // 🔥 ЗАПОЛНЯЕМ ВЕСА КОСТЕЙ ИЗ ДАННЫХ ASSIMP
+            for (unsigned int b = 0; b < mesh->mNumBones; ++b)
+            {
+                aiBone* bone = mesh->mBones[b];
+                for (unsigned int w = 0; w < bone->mNumWeights; ++w)
+                {
+                    if (bone->mWeights[w].mVertexId == j)
+                    {
+                        int boneIndex = m_boneMap[bone->mName.C_Str()];
+                        float weight = bone->mWeights[w].mWeight;
+
+                        // Ищем свободный слот или заменяем наименьший вес
+                        for (int slot = 0; slot < 4; ++slot)
+                        {
+                            if (vertex.boneIDs[slot] == -1)
+                            {
+                                vertex.boneIDs[slot] = boneIndex;
+                                vertex.boneWeights[slot] = weight;
+                                break;
+                            }
+                            else if (vertex.boneWeights[slot] < weight)
+                            {
+                                vertex.boneIDs[slot] = boneIndex;
+                                vertex.boneWeights[slot] = weight;
+                                break;
+                            }
+                        }
+                        break; // Переходим к следующей кости для этой вершины
+                    }
+                }
+            }
+
             vertices.push_back(vertex);
+        }
+
+        int verticesWithBones = 0;
+        int verticesWithZeroWeights = 0;
+        float totalWeightSum = 0.0f;
+
+        for (const auto& v : vertices)
+        {
+            bool hasBone = false;
+            float weightSum = 0.0f;
+
+            for (int i = 0; i < 4; i++)
+            {
+                if (v.boneIDs[i] >= 0)
+                {
+                    hasBone = true;
+                    weightSum += v.boneWeights[i];
+                }
+            }
+
+            if (hasBone) verticesWithBones++;
+            if (weightSum < 0.001f) verticesWithZeroWeights++;
+            totalWeightSum += weightSum;
+        }
+
+        char dbg[512];
+        sprintf_s(dbg, "DEBUG MESH STATS:\n"
+            "  Total vertices: %zu\n"
+            "  Vertices with bones: %d\n"
+            "  Vertices with zero weights: %d\n"
+            "  Avg weight sum: %.3f (should be ~1.0)\n"
+            "  Total bones in map: %zu\n",
+            vertices.size(), verticesWithBones, verticesWithZeroWeights,
+            verticesWithBones > 0 ? totalWeightSum / verticesWithBones : 0.0f,
+            m_boneMap.size());
+        OutputDebugStringA(dbg);
+
+        // 🔥 Вывод первых 5 вершин для проверки
+        for (size_t i = 0; i < std::min(vertices.size(), size_t(5)); i++)
+        {
+            const auto& v = vertices[i];
+            sprintf_s(dbg, "  Vertex %zu: pos(%.2f,%.2f,%.2f) bones[%d,%d,%d,%d] weights[%.2f,%.2f,%.2f,%.2f]\n",
+                i,
+                v.position.x, v.position.y, v.position.z,
+                v.boneIDs[0], v.boneIDs[1], v.boneIDs[2], v.boneIDs[3],
+                v.boneWeights[0], v.boneWeights[1], v.boneWeights[2], v.boneWeights[3]);
+            OutputDebugStringA(dbg);
         }
 
         std::vector<unsigned long> indices;
@@ -308,170 +397,129 @@ bool AssimpModelClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* dev
         }
 
         // Попытаемся извлечь текстуры для материала этого меша (если есть)
-       
-            if (mesh->mMaterialIndex >= 0 && mesh->mMaterialIndex < static_cast<int>(m_scene->mNumMaterials))
+
+        if (mesh->mMaterialIndex >= 0 && mesh->mMaterialIndex < static_cast<int>(m_scene->mNumMaterials))
+        {
+            const aiMaterial* mat = m_scene->mMaterials[mesh->mMaterialIndex];
+
+            // Albedo / BaseColor
+            part.texture = ExtractTexture_Internal(device, deviceContext, m_scene, mat, aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE);
+
+            // Normal map
+            part.normalMap = ExtractTexture_Internal(device, deviceContext, m_scene, mat, aiTextureType_NORMALS, aiTextureType_HEIGHT);
+
+            // Metalness & Roughness
+            part.metalness = ExtractTexture_Internal(device, deviceContext, m_scene, mat, aiTextureType_METALNESS, aiTextureType_UNKNOWN);
+            part.roughness = ExtractTexture_Internal(device, deviceContext, m_scene, mat, aiTextureType_DIFFUSE_ROUGHNESS, aiTextureType_UNKNOWN);
+
+            // --- НОВАЯ ЛОГИКА: Заглушка из цвета ТОЛЬКО если:
+            // 1. part.texture == nullptr
+            // 2. И модель НЕ загружена с внешней текстурой (m_Texture == nullptr)
+            // Это предотвращает перезапись stone.tga для sphere.obj
+            if (!part.texture && !m_Texture) // ← КЛЮЧЕВОЕ УСЛОВИЕ!
             {
-                const aiMaterial* mat = m_scene->mMaterials[mesh->mMaterialIndex];
-
-                // Albedo / BaseColor
-                part.texture = ExtractTexture_Internal(device, deviceContext, m_scene, mat,  aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE);
-
-                // Normal map
-                part.normalMap = ExtractTexture_Internal(device, deviceContext, m_scene, mat,  aiTextureType_NORMALS, aiTextureType_HEIGHT);
-
-                // Metalness & Roughness
-                part.metalness = ExtractTexture_Internal(device, deviceContext, m_scene, mat, aiTextureType_METALNESS, aiTextureType_UNKNOWN);
-                part.roughness = ExtractTexture_Internal(device, deviceContext, m_scene, mat,  aiTextureType_DIFFUSE_ROUGHNESS, aiTextureType_UNKNOWN);
-
-                // --- НОВАЯ ЛОГИКА: Заглушка из цвета ТОЛЬКО если:
-                // 1. part.texture == nullptr
-                // 2. И модель НЕ загружена с внешней текстурой (m_Texture == nullptr)
-                // Это предотвращает перезапись stone.tga для sphere.obj
-                if (!part.texture && !m_Texture) // ← КЛЮЧЕВОЕ УСЛОВИЕ!
+                aiColor4D albedoColor = GetPBRColorFromMaterial(mat, aiTextureType_BASE_COLOR);
+                part.texture = Create1x1SRVFromColor(device, albedoColor);
+                if (part.texture)
                 {
-                    aiColor4D albedoColor = GetPBRColorFromMaterial(mat, aiTextureType_BASE_COLOR);
-                    part.texture = Create1x1SRVFromColor(device, albedoColor);
-                    if (part.texture)
-                    {
-                        OutputDebugStringA(("Created 1x1 albedo SRV from color for mesh " + std::to_string(i) + "\n").c_str());
-                    }
-                }
-
-                if (!part.metalness && !m_Texture)
-                {
-                    float metallicFactor = 0.0f;
-                    if (AI_SUCCESS == aiGetMaterialFloat(mat, "$mat.metallicFactor", 0, 0, &metallicFactor))
-                        metallicFactor = std::clamp(metallicFactor, 0.0f, 1.0f);
-                    aiColor4D metalColor(metallicFactor, metallicFactor, metallicFactor, 1.0f);
-                    part.metalness = Create1x1SRVFromColor(device, metalColor);
-                    if (part.metalness)
-                    {
-                        OutputDebugStringA(("Created 1x1 metalness SRV for mesh " + std::to_string(i) + "\n").c_str());
-                    }
-                }
-
-                if (!part.roughness && !m_Texture)
-                {
-                    float roughnessFactor = 1.0f;
-                    if (AI_SUCCESS == aiGetMaterialFloat(mat, "$mat.roughnessFactor", 0, 0, &roughnessFactor))
-                        roughnessFactor = std::clamp(roughnessFactor, 0.0f, 1.0f);
-                    aiColor4D roughColor(roughnessFactor, roughnessFactor, roughnessFactor, 1.0f);
-                    part.roughness = Create1x1SRVFromColor(device, roughColor);
-                    if (part.roughness)
-                    {
-                        OutputDebugStringA(("Created 1x1 roughness SRV for mesh " + std::to_string(i) + "\n").c_str());
-                    }
-                }
-                {
-                    // Читаем alphaMode (glTF: "OPAQUE", "MASK", "BLEND")
-                    aiString alphaMode;
-                    mat->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode);
-                    std::string alphaModeStr = alphaMode.C_Str();
-
-                    // Читаем opacity (0..1)
-                    float opacity = 1.0f;
-                    aiGetMaterialFloat(mat, AI_MATKEY_OPACITY, &opacity);
-
-                    // Читаем transmission (glTF: KHR_materials_transmission)
-                    // Правильный ключ: AI_MATKEY_TRANSMISSION_FACTOR = "$mat.transmission.factor"
-                    float transmission = 0.0f;
-                    aiGetMaterialFloat(mat, AI_MATKEY_TRANSMISSION_FACTOR, &transmission);
-
-                    part.isTransparent = (alphaModeStr == "BLEND") || (opacity < 0.999f) || (transmission > 0.01f);
-                    part.opacity = opacity;
-
-                    // ── Определяем стекло ────────────────────────────────────
-                    float metallicFactor = 0.0f;
-                    aiGetMaterialFloat(mat, AI_MATKEY_METALLIC_FACTOR, &metallicFactor);
-
-                    // IOR: пробуем стандартный ключ Assimp (классические форматы)
-                    float ior = 1.0f;
-                    aiGetMaterialFloat(mat, AI_MATKEY_REFRACTI, &ior);
-
-                    // Проверяем имя материала на наличие "glass"
-                    aiString matName;
-                    mat->Get(AI_MATKEY_NAME, matName);
-                    std::string matNameStr = matName.C_Str();
-                    std::string matNameLower = matNameStr;
-                    for (auto& c : matNameLower) c = static_cast<char>(tolower(c));
-                    bool nameIsGlass = (matNameLower.find("glass") != std::string::npos);
-
-                    // ── Логика определения стекла ────────────────────────────
-                    // 1) Прозрачный + (высокий metallic или transmission)
-                    bool isGlassOriginal = part.isTransparent && (metallicFactor > 0.5f || transmission > 0.01f);
-                    // 2) Имя содержит "glass" (Blender glass trick: metallic=1)
-                    bool isGlassByName   = nameIsGlass;
-                    // 3) IOR > 1.0 + высокий metallic
-                    bool isGlassByIOR    = (ior > 1.01f) && (metallicFactor > 0.5f);
-                    // 4) Высокий metallic + Render Method Blended (Blender ставит alphaMode=BLEND)
-                    bool isGlassByMetal  = (metallicFactor > 0.9f) && (alphaModeStr == "BLEND");
-
-                    part.isGlass = isGlassOriginal || isGlassByName || isGlassByIOR || isGlassByMetal;
-
-                    // Если стекло обнаружено — принудительно помечаем прозрачным
-                    if (part.isGlass && !part.isTransparent)
-                    {
-                        part.isTransparent = true;
-                    }
-                    // Назначаем разумную прозрачность для стекла
-                    if (part.isGlass && part.opacity > 0.5f)
-                    {
-                        part.opacity = 0.12f; // Чистое стекло: почти прозрачное
-                    }
-
-                    char dbg[512];
-                    sprintf_s(dbg, "Mesh #%u: name='%s' alphaMode='%s' opacity=%.3f metallic=%.3f "
-                        "transmission=%.3f ior=%.3f isTransparent=%d isGlass=%d "
-                        "(byOriginal=%d byName=%d byIOR=%d byMetal=%d)\n",
-                        i, matNameStr.c_str(), alphaModeStr.c_str(), opacity, metallicFactor,
-                        transmission, ior,
-                        (int)part.isTransparent, (int)part.isGlass,
-                        (int)isGlassOriginal, (int)isGlassByName,
-                        (int)isGlassByIOR, (int)isGlassByMetal);
-                    OutputDebugStringA(dbg);
+                    OutputDebugStringA(("Created 1x1 albedo SRV from color for mesh " + std::to_string(i) + "\n").c_str());
                 }
             }
 
-           
-                for (unsigned int m = 0; m < m_scene->mNumMeshes; ++m)
+            if (!part.metalness && !m_Texture)
+            {
+                float metallicFactor = 0.0f;
+                if (AI_SUCCESS == aiGetMaterialFloat(mat, "$mat.metallicFactor", 0, 0, &metallicFactor))
+                    metallicFactor = std::clamp(metallicFactor, 0.0f, 1.0f);
+                aiColor4D metalColor(metallicFactor, metallicFactor, metallicFactor, 1.0f);
+                part.metalness = Create1x1SRVFromColor(device, metalColor);
+                if (part.metalness)
                 {
-                    aiMesh* mesh = m_scene->mMeshes[m];
-                    if (mesh->mNumBones == 0) continue;
-
-                    for (unsigned int b = 0; b < mesh->mNumBones; ++b)
-                    {
-                        aiBone* bone = mesh->mBones[b];
-                        if (m_boneMap.find(bone->mName.C_Str()) == m_boneMap.end())
-                        {
-                            int boneIndex = m_maxBones++;
-                            m_boneMap[bone->mName.C_Str()] = boneIndex;
-                            // ✅ Создаём XMFLOAT4X4 и записываем в него единичную матрицу
-                            XMFLOAT4X4 identityMatrix;
-                            XMStoreFloat4x4(&identityMatrix, XMMatrixIdentity());
-                            m_boneMatrices.push_back(identityMatrix);
-                        }
-
-                        int boneIndex = m_boneMap[bone->mName.C_Str()];
-
-                        for (unsigned int w = 0; w < bone->mNumWeights; ++w)
-                        {
-                            unsigned int vertexID = bone->mWeights[w].mVertexId;
-                            float weight = bone->mWeights[w].mWeight;
-
-                            // Находим свободный слот (до 4 костей)
-                            for (int slot = 0; slot < 4; ++slot)
-                            {
-                                if (m_meshParts[m].vertexBuffer == nullptr) break; // Защита
-                                // Тут нужно обратиться к вершинам, которые ты создавал выше.
-                                // Лучше сохранить vertices[] в локальную переменную перед созданием VB
-                                // Пример доступа (адаптируй под свой код):
-                                // vertices[vertexID].boneIDs[slot] = boneIndex;
-                                // vertices[vertexID].boneWeights[slot] = weight;
-                                break;
-                            }
-                        }
-                    }
+                    OutputDebugStringA(("Created 1x1 metalness SRV for mesh " + std::to_string(i) + "\n").c_str());
                 }
+            }
+
+            if (!part.roughness && !m_Texture)
+            {
+                float roughnessFactor = 1.0f;
+                if (AI_SUCCESS == aiGetMaterialFloat(mat, "$mat.roughnessFactor", 0, 0, &roughnessFactor))
+                    roughnessFactor = std::clamp(roughnessFactor, 0.0f, 1.0f);
+                aiColor4D roughColor(roughnessFactor, roughnessFactor, roughnessFactor, 1.0f);
+                part.roughness = Create1x1SRVFromColor(device, roughColor);
+                if (part.roughness)
+                {
+                    OutputDebugStringA(("Created 1x1 roughness SRV for mesh " + std::to_string(i) + "\n").c_str());
+                }
+            }
+            {
+                // Читаем alphaMode (glTF: "OPAQUE", "MASK", "BLEND")
+                aiString alphaMode;
+                mat->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode);
+                std::string alphaModeStr = alphaMode.C_Str();
+
+                // Читаем opacity (0..1)
+                float opacity = 1.0f;
+                aiGetMaterialFloat(mat, AI_MATKEY_OPACITY, &opacity);
+
+                // Читаем transmission (glTF: KHR_materials_transmission)
+                // Правильный ключ: AI_MATKEY_TRANSMISSION_FACTOR = "$mat.transmission.factor"
+                float transmission = 0.0f;
+                aiGetMaterialFloat(mat, AI_MATKEY_TRANSMISSION_FACTOR, &transmission);
+
+                part.isTransparent = (alphaModeStr == "BLEND") || (opacity < 0.999f) || (transmission > 0.01f);
+                part.opacity = opacity;
+
+                // ── Определяем стекло ────────────────────────────────────
+                float metallicFactor = 0.0f;
+                aiGetMaterialFloat(mat, AI_MATKEY_METALLIC_FACTOR, &metallicFactor);
+
+                // IOR: пробуем стандартный ключ Assimp (классические форматы)
+                float ior = 1.0f;
+                aiGetMaterialFloat(mat, AI_MATKEY_REFRACTI, &ior);
+
+                // Проверяем имя материала на наличие "glass"
+                aiString matName;
+                mat->Get(AI_MATKEY_NAME, matName);
+                std::string matNameStr = matName.C_Str();
+                std::string matNameLower = matNameStr;
+                for (auto& c : matNameLower) c = static_cast<char>(tolower(c));
+                bool nameIsGlass = (matNameLower.find("glass") != std::string::npos);
+
+                // ── Логика определения стекла ────────────────────────────
+                // 1) Прозрачный + (высокий metallic или transmission)
+                bool isGlassOriginal = part.isTransparent && (metallicFactor > 0.5f || transmission > 0.01f);
+                // 2) Имя содержит "glass" (Blender glass trick: metallic=1)
+                bool isGlassByName = nameIsGlass;
+                // 3) IOR > 1.0 + высокий metallic
+                bool isGlassByIOR = (ior > 1.01f) && (metallicFactor > 0.5f);
+                // 4) Высокий metallic + Render Method Blended (Blender ставит alphaMode=BLEND)
+                bool isGlassByMetal = (metallicFactor > 0.9f) && (alphaModeStr == "BLEND");
+
+                part.isGlass = isGlassOriginal || isGlassByName || isGlassByIOR || isGlassByMetal;
+
+                // Если стекло обнаружено — принудительно помечаем прозрачным
+                if (part.isGlass && !part.isTransparent)
+                {
+                    part.isTransparent = true;
+                }
+                // Назначаем разумную прозрачность для стекла
+                if (part.isGlass && part.opacity > 0.5f)
+                {
+                    part.opacity = 0.12f; // Чистое стекло: почти прозрачное
+                }
+
+                char dbg[512];
+                sprintf_s(dbg, "Mesh #%u: name='%s' alphaMode='%s' opacity=%.3f metallic=%.3f "
+                    "transmission=%.3f ior=%.3f isTransparent=%d isGlass=%d "
+                    "(byOriginal=%d byName=%d byIOR=%d byMetal=%d)\n",
+                    i, matNameStr.c_str(), alphaModeStr.c_str(), opacity, metallicFactor,
+                    transmission, ior,
+                    (int)part.isTransparent, (int)part.isGlass,
+                    (int)isGlassOriginal, (int)isGlassByName,
+                    (int)isGlassByIOR, (int)isGlassByMetal);
+                OutputDebugStringA(dbg);
+            }
+        }
 
         // Добавляем созданный part в список мешей
         m_meshParts.push_back(part);
@@ -549,6 +597,13 @@ void AssimpModelClass::Shutdown()
         delete m_Texture;
         m_Texture = nullptr;
     }
+
+    // 🔥 Освобождаем буфер матриц костей
+    if (m_boneMatrixBuffer)
+    {
+        m_boneMatrixBuffer->Release();
+        m_boneMatrixBuffer = nullptr;
+    }
 }
 
 void AssimpModelClass::Render(ID3D11DeviceContext* deviceContext)
@@ -562,6 +617,60 @@ void AssimpModelClass::Render(ID3D11DeviceContext* deviceContext)
     deviceContext->IASetVertexBuffers(0, 1, &m_meshParts[0].vertexBuffer, &stride, &offset);
     deviceContext->IASetIndexBuffer(m_meshParts[0].indexBuffer, DXGI_FORMAT_R32_UINT, 0);
     deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+}
+
+void AssimpModelClass::RenderAll(ID3D11DeviceContext* deviceContext,
+    PBRShaderClass* shader,
+    XMMATRIX world, XMMATRIX view, XMMATRIX proj)
+{
+    if (m_meshParts.empty()) return;
+
+    unsigned int stride = sizeof(VertexType);
+    unsigned int offset = 0;
+
+    // 🔥 Обновляем анимацию (если есть)
+    if (HasAnimations())
+    {
+        static float animationTime = 0.0f;
+        animationTime += 0.016f; // ~60 FPS
+        UpdateAnimation(animationTime, 0);
+        SetBoneMatrices(deviceContext);
+    }
+
+    // Рендерим все mesh parts
+    for (const auto& part : m_meshParts)
+    {
+        deviceContext->IASetVertexBuffers(0, 1, &part.vertexBuffer, &stride, &offset);
+        deviceContext->IASetIndexBuffer(part.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+        deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+        // Устанавливаем текстуры
+        if (shader)
+        {
+            // Передаём матрицы в шейдер
+            shader->SetMatrixBuffers(deviceContext, world, view, proj);
+
+            // Устанавливаем текстуры для PBR
+            if (part.texture)
+                deviceContext->PSSetShaderResources(0, 1, &part.texture);
+            if (part.normalMap)
+                deviceContext->PSSetShaderResources(1, 1, &part.normalMap);
+            if (part.metalness)
+                deviceContext->PSSetShaderResources(2, 1, &part.metalness);
+            if (part.roughness)
+                deviceContext->PSSetShaderResources(3, 1, &part.roughness);
+
+            // Рендерим
+            shader->Render(deviceContext, part.indexCount, world, view, proj,
+                part.texture, part.normalMap, part.metalness, part.roughness,
+                nullptr, nullptr, XMFLOAT3(0, 0, 0), 1.0f, 1.0f);
+        }
+        else
+        {
+            // Fallback: просто рендерим без шейдера
+            deviceContext->DrawIndexed(part.indexCount, 0, 0);
+        }
+    }
 }
 
 int AssimpModelClass::GetIndexCount()
@@ -1032,17 +1141,6 @@ void AssimpModelClass::LoadBones(const aiScene* scene)
                 // Сохраняем offset matrix (inverse bind pose)
                 m_boneOffsets.push_back(ConvertMatrix(bone->mOffsetMatrix));
             }
-
-            int boneIndex = m_boneMap[boneName];
-
-            // ⚠️ ВЕСА ВЕРШИН: это нужно делать ДО создания vertex buffer!
-            // Здесь мы только логируем — реальное заполнение делай в цикле создания vertices[]
-            for (unsigned int w = 0; w < bone->mNumWeights; ++w)
-            {
-                // unsigned int vertexID = bone->mWeights[w].mVertexId;
-                // float weight = bone->mWeights[w].mWeight;
-                // vertices[vertexID].AddBoneData(boneIndex, weight); // Твой метод
-            }
         }
     }
 
@@ -1242,7 +1340,8 @@ void AssimpModelClass::ReadNodeHierarchy(const aiNode* node,
     std::string nodeName(node->mName.C_Str());
 
     // Текущая трансформация узла (из сцены)
-    XMMATRIX nodeTransform = XMLoadFloat4x4(&ConvertMatrix(node->mTransformation));
+    XMFLOAT4X4 tempMatrix = ConvertMatrix(node->mTransformation);
+    XMMATRIX nodeTransform = XMLoadFloat4x4(&tempMatrix);
 
     // Если эта кость анимируется — переопределяем трансформ ключевыми кадрами
     auto it = m_boneMap.find(nodeName);
@@ -1293,17 +1392,78 @@ void AssimpModelClass::UpdateAnimation(float currentTime, int animIndex)
 
     const Animation& anim = m_animations[animIndex];
 
-    // Нормализуем время (циклическое воспроизведение)
+    // 🔥 ЗАЩИТА: Если длительность 0, не пытаемся анимировать
+    if (anim.duration <= 0.0001f)
+    {
+        // Можно вывести в дебаг: OutputDebugStringA("Anim duration is 0!\n");
+        return;
+    }
+
     float ticksPerSecond = (anim.ticksPerSecond > 0.0f) ? anim.ticksPerSecond : 24.0f;
     float timeInSeconds = currentTime * ticksPerSecond;
-    float animTime = fmod(timeInSeconds, anim.duration);
 
+    // 🔥 ЗАЩИТА: fmod не любит 0 в знаменателе
+    float animTime = fmod(timeInSeconds, anim.duration);
     // Запускаем рекурсивную сборку матриц от корня
     if (m_scene && m_scene->mRootNode)
     {
         XMFLOAT4X4 identity;
         XMStoreFloat4x4(&identity, XMMatrixIdentity());
         ReadNodeHierarchy(m_scene->mRootNode, identity, anim, animTime);
+    }
+}
+
+void AssimpModelClass::SetBoneMatrices(ID3D11DeviceContext* deviceContext)
+{
+    if (m_boneMatrices.empty())
+        return;
+
+    // 🔥 Получаем устройство из контекста
+    ID3D11Device* device = nullptr;
+    deviceContext->GetDevice(&device);
+    if (!device)
+        return;
+
+    // 🔥 Создаём константный буфер для матриц костей, если ещё не создан
+    if (!m_boneMatrixBuffer)
+    {
+        D3D11_BUFFER_DESC cbDesc = {};
+        cbDesc.Usage = D3D11_USAGE_DYNAMIC;
+        cbDesc.ByteWidth = sizeof(XMFLOAT4X4) * 128;  // Максимум 128 костей
+        cbDesc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        cbDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+
+        HRESULT hr = device->CreateBuffer(&cbDesc, nullptr, &m_boneMatrixBuffer);
+        device->Release();
+        if (FAILED(hr))
+        {
+            OutputDebugStringA("ERROR: Failed to create bone matrix buffer!\n");
+            return;
+        }
+    }
+    else
+    {
+        device->Release();
+    }
+
+    // 🔥 Обновляем буфер матрицами костей
+    D3D11_MAPPED_SUBRESOURCE mappedResource;
+    HRESULT hr = deviceContext->Map(m_boneMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (SUCCEEDED(hr))
+    {
+        XMFLOAT4X4* boneMatrices = reinterpret_cast<XMFLOAT4X4*>(mappedResource.pData);
+
+        // Копируем матрицы костей в буфер
+        size_t numBones = std::min(m_boneMatrices.size(), static_cast<size_t>(128));
+        for (size_t i = 0; i < numBones; ++i)
+        {
+            boneMatrices[i] = m_boneMatrices[i];
+        }
+
+        deviceContext->Unmap(m_boneMatrixBuffer, 0);
+
+        // 🔥 Устанавливаем буфер в слот b8 (как указано в pbr.vs)
+        deviceContext->VSSetConstantBuffers(8, 1, &m_boneMatrixBuffer);
     }
 }
 
