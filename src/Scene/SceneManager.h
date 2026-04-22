@@ -31,7 +31,7 @@ using json = nlohmann::json;
 class SceneManager
 {
 public:
-   
+
 
     SceneManager();
     ~SceneManager();
@@ -88,15 +88,15 @@ public:
     // =========================================================================
     // Свет
     // =========================================================================
-   
+
     void UpdateLights();
 
     void RemapEntityReferences(const std::unordered_map<uint32_t, Entity>& remap);
 
-   
+
 
     // Convenience setters for individual light properties (used by EditorUI)
-  
+
 
     // =========================================================================
     // Спрайты
@@ -142,7 +142,7 @@ public:
         XMFLOAT4        lightColors[],
         XMFLOAT4        lightPositions[],
         const Settings::FogSettings& fog,
-        Entity selectedEntity = INVALID_ENTITY, XMFLOAT3 cameraPos = { 0.0f, 0.0f, 0.0f });
+        Entity selectedEntity = INVALID_ENTITY, XMFLOAT3 cameraPos = { 0.0f, 0.0f, 0.0f }, float deltaTime = 0.0f);
 
     void RenderAllECSExcluding(
         ID3D11DeviceContext* context,
@@ -152,7 +152,7 @@ public:
         XMFLOAT4        lightColors[],
         XMFLOAT4        lightPositions[],
         const Settings::FogSettings& fog,
-        Entity excludeEntity = INVALID_ENTITY);
+        Entity excludeEntity = INVALID_ENTITY, float deltaTime = 0.0f);
 
     // =========================================================================
     // Light-сферы (только для редактора, не часть ECS)
@@ -184,19 +184,19 @@ public:
 
     Entity SpawnLight(const XMFLOAT3& position, const XMFLOAT4& color, bool isGizmo = false);
     bool   RemoveLight(Entity entity);
-    
-    bool IsLightActive(Entity i) 
+
+    bool IsLightActive(Entity i)
     {
-      
+
         if (m_registry.HasComponent<LightComponent>(i))
         {
             return m_registry.GetComponent<LightComponent>(i)->enabled;
-      }
-        
+        }
+
     }
 
-    
-    
+
+
     void SetLightPosition(Entity entity, const XMFLOAT3& position);
     void SetLightEnabled(Entity entity, bool enabled);
     void AttachLightToObject(Entity lightEntity, Entity targetEntity, const XMFLOAT3& offset = {});
@@ -222,7 +222,7 @@ private:
     json   SerializeObject(Entity entity, int id);
     Entity DeserializeObject(const json& j, ID3D11Device* device,
         ID3D11DeviceContext* deviceContext);
-  
+
     json   SerializeMaterial(const MaterialClass* mat);
 
     ID3D11ShaderResourceView* m_refractionSRV = nullptr;
@@ -233,8 +233,8 @@ private:
     //WATER 
     float m_waterLevel = 0.0f;  // 🌊 Уровень поверхности воды
 
-    public:
-        float GetWaterLevel() const { return m_waterLevel; }
-        void SetWaterLevel(float level) { m_waterLevel = level; }
-    
+public:
+    float GetWaterLevel() const { return m_waterLevel; }
+    void SetWaterLevel(float level) { m_waterLevel = level; }
+
 };

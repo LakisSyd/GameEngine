@@ -118,7 +118,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 
     m_colorShader = new ColorShaderClass();
 
-	m_colorShader->Initialize(m_direct3D->GetDevice(), hwnd);
+    m_colorShader->Initialize(m_direct3D->GetDevice(), hwnd);
     // Инициализируем физику
     if (!PhysicsSystem::InitializeWorld())
     {
@@ -202,7 +202,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_sceneManager.SetupLightSpheres(m_lightSpheres, m_lightSphereModel);
 
     // ── Один источник света по умолчанию ─────────────────────────────────────
-    
+
 
     // ── Default material для всех объектов без ручного назначения ─────────
     // Раньше было: создавали Material, но не инициализировали/не назначали.
@@ -295,7 +295,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     XMMATRIX proj2 = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), 1.0f, 0.1f, 100.0f);
     mat->SetProjectionView2(view2);
     mat->SetProjectionProj2(proj2);
-  
+
     return true;
 }
 
@@ -482,8 +482,8 @@ bool ApplicationClass::Frame(float dt)
             compartmentTransform->rotation = rootTransform->rotation;
         }
     }
-     // Построение визуализации коллизий
-  // Вариант 1: Простое исправление
+    // Построение визуализации коллизий
+ // Вариант 1: Простое исправление
     if (dt > 0.0f)
     {
         auto& registry = m_sceneManager.GetECSRegistry();
@@ -546,7 +546,7 @@ bool ApplicationClass::Frame(float dt)
         auto& meshPool = m_sceneManager.GetECSRegistry()
             .GetComponents<MeshRendererComponent>();
 
-      
+
 
         for (auto& [ent, mesh] : meshPool)
         {
@@ -560,7 +560,7 @@ bool ApplicationClass::Frame(float dt)
 
             ShaderType st = mat->GetShader()->GetType();
 
-            
+
         }
     }
 
@@ -597,11 +597,11 @@ bool ApplicationClass::Frame(float dt)
     m_sceneManager.UpdateAll(dt);
 
 
-  
+
 
     // Рендерим в shadow map (без текстур, только depth)
-   
-  
+
+
 
 
 
@@ -676,7 +676,7 @@ bool ApplicationClass::Frame(float dt)
         auto& meshPool = m_sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
         XMFLOAT4 lightColors[NUM_LIGHTS];
         XMFLOAT4 lightPositions[NUM_LIGHTS];
-    
+
 
         for (auto& [entity, mesh] : meshPool)
         {
@@ -738,11 +738,11 @@ bool ApplicationClass::Frame(float dt)
         m_direct3D->BeginScene(0.0f, 0.0f, 0.0f, 1.0f);
 
     Render3DObjects(m_direct3D->GetDeviceContext(), m_viewMatrix, m_projMatrix);
-  
+
     RenderWorldSprites(m_direct3D->GetDeviceContext(), m_viewMatrix, m_projMatrix);
 
 
-    if(m_compartmentRenderer&& m_colorShader)
+    if (m_compartmentRenderer && m_colorShader)
     {
         // Убеждаемся, что растеризатор в режиме SOLID (заполнение)
         // Если m_wireframeRS — это wireframe, то нужно либо:
@@ -805,7 +805,7 @@ bool ApplicationClass::Frame(float dt)
     if (!imguiWantsMouse)
         HandleDragDrop();
 
-   
+
     m_editorUI.Update(m_sceneManager);
     RenderCompartmentCornerHandles();
     RenderCompoundCornerHandles();
@@ -867,7 +867,7 @@ bool ApplicationClass::Frame(float dt)
             // Включаем ImGuizmo
             ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
             ImGuizmo::SetRect(0, 0, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
-         
+
 
             // Матрицы для гизмо
             XMMATRIX view, projection;
@@ -1078,7 +1078,7 @@ void ApplicationClass::Render3DObjects(
 
     ShaderManager::Get().ForEach([&](ShaderBaseClass* shader) {
         shader->UpdateFog(context, m_sceneManager.GetFogSettings());
-    });
+        });
 
     XMFLOAT4 lightColors[NUM_LIGHTS];
     XMFLOAT4 lightPositions[NUM_LIGHTS];
@@ -1123,13 +1123,13 @@ void ApplicationClass::Render3DObjects(
                 transform->GetWorldMatrix());
         }
     }
-        m_sceneManager.RenderAllECS(
+    m_sceneManager.RenderAllECS(
         context, view, projection,
         m_defaultMaterial,
         lightColors, lightPositions,
         m_sceneManager.GetFogSettings(),
         selectedEntity,
-        camPos);
+        camPos, TimeManager::UnscaledDeltaTime());
 
     // После рендера желательно очистить слот 7, чтобы другие проходы не видели shadow map случайно
     {
@@ -1155,7 +1155,7 @@ void ApplicationClass::Render3DObjectsExcluding(
 
     XMFLOAT4 lightColors[NUM_LIGHTS];
     XMFLOAT4 lightPositions[NUM_LIGHTS];
-  
+
 
     Entity excludeEntity = (excludeIndex >= 0)
         ? static_cast<Entity>(excludeIndex) : INVALID_ENTITY;
@@ -1165,7 +1165,7 @@ void ApplicationClass::Render3DObjectsExcluding(
         m_defaultMaterial,
         lightColors, lightPositions,
         m_sceneManager.GetFogSettings(),
-        excludeEntity);
+        excludeEntity, TimeManager::UnscaledDeltaTime());
 }
 
 // ============================================================================
@@ -1275,7 +1275,7 @@ void ApplicationClass::HandleDragDrop()
             switch (m_pendingPickResult.type)
             {
             case PickingSystem::PickedType::Light:
-             
+
                 break;
             case PickingSystem::PickedType::Object:
                 if (auto* t = m_sceneManager.GetObjectTransform(
@@ -1380,7 +1380,7 @@ void ApplicationClass::UpdateDraggedPosition(const CameraClass::Ray& ray)
 
     if (m_draggedLightIndex >= 0)
     {
-       // m_sceneManager.SetLight(m_draggedLightIndex, newPos, XMFLOAT4(1, 1, 0.9f, 1), true);
+        // m_sceneManager.SetLight(m_draggedLightIndex, newPos, XMFLOAT4(1, 1, 0.9f, 1), true);
     }
     else if (m_draggedSpriteIndex >= 0)
     {
@@ -1603,13 +1603,13 @@ void ApplicationClass::Render3DObjectsToShadowMap(
             mesh.model->GetIndexCount(), world, lightViewProj);
 
         // DEBUG: Логируем каждый объект
-       
+
 
         renderedCount++;
     }
 
     // ВАЖНЫЙ ЛОГ
-   
+
     // Очищаем состояние
     {
         ID3D11Buffer* nullBuffers[6] = {};

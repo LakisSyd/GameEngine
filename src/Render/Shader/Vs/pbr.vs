@@ -12,7 +12,8 @@ cbuffer MatrixBuffer : register(b0)
 
 cbuffer BoneTransforms : register(b8)
 {
-    matrix boneTransforms[128];
+      row_major matrix boneTransforms[128];
+
 };
 
 
@@ -55,28 +56,34 @@ PixelInputType PBRVertexShader(VertexInputType input)
     PixelInputType output;
     input.position.w = 1.0f;
 
-    //  SKINNING: Взвешенная трансформация вершины костями
     float4 skinnedPos = float4(0.0f, 0.0f, 0.0f, 1.0f);
     float3 skinnedNormal = float3(0.0f, 0.0f, 0.0f);
+    bool hasValidBones = false;
     
     for (int i = 0; i < 4; i++)
     {
-        // Пропускаем невалидные индексы костей
         if (input.boneIDs[i] < 0) continue;
         
         float weight = input.boneWeights[i];
+        if (weight <= 0.0f) continue;
+        
+        hasValidBones = true;
         matrix boneMat = boneTransforms[input.boneIDs[i]];
         
-        // Трансформируем позицию
         skinnedPos += mul(input.position, boneMat) * weight;
         
-        // Трансформируем нормаль (только вращение, без трансляции)
         float3x3 boneRot = (float3x3)boneMat;
         skinnedNormal += mul(input.normal, boneRot) * weight;
     }
     
-    // Используем skinnedPos вместо input.position для дальнейших расчётов
-    float4 worldPos = mul(skinnedPos, worldMatrix);
+    // 🔥 ВАЖНО: Если нет валидных костей, используем оригинальную позицию
+    float4 finalPos = hasValidBones ? skinnedPos : input.position;
+    float3 finalNormal = hasValidBones ? skinnedNormal : input.normal;
+
+     finalPos.w = 1.0f; 
+
+    
+    float4 worldPos = mul(finalPos, worldMatrix);
     float4 viewPos  = mul(worldPos, viewMatrix);
     output.position = mul(viewPos, projectionMatrix);
 
@@ -86,9 +93,8 @@ PixelInputType PBRVertexShader(VertexInputType input)
 
     float3x3 worldRot = (float3x3)worldMatrix;
     
-    // Используем skinnedNormal для освещения
-    output.normal   = normalize(mul(skinnedNormal, worldRot));
-    output.tangent  = normalize(mul(input.tangent, worldRot)); // tangent обычно не скиннится для простоты
+    output.normal   = normalize(mul(finalNormal, worldRot));
+    output.tangent  = normalize(mul(input.tangent, worldRot));
     output.binormal = normalize(mul(input.binormal, worldRot));
 
     for (int i = 0; i < NUM_LIGHTS; i++)

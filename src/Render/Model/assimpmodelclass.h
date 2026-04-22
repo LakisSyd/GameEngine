@@ -8,8 +8,10 @@
 #include <assimp/postprocess.h>
 #include "TextureClass.h"
 #include <unordered_map>
+#include <algorithm>
 
 class TextureShaderClass;
+class PBRShaderClass;
 
 using namespace DirectX;
 using namespace std;
@@ -21,28 +23,31 @@ public:
     struct MeshPart
     {
         ID3D11Buffer* vertexBuffer = nullptr;
-        ID3D11Buffer* indexBuffer  = nullptr;
-        int           indexCount   = 0;
+        ID3D11Buffer* indexBuffer = nullptr;
+        int           indexCount = 0;
 
-        ID3D11ShaderResourceView* texture   = nullptr;
+        ID3D11ShaderResourceView* texture = nullptr;
         ID3D11ShaderResourceView* normalMap = nullptr;
         ID3D11ShaderResourceView* metalness = nullptr;
         ID3D11ShaderResourceView* roughness = nullptr;
 
         bool  isTransparent = false;
-        bool  isGlass       = false;   // ← НОВОЕ: стекло из GLB
-        float opacity       = 1.0f;
+        bool  isGlass = false;   // ← НОВОЕ: стекло из GLB
+        float opacity = 1.0f;
     };
 
     // ── Вершина — добавили tangent и binormal для PBR/NormalMap ──────────────
-    struct VertexType {
+    struct VertexType
+    {
         XMFLOAT3 position;
         XMFLOAT2 texture;
         XMFLOAT3 normal;
         XMFLOAT3 tangent;
         XMFLOAT3 binormal;
-        int    boneIDs[4];      // Индексы костей (по умолчанию -1)
-        float  boneWeights[4];  // Веса (по умолчанию 0.0f)
+
+        // НОВОЕ: Для скелетной анимации
+        int boneIDs[4];        // или XMFLOAT4/int4
+        float boneWeights[4];  // или XMFLOAT4
     };
 
 public:
@@ -56,7 +61,7 @@ public:
 
     void Render(ID3D11DeviceContext* deviceContext);
     void RenderAll(ID3D11DeviceContext* deviceContext,
-        TextureShaderClass* shader,
+        PBRShaderClass* shader,
         XMMATRIX world, XMMATRIX view, XMMATRIX proj);
 
     static aiColor4D GetPBRColorFromMaterial(const aiMaterial* mat, aiTextureType type);
@@ -106,6 +111,7 @@ public:
     const std::vector<Animation>& GetAnimations() const { return m_animations; }
     const std::vector<XMFLOAT4X4>& GetBoneMatrices() const { return m_boneMatrices; }
     void UpdateAnimation(float currentTime, int animIndex = 0);
+    void SetBoneMatrices(ID3D11DeviceContext* deviceContext);
 
 private:
 
@@ -116,8 +122,9 @@ private:
     const aiScene* m_scene;                          // Уже есть у тебя
     int m_maxBones = 0;
     std::vector<XMFLOAT4X4> m_boneOffsets;  // Индекс = boneIndex
+    ID3D11Buffer* m_boneMatrixBuffer = nullptr;     // Константный буфер для матриц костей
     // Вспомогательные
-    
+
     XMFLOAT4X4 ConvertMatrix(const aiMatrix4x4& from);
     XMFLOAT4X4 InterpolatePosition(const std::vector<KeyPosition>& keys, float animTime);
     XMFLOAT4X4 InterpolateRotation(const std::vector<AssimpModelClass::KeyRotation>& keys, float animTime);
@@ -144,11 +151,11 @@ private:
         aiTextureType type2 = aiTextureType_NONE);
 
 
-   
+
 
 private:
     Assimp::Importer      m_importer;
-    const aiScene* m_scene;
+
     TextureClass* m_Texture;
     int                   m_totalIndexCount;
     std::vector<MeshPart> m_meshParts;
