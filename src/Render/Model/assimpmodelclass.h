@@ -93,46 +93,59 @@ public:
     struct KeyRotation { XMFLOAT4 orientation; float timeStamp; }; // Кватернион
     struct KeyScale { XMFLOAT3 scale; float timeStamp; };
 
-    struct BoneAnimation {
-        std::string name;
+    struct BoneAnimationChannel {
+        std::string nodeName;  // Имя узла (НЕ кости!)
         std::vector<KeyPosition> positions;
         std::vector<KeyRotation> rotations;
         std::vector<KeyScale> scales;
     };
 
-    struct Animation {
+
+    struct AnimationClip {
         std::string name;
         float duration;
         float ticksPerSecond;
-        std::vector<BoneAnimation> channels; // Индексы совпадают с m_boneMatrices
+        std::vector<BoneAnimationChannel> channels;
+    };
+    struct BoneInfo {
+        std::string name;
+        XMFLOAT4X4 offsetMatrix;
+        int boneIndex;
     };
 
+    std::unordered_map<std::string, BoneInfo> m_boneInfoMap;  // ключ: имя узла
+    std::vector<AnimationClip> m_animations;
+    std::vector<XMFLOAT4X4> m_finalBoneMatrices;  // [boneIndex] -> матрица для шейдера
+    ID3D11Buffer* m_boneMatrixBuffer;
+    float m_animationTime;
+
     bool HasAnimations() const { return !m_animations.empty(); }
-    const std::vector<Animation>& GetAnimations() const { return m_animations; }
-    const std::vector<XMFLOAT4X4>& GetBoneMatrices() const { return m_boneMatrices; }
-    void UpdateAnimation(float currentTime, int animIndex = 0);
+
+    void UpdateAnimation(float deltaTime, int animIndex);
+
     void SetBoneMatrices(ID3D11DeviceContext* deviceContext);
 
 private:
-
-    //ANIMATION
-    std::vector<XMFLOAT4X4> m_boneMatrices;          // Финальные матрицы для шейдера
-    std::unordered_map<std::string, int> m_boneMap;  // Имя кости → индекс в массиве
-    std::vector<Animation> m_animations;
-    const aiScene* m_scene;                          // Уже есть у тебя
-    int m_maxBones = 0;
-    std::vector<XMFLOAT4X4> m_boneOffsets;  // Индекс = boneIndex
-    ID3D11Buffer* m_boneMatrixBuffer = nullptr;     // Константный буфер для матриц костей
+   
+    //ANIMATIONx
+   
     // Вспомогательные
 
     XMFLOAT4X4 ConvertMatrix(const aiMatrix4x4& from);
-    XMFLOAT4X4 InterpolatePosition(const std::vector<KeyPosition>& keys, float animTime);
-    XMFLOAT4X4 InterpolateRotation(const std::vector<AssimpModelClass::KeyRotation>& keys, float animTime);
-    XMFLOAT4X4 InterpolateScale(const std::vector<KeyScale>& keys, float animTime);
-    XMFLOAT4X4 InterpolateTransform(const BoneAnimation& channel, float animTime);
-    void ReadNodeHierarchy(const aiNode* node, const XMFLOAT4X4& parentTransform, const Animation& anim, float animTime);
-    XMFLOAT4X4 CalculateFinalTransform(int boneIndex, float animTime);
+    XMMATRIX InterpolatePosition(const std::vector<KeyPosition>&, float);
+    XMMATRIX InterpolateRotation(const std::vector<KeyRotation>&, float);
+    XMMATRIX InterpolateScale(const std::vector<KeyScale>&, float);
 
+   
+   
+    void ReadNodeHierarchy(const aiNode* node, const XMMATRIX& parentTransform,
+        const AnimationClip& anim, float animTime);
+
+   
+  
+    
+  
+    
     // Загружает вшитую текстуру из GLB по типу (BASE_COLOR, NORMALS, etc.)
     ID3D11ShaderResourceView* LoadEmbeddedTexture(ID3D11Device* device,
         const aiTexture* tex);
@@ -147,10 +160,10 @@ private:
         ID3D11DeviceContext* deviceContext,
         const aiScene* scene,
         const aiMaterial* mat,
-        aiTextureType type1,
+        aiTextureType type1, 
         aiTextureType type2 = aiTextureType_NONE);
 
-
+  
 
 
 private:
@@ -159,7 +172,7 @@ private:
     TextureClass* m_Texture;
     int                   m_totalIndexCount;
     std::vector<MeshPart> m_meshParts;
-
+    const aiScene* m_scene = nullptr;
 
     // 🔥 ДОБАВЬТЕ КЭШИРОВАНИЕ:
     mutable XMFLOAT3 m_cachedBBMin = XMFLOAT3(FLT_MAX, FLT_MAX, FLT_MAX);

@@ -2285,17 +2285,12 @@ void EditorUI::RenderContentBrowser()
     }
 
     // ✅ DEBUG: Выводим пути перед поиском
-#ifdef _DEBUG
-    OutputDebugStringA(("[CB] relativeDir: '" + relativeDir + "'\n").c_str());
-    OutputDebugStringA(("[CB] Root: " + m_fileSystem->GetRootPath().string() + "\n").c_str());
-#endif
+\
 
     auto entries = m_fileSystem->GetFilteredEntries(relativeDir, query, m_filterExtensions[m_activeFilterIndex]);
 
     // ✅ DEBUG: Сколько файлов найдено
-#ifdef _DEBUG
-    OutputDebugStringA(("[CB] Found " + std::to_string(entries.size()) + " entries\n").c_str());
-#endif
+
 
     RenderFileBrowserList(entries);
 }

@@ -43,7 +43,7 @@ inline void RenderMesh(
     if (!shader) return;
 
     // Обновляем анимацию если модель имеет кости и это PBR шейдер
-    static float animationTime = 0.0f;
+     float animationTime = 0.0f;
     if (deltaTime > 0.0f && model->HasAnimations() && shader->GetType() == ShaderType::PBR)
     {
         animationTime += deltaTime;

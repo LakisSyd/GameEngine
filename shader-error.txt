@@ -1,1 +1,1 @@
-C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Ps\pbr.ps(114,20-26): error X3004: undeclared identifier 'ambient'
+C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Ps\pbr.ps(147,21-55): error X3507: 'PBRPixelShader': Not all control paths return a value
