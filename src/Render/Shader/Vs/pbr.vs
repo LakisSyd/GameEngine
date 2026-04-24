@@ -56,7 +56,7 @@ PixelInputType PBRVertexShader(VertexInputType input)
     PixelInputType output;
     input.position.w = 1.0f;
 
-    float4 skinnedPos = float4(0.0f, 0.0f, 0.0f, 1.0f);
+   float4 skinnedPos = float4(0.0f, 0.0f, 0.0f, 0.0f);  // ← w=0!
     float3 skinnedNormal = float3(0.0f, 0.0f, 0.0f);
     bool hasValidBones = false;
     

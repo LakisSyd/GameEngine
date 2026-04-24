@@ -73,6 +73,7 @@
     <ClCompile Include="src\Scene\gameobject.cpp" />
     <ClCompile Include="src\Scene\Light\LightClass.cpp" />
     <ClCompile Include="src\Scene\SceneManager.cpp" />
+    <ClCompile Include="TinyGltfModelClass.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
@@ -117,6 +118,7 @@
     <ClInclude Include="src\Render\Model\assimpmodelclass.h" />
     <ClInclude Include="src\Render\Model\modelclass.h" />
     <ClInclude Include="src\Render\Model\ModelManager.h" />
+    <ClInclude Include="src\Render\Model\tiny_gltf_v3.h" />
     <ClInclude Include="src\Render\Shader\BaseShader.h" />
     <ClInclude Include="src\Render\Shader\clipplaneshaderclass.h" />
     <ClInclude Include="src\Render\Shader\colorshaderclass.h" />
@@ -142,6 +144,7 @@
     <ClInclude Include="SubmarineBuilder.h" />
     <ClInclude Include="SubmarineSystem.h" />
     <ClInclude Include="TimeManager.h" />
+    <ClInclude Include="TinyGltfModelClass.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shadow.ps" />

@@ -228,6 +228,9 @@
     <ClCompile Include="FileName.h">
       <Filter>ECS</Filter>
     </ClCompile>
+    <ClCompile Include="TinyGltfModelClass.cpp">
+      <Filter>Render\Model</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\HelpFunc\helper.h">
@@ -430,6 +433,12 @@
     </ClInclude>
     <ClInclude Include="lib\VHACD.h">
       <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Model\tiny_gltf_v3.h">
+      <Filter>Render\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="TinyGltfModelClass.h">
+      <Filter>Render\Model</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
