@@ -2285,12 +2285,25 @@ void EditorUI::RenderContentBrowser()
     }
 
     // ✅ DEBUG: Выводим пути перед поиском
+<<<<<<< HEAD
 \
+=======
+#ifdef _DEBUG
+    OutputDebugStringA(("[CB] relativeDir: '" + relativeDir + "'\n").c_str());
+    OutputDebugStringA(("[CB] Root: " + m_fileSystem->GetRootPath().string() + "\n").c_str());
+#endif
+>>>>>>> ccaaba2e827d646a5b57534fa6cc735f8beb8b69
 
     auto entries = m_fileSystem->GetFilteredEntries(relativeDir, query, m_filterExtensions[m_activeFilterIndex]);
 
     // ✅ DEBUG: Сколько файлов найдено
+<<<<<<< HEAD
 
+=======
+#ifdef _DEBUG
+    OutputDebugStringA(("[CB] Found " + std::to_string(entries.size()) + " entries\n").c_str());
+#endif
+>>>>>>> ccaaba2e827d646a5b57534fa6cc735f8beb8b69
 
     RenderFileBrowserList(entries);
 }

@@ -144,7 +144,10 @@
     <ClInclude Include="SubmarineBuilder.h" />
     <ClInclude Include="SubmarineSystem.h" />
     <ClInclude Include="TimeManager.h" />
+<<<<<<< HEAD
     <ClInclude Include="TinyGltfModelClass.h" />
+=======
+>>>>>>> ccaaba2e827d646a5b57534fa6cc735f8beb8b69
   </ItemGroup>
   <ItemGroup>
     <None Include="shadow.ps" />

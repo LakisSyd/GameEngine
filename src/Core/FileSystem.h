@@ -216,7 +216,13 @@ public:
         }
 
         // ✅ DEBUG: Выводим targetStr для проверки
+<<<<<<< HEAD
 
+=======
+#ifdef _DEBUG
+        OutputDebugStringA(("[FS] targetStr: '" + targetStr + "'\n").c_str());
+#endif
+>>>>>>> ccaaba2e827d646a5b57534fa6cc735f8beb8b69
 
         for (const auto& entry : m_files) {
             std::string entryPath = entry.path;
@@ -228,7 +234,17 @@ public:
             std::string parentPath = entryPath.substr(0, lastSlash);
 
             // ✅ DEBUG: Сравниваем пути
+<<<<<<< HEAD
 
+=======
+#ifdef _DEBUG
+            if (results.size() < 3) { // Выводим первые 3 совпадения
+                OutputDebugStringA(("[FS] entry.path: '" + entry.path + "'\n").c_str());
+                OutputDebugStringA(("[FS] parentPath: '" + parentPath + "'\n").c_str());
+                OutputDebugStringA(("[FS] Match: " + std::string(parentPath == targetStr ? "YES" : "NO") + "\n").c_str());
+            }
+#endif
+>>>>>>> ccaaba2e827d646a5b57534fa6cc735f8beb8b69
 
             if (parentPath == targetStr) {
                 results.push_back(&entry);
