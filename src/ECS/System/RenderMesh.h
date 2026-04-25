@@ -35,26 +35,22 @@ inline void RenderMesh(
     const Settings::FogSettings& fog,
     bool                 selected = false,
     XMFLOAT3             cameraPos = { 0.0f, 0.0f, 0.0f },
-    float                deltaTime = 0.0f)
+    float                deltaTime = 0.0f, AnimationComponent* animComp = nullptr)
 {
     if (!model || !material) return;
 
     auto* shader = material->GetShader();
     if (!shader) return;
 
-    // Обновляем анимацию если модель имеет кости и это PBR шейдер
-     float animationTime = 0.0f;
-    if (deltaTime > 0.0f && model->HasAnimations() && shader->GetType() == ShaderType::PBR)
+    if (animComp && deltaTime > 0.0f && model->HasAnimations() && shader->GetType() == ShaderType::PBR)
     {
-        animationTime += deltaTime;
-        model->UpdateAnimation(animationTime, 0);
+      
+        model->SetBoneMatricesFromComponent(context, *animComp);
     }
 
+
     // Передаём матрицы костей в шейдер перед рендерингом
-    if (model->HasAnimations() && shader->GetType() == ShaderType::PBR)
-    {
-        model->SetBoneMatrices(context);
-    }
+  
 
     model->Render(context);
 

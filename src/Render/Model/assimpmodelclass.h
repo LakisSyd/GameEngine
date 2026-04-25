@@ -9,6 +9,7 @@
 #include "TextureClass.h"
 #include <unordered_map>
 #include <algorithm>
+#include "../../../AnimationComponent.h"
 
 class TextureShaderClass;
 class PBRShaderClass;
@@ -56,6 +57,7 @@ public:
 
     bool Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceContext,
         const char* modelPath, const char* textureFilename);
+    void DebugCompareNames();
     void Shutdown();
 
 
@@ -100,6 +102,11 @@ public:
         std::vector<KeyScale> scales;
     };
 
+    void UpdateAnimation(AnimationComponent& animComp, float deltaTime);
+    void SetBoneMatricesFromComponent(ID3D11DeviceContext* context, const AnimationComponent& animComp);
+
+  
+    
 
     struct AnimationClip {
         std::string name;
@@ -113,17 +120,40 @@ public:
         int boneIndex;
     };
 
+    void ReadNodeHierarchyToComponent(
+        const aiNode* node,
+        const DirectX::XMMATRIX& parentTransform,
+        const AnimationClip& anim,              // ← const ref
+        float animTime,
+        std::vector<DirectX::XMFLOAT4X4>& outMatrices) const;  // ← БЕЗ const!
+
+    void ComputeBoneMatrices(int animIndex, float animTime, std::vector<XMFLOAT4X4>& outMatrices) const;
+
+    void PrintModelDebugInfo();
+
+    void DebugAnimationBinding(const AnimationClip& anim);
+
+    const AnimationClip* GetAnimation(int index) const {
+        if (index < 0 || index >= (int)m_animations.size()) return nullptr;
+        return &m_animations[index];
+    }
+
+    [[nodiscard]] size_t GetAnimationCount() const { return m_animations.size(); }
+
+    // Опционально: проверить, есть ли анимации вообще
+    [[nodiscard]] bool HasAnimations() const { return !m_animations.empty(); }
+
     std::unordered_map<std::string, BoneInfo> m_boneInfoMap;  // ключ: имя узла
     std::vector<AnimationClip> m_animations;
     std::vector<XMFLOAT4X4> m_finalBoneMatrices;  // [boneIndex] -> матрица для шейдера
     ID3D11Buffer* m_boneMatrixBuffer;
     float m_animationTime;
 
-    bool HasAnimations() const { return !m_animations.empty(); }
+   
 
-    void UpdateAnimation(float deltaTime, int animIndex);
 
-    void SetBoneMatrices(ID3D11DeviceContext* deviceContext);
+
+    
 
 private:
    
@@ -131,10 +161,10 @@ private:
    
     // Вспомогательные
 
-    XMFLOAT4X4 ConvertMatrix(const aiMatrix4x4& from);
-    XMMATRIX InterpolatePosition(const std::vector<KeyPosition>&, float);
-    XMMATRIX InterpolateRotation(const std::vector<KeyRotation>&, float);
-    XMMATRIX InterpolateScale(const std::vector<KeyScale>&, float);
+    XMFLOAT4X4 ConvertMatrix(const aiMatrix4x4& from) const;
+    XMMATRIX InterpolatePosition(const std::vector<KeyPosition>&, float) const;
+    XMMATRIX InterpolateRotation(const std::vector<KeyRotation>&, float) const;
+    XMMATRIX InterpolateScale(const std::vector<KeyScale>&, float) const;
 
    
    
