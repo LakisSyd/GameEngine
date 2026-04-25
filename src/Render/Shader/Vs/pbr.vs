@@ -75,6 +75,16 @@ PixelInputType PBRVertexShader(VertexInputType input)
         float3x3 boneRot = (float3x3)boneMat;
         skinnedNormal += mul(input.normal, boneRot) * weight;
     }
+    if (!hasValidBones) {
+    // Проверяем, не является ли boneTransforms[0] анимированным
+    matrix rootBone = boneTransforms[0];
+    // Простая проверка: если позиция не (0,0,0) — кость анимирована
+    if (rootBone._41 != 0.0f || rootBone._42 != 0.0f || rootBone._43 != 0.0f) {
+        hasValidBones = true;
+        skinnedPos = mul(input.position, rootBone);
+        skinnedNormal = mul(input.normal, (float3x3)rootBone);
+    }
+}
     
     // 🔥 ВАЖНО: Если нет валидных костей, используем оригинальную позицию
     float4 finalPos = hasValidBones ? skinnedPos : input.position;

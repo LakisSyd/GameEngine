@@ -1,12 +1,5 @@
 ﻿// ============================================================================
-// assimpmodelclass.cpp — Полная реализация с исправленной системой анимаций
-// ============================================================================
-// Исправления:
-// 1. Правильный порядок матриц: offset * global (для DirectX row-major)
-// 2. Сопоставление костей по имени УЗЛА (aiNode::mName), а не кости
-// 3. Нормализация весов костей для каждой вершины
-// 4. Корректная интерполяция и обход иерархии
-// 5. Защита от мусорных данных в константном буфере костей
+// assimpmodelclass.cpp — Полная реализация с расширенной отладкой
 // ============================================================================
 
 #include "assimpmodelclass.h"
@@ -17,7 +10,77 @@
 #include <algorithm>
 #include "PBRShaderClass.h"
 #include <DirectXMath.h>
+#include <functional>
+#include <iomanip>
 using namespace DirectX;
+
+// ============================================================================
+// Глобальные настройки отладки
+// ============================================================================
+#define DEBUG_VERBOSE 1          // Подробный вывод
+#define DEBUG_BONE_MATCHING 1    // Отладка сопоставления костей
+#define DEBUG_TRANSFORMS 1       // Отладка трансформаций
+#define DEBUG_ANIMATION_KEYS 1   // Отладка ключей анимации
+
+static std::string SafeReadAiString(const aiString& aiStr) {
+    if (aiStr.length == 0) return "";
+    // Читаем ровно aiStr.length байт, игнорируя отсутствие \0
+    return std::string(aiStr.C_Str(), aiStr.length);
+}
+
+
+static std::string NormalizeBoneName(std::string name) {
+    // 1. Убираем суффиксы масштабной компенсации
+    size_t pos = name.find("_scaleCompensation");
+    if (pos != std::string::npos) name = name.substr(0, pos);
+
+    // 2. Убираем суффиксы вида _01, _02, _14 и т.д.
+    pos = name.find_last_of('_');
+    if (pos != std::string::npos) {
+        std::string suffix = name.substr(pos + 1);
+        bool isNumber = true;
+        for (char c : suffix) if (!std::isdigit(static_cast<unsigned char>(c))) { isNumber = false; break; }
+        if (isNumber && !suffix.empty()) name = name.substr(0, pos);
+    }
+    return name;
+}
+
+// ============================================================================
+// Вспомогательные функции отладки
+// ============================================================================
+static void PrintMatrix(const XMFLOAT4X4& matrix, const std::string& label) {
+#if DEBUG_VERBOSE
+    char dbg[512];
+    sprintf_s(dbg, "%s:\n"
+        "[%.4f, %.4f, %.4f, %.4f]\n"
+        "[%.4f, %.4f, %.4f, %.4f]\n"
+        "[%.4f, %.4f, %.4f, %.4f]\n"
+        "[%.4f, %.4f, %.4f, %.4f]\n",
+        label.c_str(),
+        matrix._11, matrix._12, matrix._13, matrix._14,
+        matrix._21, matrix._22, matrix._23, matrix._24,
+        matrix._31, matrix._32, matrix._33, matrix._34,
+        matrix._41, matrix._42, matrix._43, matrix._44);
+    OutputDebugStringA(dbg);
+#endif
+}
+
+static void PrintVector3(const XMFLOAT3& vec, const std::string& label) {
+#if DEBUG_VERBOSE
+    char dbg[256];
+    sprintf_s(dbg, "%s: (%.4f, %.4f, %.4f)\n", label.c_str(), vec.x, vec.y, vec.z);
+    OutputDebugStringA(dbg);
+#endif
+}
+
+static void PrintQuaternion(const XMFLOAT4& quat, const std::string& label) {
+#if DEBUG_VERBOSE
+    char dbg[256];
+    sprintf_s(dbg, "%s: (%.4f, %.4f, %.4f, %.4f) [w=%.4f]\n",
+        label.c_str(), quat.x, quat.y, quat.z, quat.w);
+    OutputDebugStringA(dbg);
+#endif
+}
 
 // ============================================================================
 // Конструктор / Деструктор
@@ -35,10 +98,17 @@ AssimpModelClass::AssimpModelClass()
     ZeroMemory(&m_cachedBBMin, sizeof(m_cachedBBMin));
     ZeroMemory(&m_cachedBBMax, sizeof(m_cachedBBMax));
     ZeroMemory(&m_cachedSphereCenter, sizeof(m_cachedSphereCenter));
+
+#if DEBUG_VERBOSE
+    OutputDebugStringA("[AssimpModelClass] Constructor called\n");
+#endif
 }
 
 AssimpModelClass::~AssimpModelClass()
 {
+#if DEBUG_VERBOSE
+    OutputDebugStringA("[AssimpModelClass] Destructor called\n");
+#endif
     Shutdown();
 }
 
@@ -53,7 +123,7 @@ static bool WriteTempFile(const std::string& filename, const char* data, size_t 
     return of.good();
 }
 
-XMFLOAT4X4 AssimpModelClass::ConvertMatrix(const aiMatrix4x4& from)
+XMFLOAT4X4 AssimpModelClass::ConvertMatrix(const aiMatrix4x4& from) const
 {
     XMFLOAT4X4 to;
     // Транспонируем при копировании:
@@ -233,55 +303,82 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
 }
 
 // ============================================================================
-// Загрузка костей — ИСПРАВЛЕННАЯ ВЕРСИЯ
+// Загрузка костей — ИСПРАВЛЕННАЯ ВЕРСИЯ с отладкой
 // ============================================================================
 void AssimpModelClass::LoadBones(const aiScene* scene)
 {
     m_boneInfoMap.clear();
-    m_finalBoneMatrices.clear();  // ← Очистить перед заполнением!
+    m_finalBoneMatrices.clear();
+
+#if DEBUG_VERBOSE
+    OutputDebugStringA("\n========== LOADING BONES ==========\n");
+    OutputDebugStringA(("Total meshes: " + std::to_string(scene->mNumMeshes) + "\n").c_str());
+#endif
 
     int boneCounter = 0;
     for (unsigned int m = 0; m < scene->mNumMeshes; ++m)
     {
         aiMesh* mesh = scene->mMeshes[m];
+#if DEBUG_VERBOSE
+        OutputDebugStringA(("Mesh " + std::to_string(m) + ": " + (mesh->mName.C_Str()[0] ? mesh->mName.C_Str() : "unnamed") + "\n").c_str());
+        OutputDebugStringA(("  Vertices: " + std::to_string(mesh->mNumVertices) + ", Bones: " + std::to_string(mesh->mNumBones) + "\n").c_str());
+#endif
+
         for (unsigned int b = 0; b < mesh->mNumBones; ++b)
         {
             aiBone* bone = mesh->mBones[b];
-            std::string boneName = bone->mName.C_Str();
+            std::string boneName = NormalizeBoneName(bone->mName.C_Str());
+            std::string originalName = bone->mName.C_Str();
+
+#if DEBUG_BONE_MATCHING
+            char dbg[512];
+            sprintf_s(dbg, "  Bone[%d]: original='%s' -> normalized='%s'\n",
+                b, originalName.c_str(), boneName.c_str());
+            OutputDebugStringA(dbg);
+#endif
 
             if (m_boneInfoMap.find(boneName) == m_boneInfoMap.end())
             {
                 BoneInfo info;
                 info.name = boneName;
                 info.offsetMatrix = ConvertMatrix(bone->mOffsetMatrix);
-                char dbg[256];
-                sprintf_s(dbg, "[BONE] %s offset: [%.3f, %.3f, %.3f, %.3f]\n",
-                    boneName.c_str(),
-                    info.offsetMatrix._11, info.offsetMatrix._12,
-                    info.offsetMatrix._13, info.offsetMatrix._14);
-                OutputDebugStringA(dbg);
+
+#if DEBUG_BONE_MATCHING
+                PrintMatrix(info.offsetMatrix, "    OffsetMatrix");
+#endif
+
                 info.boneIndex = boneCounter++;
                 m_boneInfoMap[boneName] = info;
 
+#if DEBUG_VERBOSE
+                OutputDebugStringA(("    [NEW] Added bone: " + boneName + " (index: " + std::to_string(info.boneIndex) + ")\n").c_str());
+#endif
             }
         }
     }
 
-
-
-    // 🔥 ВЫДЕЛИТЬ ПАМЯТЬ И ИНИЦИАЛИЗИРОВАТЬ
+    // Выделяем память и инициализируем
     m_finalBoneMatrices.resize(m_boneInfoMap.size());
     XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
     for (auto& mat : m_finalBoneMatrices) mat = identity;
 
-    OutputDebugStringA(("Loaded " + std::to_string(boneCounter) + " bones\n").c_str());
+#if DEBUG_VERBOSE
+    OutputDebugStringA(("Loaded " + std::to_string(boneCounter) + " unique bones\n").c_str());
+    OutputDebugStringA("========== END BONES ==========\n\n");
+#endif
 }
+
 // ============================================================================
-// Загрузка анимаций — ИСПРАВЛЕННАЯ ВЕРСИЯ
+// Загрузка анимаций — ИСПРАВЛЕННАЯ ВЕРСИЯ с отладкой
 // ============================================================================
 void AssimpModelClass::LoadAnimations(const aiScene* scene)
 {
     m_animations.clear();
+
+#if DEBUG_VERBOSE
+    OutputDebugStringA("\n========== LOADING ANIMATIONS ==========\n");
+    OutputDebugStringA(("Total animations: " + std::to_string(scene->mNumAnimations) + "\n").c_str());
+#endif
 
     for (unsigned int i = 0; i < scene->mNumAnimations; ++i)
     {
@@ -291,13 +388,31 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
         clip.duration = (float)anim->mDuration;
         clip.ticksPerSecond = (anim->mTicksPerSecond == 0.0) ? 24.0f : (float)anim->mTicksPerSecond;
 
+#if DEBUG_VERBOSE
+        OutputDebugStringA(("\nAnimation[" + std::to_string(i) + "]: " + clip.name + "\n").c_str());
+        OutputDebugStringA(("  Duration: " + std::to_string(clip.duration) + " ticks\n").c_str());
+        OutputDebugStringA(("  TicksPerSecond: " + std::to_string(clip.ticksPerSecond) + "\n").c_str());
+        OutputDebugStringA(("  Channels: " + std::to_string(anim->mNumChannels) + "\n").c_str());
+#endif
+
         for (unsigned int c = 0; c < anim->mNumChannels; ++c)
         {
             aiNodeAnim* channel = anim->mChannels[c];
             BoneAnimationChannel boneChannel;
 
-            // 🔥 КЛЮЧЕВОЕ: используем mNodeName — имя узла в иерархии
-            boneChannel.nodeName = channel->mNodeName.C_Str();
+            // КЛЮЧЕВОЕ: используем mNodeName — имя узла в иерархии
+            boneChannel.nodeName = NormalizeBoneName(channel->mNodeName.C_Str());
+            std::string originalNodeName = channel->mNodeName.C_Str();
+
+#if DEBUG_ANIMATION_KEYS
+            char dbg[512];
+            sprintf_s(dbg, "  Channel[%d]: original='%s' -> normalized='%s'\n",
+                c, originalNodeName.c_str(), boneChannel.nodeName.c_str());
+            OutputDebugStringA(dbg);
+            OutputDebugStringA(("    Pos keys: " + std::to_string(channel->mNumPositionKeys) + "\n").c_str());
+            OutputDebugStringA(("    Rot keys: " + std::to_string(channel->mNumRotationKeys) + "\n").c_str());
+            OutputDebugStringA(("    Scale keys: " + std::to_string(channel->mNumScalingKeys) + "\n").c_str());
+#endif
 
             // Позиции
             for (unsigned int k = 0; k < channel->mNumPositionKeys; ++k)
@@ -309,12 +424,18 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
                     channel->mPositionKeys[k].mValue.z);
                 kp.timeStamp = (float)channel->mPositionKeys[k].mTime;
                 boneChannel.positions.push_back(kp);
+
+#if DEBUG_ANIMATION_KEYS && k < 3
+                PrintVector3(kp.position, "      Pos key[" + std::to_string(k) + "]");
+#endif
             }
 
             // Вращения
             for (unsigned int k = 0; k < channel->mNumRotationKeys; ++k)
             {
                 KeyRotation kr;
+                aiQuaternion q = channel->mRotationKeys[k].mValue;
+
                 kr.orientation = XMFLOAT4(
                     channel->mRotationKeys[k].mValue.x,
                     channel->mRotationKeys[k].mValue.y,
@@ -322,6 +443,10 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
                     channel->mRotationKeys[k].mValue.w);
                 kr.timeStamp = (float)channel->mRotationKeys[k].mTime;
                 boneChannel.rotations.push_back(kr);
+
+#if DEBUG_ANIMATION_KEYS && k < 3
+                PrintQuaternion(kr.orientation, "      Rot key[" + std::to_string(k) + "]");
+#endif
             }
 
             // Масштаб
@@ -334,41 +459,26 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
                     channel->mScalingKeys[k].mValue.z);
                 ks.timeStamp = (float)channel->mScalingKeys[k].mTime;
                 boneChannel.scales.push_back(ks);
+
+#if DEBUG_ANIMATION_KEYS && k < 3
+                PrintVector3(ks.scale, "      Scale key[" + std::to_string(k) + "]");
+#endif
             }
 
             clip.channels.push_back(boneChannel);
         }
         m_animations.push_back(clip);
-        OutputDebugStringA(("Loaded animation: " + clip.name + "\n").c_str());
-    
-        OutputDebugStringA(("Name: " + clip.name + "\n").c_str());
-        OutputDebugStringA(("Duration: " + std::to_string(clip.duration) + " ticks\n").c_str());
-        OutputDebugStringA(("TicksPerSecond: " + std::to_string(clip.ticksPerSecond) + "\n").c_str());
-        OutputDebugStringA(("Channels: " + std::to_string(clip.channels.size()) + "\n").c_str());
-
-        for (size_t c = 0; c < clip.channels.size() && c < 3; ++c) {
-            const auto& ch = clip.channels[c];
-            OutputDebugStringA(("  Channel[" + std::to_string(c) + "] node: " + ch.nodeName + "\n").c_str());
-            OutputDebugStringA(("    Pos keys: " + std::to_string(ch.positions.size()) + "\n").c_str());
-            OutputDebugStringA(("    Rot keys: " + std::to_string(ch.rotations.size()) + "\n").c_str());
-            OutputDebugStringA(("    Scale keys: " + std::to_string(ch.scales.size()) + "\n").c_str());
-
-            // 🔥 Выведи первый ключ масштаба — частая причина растяжек!
-            if (!ch.scales.empty()) {
-                const auto& s = ch.scales[0];
-                OutputDebugStringA(("    First scale key: (" +
-                    std::to_string(s.scale.x) + ", " +
-                    std::to_string(s.scale.y) + ", " +
-                    std::to_string(s.scale.z) + ")\n").c_str());
-            }
-        }
     }
+
+#if DEBUG_VERBOSE
+    OutputDebugStringA("========== END ANIMATIONS ==========\n\n");
+#endif
 }
 
 // ============================================================================
-// Интерполяция трансформаций
+// Интерполяция трансформаций с отладкой
 // ============================================================================
-XMMATRIX AssimpModelClass::InterpolatePosition(const std::vector<KeyPosition>& keys, float animTime)
+XMMATRIX AssimpModelClass::InterpolatePosition(const std::vector<KeyPosition>& keys, float animTime) const
 {
     if (keys.empty()) return XMMatrixIdentity();
     if (keys.size() == 1)
@@ -383,6 +493,13 @@ XMMATRIX AssimpModelClass::InterpolatePosition(const std::vector<KeyPosition>& k
     if (dt < 0.0001f) dt = 1.0f;
     float factor = std::clamp((animTime - k1.timeStamp) / dt, 0.0f, 1.0f);
 
+#if DEBUG_TRANSFORMS && false // Включите для отладки интерполяции
+    char dbg[256];
+    sprintf_s(dbg, "[InterpPos] factor=%.3f, t1=%.3f, t2=%.3f, animTime=%.3f\n",
+        factor, k1.timeStamp, k2.timeStamp, animTime);
+    OutputDebugStringA(dbg);
+#endif
+
     XMFLOAT3 interp(
         k1.position.x + factor * (k2.position.x - k1.position.x),
         k1.position.y + factor * (k2.position.y - k1.position.y),
@@ -391,7 +508,7 @@ XMMATRIX AssimpModelClass::InterpolatePosition(const std::vector<KeyPosition>& k
     return XMMatrixTranslation(interp.x, interp.y, interp.z);
 }
 
-XMMATRIX AssimpModelClass::InterpolateRotation(const std::vector<KeyRotation>& keys, float animTime)
+XMMATRIX AssimpModelClass::InterpolateRotation(const std::vector<KeyRotation>& keys, float animTime) const
 {
     if (keys.empty()) return XMMatrixIdentity();
     if (keys.size() == 1)
@@ -411,7 +528,7 @@ XMMATRIX AssimpModelClass::InterpolateRotation(const std::vector<KeyRotation>& k
     return XMMatrixRotationQuaternion(XMQuaternionSlerp(q1, q2, factor));
 }
 
-XMMATRIX AssimpModelClass::InterpolateScale(const std::vector<KeyScale>& keys, float animTime)
+XMMATRIX AssimpModelClass::InterpolateScale(const std::vector<KeyScale>& keys, float animTime) const
 {
     if (keys.empty()) return XMMatrixIdentity();
     if (keys.size() == 1)
@@ -426,24 +543,23 @@ XMMATRIX AssimpModelClass::InterpolateScale(const std::vector<KeyScale>& keys, f
     if (dt < 0.0001f) dt = 1.0f;
     float factor = std::clamp((animTime - k1.timeStamp) / dt, 0.0f, 1.0f);
 
+#if DEBUG_TRANSFORMS && false
+    char dbg[256];
+    sprintf_s(dbg, "[InterpScale] factor=%.3f, scale1=(%.3f,%.3f,%.3f), scale2=(%.3f,%.3f,%.3f)\n",
+        factor, k1.scale.x, k1.scale.y, k1.scale.z, k2.scale.x, k2.scale.y, k2.scale.z);
+    OutputDebugStringA(dbg);
+#endif
+
     XMFLOAT3 interp(
         k1.scale.x + factor * (k2.scale.x - k1.scale.x),
         k1.scale.y + factor * (k2.scale.y - k1.scale.y),
         k1.scale.z + factor * (k2.scale.z - k1.scale.z));
-    static bool logged = false;
-    if (!logged) {
-        char dbg[256];
-        sprintf_s(dbg, "[SCALE] factor=%.2f -> (%.3f, %.3f, %.3f)\n",
-            factor, interp.x, interp.y, interp.z);
-        OutputDebugStringA(dbg);
-        logged = true;  // Убери эту строку, если хочешь лог каждый кадр
-    }
 
     return XMMatrixScaling(interp.x, interp.y, interp.z);
 }
 
 // ============================================================================
-// ReadNodeHierarchy — ОСНОВНАЯ ЛОГИКА АНИМАЦИИ (ИСПРАВЛЕНА)
+// ReadNodeHierarchy — ОСНОВНАЯ ЛОГИКА АНИМАЦИИ с отладкой
 // ============================================================================
 void AssimpModelClass::ReadNodeHierarchy(
     const aiNode* node,
@@ -451,17 +567,38 @@ void AssimpModelClass::ReadNodeHierarchy(
     const AnimationClip& anim,
     float animTimeInSeconds)
 {
-    std::string nodeName = node->mName.C_Str();
+    std::string nodeName = NormalizeBoneName(node->mName.C_Str());
+    std::string originalNodeName = node->mName.C_Str();
+
+#if DEBUG_TRANSFORMS
+    static int depth = 0;
+    std::string indent(depth * 2, ' ');
+    char dbg[512];
+    sprintf_s(dbg, "%s[Node] '%s' (orig: '%s'), depth=%d\n",
+        indent.c_str(), nodeName.c_str(), originalNodeName.c_str(), depth);
+    OutputDebugStringA(dbg);
+    depth++;
+#endif
 
     // 1. Локальная трансформация из сцены
     XMFLOAT4X4 nodeLocalFloat = ConvertMatrix(node->mTransformation);
     XMMATRIX nodeTransform = XMLoadFloat4x4(&nodeLocalFloat);
 
+#if DEBUG_TRANSFORMS && false
+    PrintMatrix(nodeLocalFloat, indent + "  NodeLocal");
+#endif
+
     // 2. Ищем анимационный канал для ЭТОГО УЗЛА
     const BoneAnimationChannel* channel = nullptr;
     for (const auto& ch : anim.channels)
     {
-        if (ch.nodeName == nodeName) { channel = &ch; break; }
+        if (ch.nodeName == nodeName) {
+            channel = &ch;
+#if DEBUG_TRANSFORMS
+            OutputDebugStringA((indent + "  ✓ Found animation channel\n").c_str());
+#endif
+            break;
+        }
     }
 
     // 3. Если есть анимация — переопределяем локальную трансформацию
@@ -473,10 +610,18 @@ void AssimpModelClass::ReadNodeHierarchy(
 
         // Порядок: Scale → Rotate → Translate (локальное пространство)
         nodeTransform = scaleMat * rotMat * posMat;
+
+#if DEBUG_TRANSFORMS && false
+        PrintMatrix(nodeTransform, indent + "  AnimatedLocal");
+#endif
     }
 
     // 4. Глобальная трансформация = родитель * локальная
     XMMATRIX globalTransform = nodeTransform * parentTransform;
+
+#if DEBUG_TRANSFORMS && false
+    PrintMatrix(globalTransform, indent + "  Global");
+#endif
 
     // 5. Если этот узел — кость, вычисляем финальную матрицу для шейдера
     auto boneIt = m_boneInfoMap.find(nodeName);
@@ -488,6 +633,20 @@ void AssimpModelClass::ReadNodeHierarchy(
         // ✅ ПРАВИЛЬНЫЙ ПОРЯДОК для DirectX: offset * global
         XMMATRIX finalMat = globalTransform * offsetMat;
         XMStoreFloat4x4(&m_finalBoneMatrices[boneIndex], finalMat);
+
+#if DEBUG_TRANSFORMS
+        sprintf_s(dbg, "%s  [Bone] '%s' (idx=%d) -> final matrix set\n",
+            indent.c_str(), nodeName.c_str(), boneIndex);
+        OutputDebugStringA(dbg);
+
+        // Выводим первую матрицу для отладки
+        static bool firstBonePrinted = false;
+        if (!firstBonePrinted && boneIndex == 0) {
+            XMFLOAT4X4 temp; XMStoreFloat4x4(&temp, nodeTransform);
+            PrintMatrix(temp, indent + "  NodeLocal");
+            firstBonePrinted = true;
+        }
+#endif
     }
 
     // 6. Рекурсия по детям
@@ -495,62 +654,14 @@ void AssimpModelClass::ReadNodeHierarchy(
     {
         ReadNodeHierarchy(node->mChildren[i], globalTransform, anim, animTimeInSeconds);
     }
+
+#if DEBUG_TRANSFORMS
+    depth--;
+#endif
 }
 
 // ============================================================================
-// Обновление анимации и отправка матриц в шейдер
-// ============================================================================
-void AssimpModelClass::UpdateAnimation(float deltaTime, int animIndex)
-{
-    if (m_animations.empty() || animIndex >= (int)m_animations.size()) return;
-
-    const AnimationClip& anim = m_animations[animIndex];
-    if (anim.duration <= 0.001f) return;
-
-    float ticksPerSecond = anim.ticksPerSecond > 0.0f ? anim.ticksPerSecond : 24.0f;
-
-    // 🔥 Считаем время в тиках и сразу зацикливаем
-    float timeInTicks = m_animationTime * ticksPerSecond;
-    float animTime = fmodf(timeInTicks, anim.duration);
-    if (animTime < 0.0f) animTime += anim.duration;
-
-   //animTime = 0.0f;
-
-    // 🔥 СБРОС: не даём m_animationTime расти бесконечно
-    if (m_animationTime >= anim.duration / ticksPerSecond)
-        m_animationTime = 0.0f;  // или: m_animationTime -= anim.duration / ticksPerSecond;
-    else
-        m_animationTime += deltaTime;
-
-    if (m_scene && m_scene->mRootNode)
-    {
-        XMMATRIX identity = XMMatrixIdentity();
-        ReadNodeHierarchy(m_scene->mRootNode, identity, anim, animTime);
-    }
-}
-
-void AssimpModelClass::SetBoneMatrices(ID3D11DeviceContext* deviceContext)
-{
-    if (!deviceContext || m_finalBoneMatrices.empty() || !m_boneMatrixBuffer)
-        return;
-
-    D3D11_MAPPED_SUBRESOURCE mapped = {};
-    HRESULT hr = deviceContext->Map(m_boneMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (FAILED(hr)) return;
-
-    auto* dst = reinterpret_cast<XMFLOAT4X4*>(mapped.pData);
-    XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
-
-    // 🔥 Заполняем ВСЕ 128 слотов. Мусор = исключён.
-    for (int i = 0; i < 128; ++i) {
-        dst[i] = (i < (int)m_finalBoneMatrices.size()) ? m_finalBoneMatrices[i] : identity;
-    }
-
-    deviceContext->Unmap(m_boneMatrixBuffer, 0);
-    deviceContext->VSSetConstantBuffers(8, 1, &m_boneMatrixBuffer);
-}
-// ============================================================================
-// Initialize — главная функция загрузки
+// Initialize — главная функция загрузки с отладкой
 // ============================================================================
 bool AssimpModelClass::Initialize(
     ID3D11Device* device,
@@ -558,16 +669,22 @@ bool AssimpModelClass::Initialize(
     const char* modelPath,
     const char* textureFilename)
 {
+#if DEBUG_VERBOSE
+    OutputDebugStringA(("\n========== INITIALIZING MODEL: " + std::string(modelPath) + " ==========\n").c_str());
+#endif
+
     Shutdown();
     m_scene = nullptr;
 
     try {
         m_scene = m_importer.ReadFile(modelPath,
             aiProcess_Triangulate |
-            aiProcess_FlipUVs |
-            aiProcess_GenSmoothNormals |
+            aiProcess_ConvertToLeftHanded |
             aiProcess_CalcTangentSpace |
-            aiProcess_LimitBoneWeights); // ❌ Убери ValidateDataStructure и PreTransformVertices
+            aiProcess_GenSmoothNormals |
+            aiProcess_LimitBoneWeights 
+            
+            );
     }
     catch (const std::exception& e) {
         OutputDebugStringA(("Assimp Exception: " + std::string(e.what()) + "\n").c_str());
@@ -579,7 +696,11 @@ bool AssimpModelClass::Initialize(
         return false;
     }
 
-    OutputDebugStringA(("Assimp: Model loaded. Meshes: " + std::to_string(m_scene->mNumMeshes) + "\n").c_str());
+#if DEBUG_VERBOSE
+    OutputDebugStringA(("Assimp: Model loaded. Meshes: " + std::to_string(m_scene->mNumMeshes) +
+        ", Materials: " + std::to_string(m_scene->mNumMaterials) +
+        ", Animations: " + std::to_string(m_scene->mNumAnimations) + "\n").c_str());
+#endif
 
     m_totalIndexCount = 0;
     m_meshParts.clear();
@@ -588,11 +709,13 @@ bool AssimpModelClass::Initialize(
     m_animations.clear();
     m_animationTime = 0.0f;
 
-    // 🔥 2. Загружаем кости и анимации
+    // Загружаем кости и анимации
     LoadBones(m_scene);
     LoadAnimations(m_scene);
 
-    // 🔥 3. Создаём буфер костей СРАЗУ (чтобы Map не падал)
+
+
+    // Создаём буфер костей
     if (!m_finalBoneMatrices.empty())
     {
         ID3D11Device* dev = nullptr;
@@ -610,11 +733,16 @@ bool AssimpModelClass::Initialize(
         }
     }
 
-    // 🔥 4. Загружаем меши
+    // Загружаем меши
     for (unsigned int i = 0; i < m_scene->mNumMeshes; ++i)
     {
         aiMesh* mesh = m_scene->mMeshes[i];
         if (mesh->mNumVertices == 0) continue;
+
+#if DEBUG_VERBOSE
+        OutputDebugStringA(("Processing mesh " + std::to_string(i) + ": " +
+            (mesh->mName.C_Str()[0] ? mesh->mName.C_Str() : "unnamed") + "\n").c_str());
+#endif
 
         MeshPart part;
         part.indexCount = static_cast<int>(mesh->mNumFaces) * 3;
@@ -625,7 +753,7 @@ bool AssimpModelClass::Initialize(
 
         for (unsigned int j = 0; j < mesh->mNumVertices; ++j)
         {
-            VertexType v = {}; // 🔥 Zero-init всей структуры!
+            VertexType v = {};
 
             v.position = XMFLOAT3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
             v.texture = mesh->HasTextureCoords(0) ? XMFLOAT2(mesh->mTextureCoords[0][j].x, mesh->mTextureCoords[0][j].y) : XMFLOAT2(0, 0);
@@ -635,13 +763,13 @@ bool AssimpModelClass::Initialize(
                 v.binormal = XMFLOAT3(mesh->mBitangents[j].x, mesh->mBitangents[j].y, mesh->mBitangents[j].z);
             }
 
-            // 🔥 Гарантируем валидные веса
+            // Гарантируем валидные веса
             for (int b = 0; b < 4; ++b) {
                 v.boneIDs[b] = -1;
                 v.boneWeights[b] = 0.0f;
             }
 
-            // Назначение весов (твой код, но без break внутри вложенного цикла!)
+            // Назначение весов
             for (unsigned int b = 0; b < mesh->mNumBones; ++b)
             {
                 aiBone* bone = mesh->mBones[b];
@@ -649,7 +777,7 @@ bool AssimpModelClass::Initialize(
                 {
                     if (bone->mWeights[w].mVertexId == j)
                     {
-                        auto it = m_boneInfoMap.find(bone->mName.C_Str());
+                        auto it = m_boneInfoMap.find(NormalizeBoneName(bone->mName.C_Str()));
                         if (it == m_boneInfoMap.end()) continue;
 
                         int boneIdx = it->second.boneIndex;
@@ -664,12 +792,12 @@ bool AssimpModelClass::Initialize(
                             v.boneIDs[minSlot] = boneIdx;
                             v.boneWeights[minSlot] = weight;
                         }
-                        break; // переходим к следующей кости
+                        break;
                     }
                 }
             }
 
-            // 🔥 Нормализация
+            // Нормализация весов
             float sum = v.boneWeights[0] + v.boneWeights[1] + v.boneWeights[2] + v.boneWeights[3];
             if (sum > 0.0001f) {
                 v.boneWeights[0] /= sum; v.boneWeights[1] /= sum;
@@ -678,11 +806,12 @@ bool AssimpModelClass::Initialize(
             else {
                 v.boneIDs[0] = 0; v.boneWeights[0] = 1.0f;
             }
-
+            if (mesh->mNumBones == 0) {
+                // 🔥 Устанавливаем корневую кость для нодовой анимации
+                v.boneIDs[0] = 0;      // вместо -1
+                v.boneWeights[0] = 1.0f;
+            }
             vertices.push_back(v);
-            // После нормализации весов:
-        
-           
         }
 
         // Индексы
@@ -768,7 +897,49 @@ bool AssimpModelClass::Initialize(
     GetBoundingSphere(&m_cachedSphereCenter, &m_cachedSphereRadius);
     m_boundsCached = true;
 
+#ifdef _DEBUG
+    DebugCompareNames();
+#endif
+
+#if DEBUG_VERBOSE
+    OutputDebugStringA("========== MODEL INITIALIZED SUCCESSFULLY ==========\n\n");
+#endif
     return true;
+}
+
+void AssimpModelClass::DebugCompareNames()
+{
+    OutputDebugStringA("=== NAME COMPARISON DEBUG ===\n");
+
+    // 1. Кости (из мешей)
+    OutputDebugStringA("--- Bones (aiBone::mName) ---\n");
+    for (const auto& [name, info] : m_boneInfoMap) {
+        OutputDebugStringA(("  BONE: [" + name + "] (index: " + std::to_string(info.boneIndex) + ")\n").c_str());
+    }
+
+    // 2. Узлы иерархии (aiNode::mName)
+    std::function<void(const aiNode*, int)> dumpNodes = [&](const aiNode* node, int depth) {
+        std::string indent(depth * 2, ' ');
+        std::string name = node->mName.C_Str();
+        bool isBone = m_boneInfoMap.count(NormalizeBoneName(name)) > 0;
+        OutputDebugStringA((indent + "NODE: [" + name + "]" + (isBone ? " ✓bone" : "") + "\n").c_str());
+        for (unsigned i = 0; i < node->mNumChildren; ++i)
+            dumpNodes(node->mChildren[i], depth + 1);
+        };
+    if (m_scene && m_scene->mRootNode) {
+        OutputDebugStringA("--- Nodes (aiNode::mName) ---\n");
+        dumpNodes(m_scene->mRootNode, 0);
+    }
+
+    // 3. Анимационные каналы (aiNodeAnim::mNodeName)
+    OutputDebugStringA("--- Animation Channels (aiNodeAnim::mNodeName) ---\n");
+    for (const auto& anim : m_animations) {
+        OutputDebugStringA(("  Anim: " + anim.name + "\n").c_str());
+        for (size_t c = 0; c < anim.channels.size() && c < 10; ++c) {
+            OutputDebugStringA(("    CH[" + std::to_string(c) + "]: [" + anim.channels[c].nodeName + "]\n").c_str());
+        }
+    }
+    OutputDebugStringA("=== END DEBUG ===\n");
 }
 
 // ============================================================================
@@ -776,6 +947,10 @@ bool AssimpModelClass::Initialize(
 // ============================================================================
 void AssimpModelClass::Shutdown()
 {
+#if DEBUG_VERBOSE
+    OutputDebugStringA("[Shutdown] Cleaning up...\n");
+#endif
+
     for (auto& part : m_meshParts) {
         if (part.vertexBuffer) { part.vertexBuffer->Release(); part.vertexBuffer = nullptr; }
         if (part.indexBuffer) { part.indexBuffer->Release(); part.indexBuffer = nullptr; }
@@ -818,17 +993,8 @@ void AssimpModelClass::RenderAll(
     PBRShaderClass* shader,
     XMMATRIX world, XMMATRIX view, XMMATRIX proj)
 {
-
-    static int callCount = 0;
-    OutputDebugStringA(("[RENDER] RenderAll call #" + std::to_string(++callCount) + "\n").c_str());
     if (m_meshParts.empty()) return;
     unsigned int stride = sizeof(VertexType), offset = 0;
-
-    // Обновление анимации
-    if (HasAnimations()) {
-        UpdateAnimation(0.016f, 0);
-        SetBoneMatrices(deviceContext);
-    }
 
     for (const auto& part : m_meshParts)
     {
@@ -941,4 +1107,305 @@ void AssimpModelClass::GetRawTriangles(std::vector<XMFLOAT3>& out) const {
                     mesh->mVertices[face.mIndices[k]].z);
         }
     }
+}
+
+// ============================================================================
+// Обновление анимации с компонентом — с расширенной отладкой
+// ============================================================================
+void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float deltaTime)
+{
+    if (!animComp.isPlaying) return;
+    if (m_animations.empty() || animComp.animationIndex < 0 || animComp.animationIndex >= (int)m_animations.size()) return;
+
+    const AnimationClip& anim = m_animations[animComp.animationIndex];
+    if (anim.duration <= 0.001f) return;
+
+    float ticksPerSecond = (anim.ticksPerSecond > 0.0f) ? anim.ticksPerSecond : 24.0f;
+
+    // 1. Накапливаем время
+    animComp.currentTime += deltaTime;
+
+    // 2. Зацикливание в секундах
+    float animDurationSec = anim.duration / ticksPerSecond;
+    if (animDurationSec > 0.0f) {
+        animComp.currentTime = fmodf(animComp.currentTime, animDurationSec);
+        if (animComp.currentTime < 0.0f) animComp.currentTime += animDurationSec;
+    }
+    else {
+        animComp.currentTime = 0.0f;
+    }
+
+    // 3. Конвертируем в тики для интерполяции (уже зациклено!)
+    float animTimeTicks = animComp.currentTime * ticksPerSecond;
+    animTimeTicks = fmodf(animTimeTicks, anim.duration);
+    if (animTimeTicks < 0.0f) animTimeTicks += anim.duration;
+
+    // 4. 🔥 КРИТИЧЕСКОЕ: гарантируем, что буфер нужного размера
+    size_t boneCount = m_boneInfoMap.size();
+    if (animComp.finalBoneMatrices.size() != boneCount) {
+        animComp.finalBoneMatrices.resize(boneCount);
+    }
+
+    // Инициализируем идентичными матрицами
+    XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
+    for (size_t i = 0; i < boneCount; ++i) {
+        animComp.finalBoneMatrices[i] = identity;
+    }
+
+    // 5. Вызываем вашу РАБОЧУЮ версию функции
+    if (m_scene && m_scene->mRootNode) {
+        ReadNodeHierarchyToComponent(m_scene->mRootNode, XMMatrixIdentity(), anim, animTimeTicks, animComp.finalBoneMatrices);
+    }
+}
+
+void AssimpModelClass::SetBoneMatricesFromComponent(ID3D11DeviceContext* context, const AnimationComponent& animComp) {
+    if (!context || animComp.finalBoneMatrices.empty() || !m_boneMatrixBuffer) return;
+
+    D3D11_MAPPED_SUBRESOURCE mapped = {};
+    HRESULT hr = context->Map(m_boneMatrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
+    if (FAILED(hr)) return;
+
+    auto* dst = reinterpret_cast<XMFLOAT4X4*>(mapped.pData);
+    DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
+
+    // Заполняем ВСЕ 128 слотов
+    for (int i = 0; i < 128; ++i) {
+        dst[i] = (i < (int)animComp.finalBoneMatrices.size()) ? animComp.finalBoneMatrices[i]
+            : *reinterpret_cast<XMFLOAT4X4*>(&identity);
+    }
+
+    context->Unmap(m_boneMatrixBuffer, 0);
+    context->VSSetConstantBuffers(8, 1, &m_boneMatrixBuffer);
+
+#if DEBUG_TRANSFORMS
+    // Выводим первую матрицу для проверки
+    if (!animComp.finalBoneMatrices.empty()) {
+        PrintMatrix(animComp.finalBoneMatrices[0], "[SetBoneMatrices] First bone matrix");
+    }
+#endif
+}
+
+void AssimpModelClass::ReadNodeHierarchyToComponent(
+    const aiNode* node,
+    const DirectX::XMMATRIX& parentTransform,
+    const AnimationClip& anim,
+    float animTime,
+    std::vector<DirectX::XMFLOAT4X4>& outMatrices) const
+{
+    if (outMatrices.empty()) {
+        OutputDebugStringA("[ReadNodeHierarchy] ⚠️ outMatrices is EMPTY!\n");
+        return;
+    }
+
+    // Безопасное чтение имени
+    std::string rawName = (node->mName.length > 0) ? std::string(node->mName.C_Str(), node->mName.length) : "";
+    std::string nodeName = NormalizeBoneName(rawName);
+
+    // 🔥 ЛОГИРУЕМ ПЕРВЫЕ 20 УЗЛОВ для отладки
+    static int debugCount = 0;
+    if (debugCount < 20) {
+        char dbg[512];
+        sprintf_s(dbg, "[Node %d] Raw='%s' | Norm='%s' | Children=%u\n",
+            debugCount, rawName.c_str(), nodeName.c_str(), node->mNumChildren);
+        OutputDebugStringA(dbg);
+        debugCount++;
+    }
+
+    // Загрузка локальной трансформации
+    XMFLOAT4X4 nodeLocalFloat = ConvertMatrix(node->mTransformation);
+    DirectX::XMMATRIX nodeTransform = DirectX::XMLoadFloat4x4(&nodeLocalFloat);
+
+    // Поиск канала анимации
+    const BoneAnimationChannel* channel = nullptr;
+    for (const auto& ch : anim.channels) {
+        if (ch.nodeName == nodeName) {
+            channel = &ch;
+            if (debugCount <= 20) OutputDebugStringA(("  ✓ Channel found: '" + ch.nodeName + "'\n").c_str());
+            break;
+        }
+    }
+
+    // Применяем анимацию
+    if (channel) {
+        XMMATRIX posMat = (channel->positions.size() >= 2) ? InterpolatePosition(channel->positions, animTime) :
+            (channel->positions.empty() ? XMMatrixIdentity() : XMMatrixTranslation(channel->positions[0].position.x, channel->positions[0].position.y, channel->positions[0].position.z));
+        XMMATRIX rotMat = (channel->rotations.size() >= 2) ? InterpolateRotation(channel->rotations, animTime) :
+            (channel->rotations.empty() ? XMMatrixIdentity() : XMMatrixRotationQuaternion(XMLoadFloat4(&channel->rotations[0].orientation)));
+        XMMATRIX scaleMat = (channel->scales.size() >= 2) ? InterpolateScale(channel->scales, animTime) :
+            (channel->scales.empty() ? XMMatrixIdentity() : XMMatrixScaling(channel->scales[0].scale.x, channel->scales[0].scale.y, channel->scales[0].scale.z));
+
+        nodeTransform = scaleMat * rotMat * posMat;
+    }
+
+    DirectX::XMMATRIX globalTransform = nodeTransform * parentTransform;
+
+    // 🔥 Ищем кость — с ДВУМЯ попытками
+    auto boneIt = m_boneInfoMap.find(nodeName);
+
+    // Попытка 2: ищем по оригинальному имени
+    if (boneIt == m_boneInfoMap.end() && !rawName.empty()) {
+        boneIt = m_boneInfoMap.find(rawName);
+        if (boneIt != m_boneInfoMap.end() && debugCount <= 20) {
+            OutputDebugStringA(("  🔁 Fallback: '" + nodeName + "' -> '" + rawName + "'\n").c_str());
+        }
+    }
+
+    // Попытка 3: ищем по имени канала
+    if (boneIt == m_boneInfoMap.end() && channel) {
+        boneIt = m_boneInfoMap.find(channel->nodeName);
+        if (boneIt != m_boneInfoMap.end() && debugCount <= 20) {
+            OutputDebugStringA(("  🔁 Fallback: '" + nodeName + "' -> Channel='" + channel->nodeName + "'\n").c_str());
+        }
+    }
+
+    if(boneIt != m_boneInfoMap.end()) {
+        // === СКЕЛЕТНАЯ АНИМАЦИЯ ===
+        int boneIndex = boneIt->second.boneIndex;
+        if (boneIndex >= 0 && boneIndex < (int)outMatrices.size()) {
+            DirectX::XMMATRIX offsetMat = DirectX::XMLoadFloat4x4(&boneIt->second.offsetMatrix);
+            DirectX::XMMATRIX finalMat = offsetMat * globalTransform;
+            DirectX::XMStoreFloat4x4(&outMatrices[boneIndex], finalMat);
+        }
+    }
+    else {
+        // === НОДОВАЯ АНИМАЦИЯ (без костей) ===
+        // Записываем ТОЛЬКО локальную анимированную трансформацию, без global/parent
+        if (!outMatrices.empty() && channel != nullptr) {
+            // nodeTransform уже содержит анимацию (scale*rot*pos)
+            // НЕ умножаем на parentTransform — это сделает шейдер через worldMatrix
+            DirectX::XMStoreFloat4x4(&outMatrices[0], globalTransform);
+
+            static bool logged = false;
+            if (!logged) {
+                OutputDebugStringA(("  [NodeAnim] Writing LOCAL transform to slot 0: '" + nodeName + "'\n").c_str());
+                logged = true;
+            }
+        }
+    }
+
+    // Рекурсия
+    for (unsigned int i = 0; i < node->mNumChildren; ++i) {
+        ReadNodeHierarchyToComponent(node->mChildren[i], globalTransform, anim, animTime, outMatrices);
+    }
+    
+}
+void AssimpModelClass::ComputeBoneMatrices(int animIndex, float animTime,
+    std::vector<XMFLOAT4X4>& outMatrices) const {
+    if (animIndex < 0 || animIndex >= (int)m_animations.size()) return;
+    if (m_scene && m_scene->mRootNode) {
+        outMatrices.resize(m_boneInfoMap.size());
+        XMMATRIX identity = XMMatrixIdentity();
+        for (auto& m : outMatrices) XMStoreFloat4x4(&m, identity);
+
+        ReadNodeHierarchyToComponent(m_scene->mRootNode, identity,
+            m_animations[animIndex], animTime, outMatrices);
+
+    }
+}
+
+// ============================================================================
+// Функция для вывода полной информации о модели (для отладки)
+// ============================================================================
+void AssimpModelClass::PrintModelDebugInfo() {
+#if DEBUG_VERBOSE
+    OutputDebugStringA("\n========== MODEL DEBUG INFO ==========\n");
+
+    // Информация о сцене
+    if (m_scene) {
+        OutputDebugStringA(("Scene: meshes=" + std::to_string(m_scene->mNumMeshes) +
+            ", materials=" + std::to_string(m_scene->mNumMaterials) +
+            ", textures=" + std::to_string(m_scene->mNumTextures) +
+            ", animations=" + std::to_string(m_scene->mNumAnimations) + "\n").c_str());
+
+        // Корневой узел
+        if (m_scene->mRootNode) {
+            OutputDebugStringA(("Root node: '" + std::string(m_scene->mRootNode->mName.C_Str()) +
+                "', children=" + std::to_string(m_scene->mRootNode->mNumChildren) + "\n").c_str());
+        }
+    }
+
+    // Информация о костях
+    OutputDebugStringA(("Bones: " + std::to_string(m_boneInfoMap.size()) + "\n").c_str());
+    for (const auto& [name, info] : m_boneInfoMap) {
+        OutputDebugStringA(("  Bone[" + std::to_string(info.boneIndex) + "]: '" + name + "'\n").c_str());
+    }
+
+    // Информация об анимациях
+    OutputDebugStringA(("Animations: " + std::to_string(m_animations.size()) + "\n").c_str());
+    for (size_t i = 0; i < m_animations.size(); ++i) {
+        const auto& anim = m_animations[i];
+        OutputDebugStringA(("  Anim[" + std::to_string(i) + "]: '" + anim.name +
+            "', duration=" + std::to_string(anim.duration) +
+            ", channels=" + std::to_string(anim.channels.size()) + "\n").c_str());
+
+        for (size_t c = 0; c < anim.channels.size() && c < 5; ++c) {
+            const auto& ch = anim.channels[c];
+            OutputDebugStringA(("    Channel[" + std::to_string(c) + "]: '" + ch.nodeName +
+                "', pos=" + std::to_string(ch.positions.size()) +
+                ", rot=" + std::to_string(ch.rotations.size()) +
+                ", scale=" + std::to_string(ch.scales.size()) + "\n").c_str());
+        }
+    }
+
+    // Информация о меши
+    OutputDebugStringA(("Mesh parts: " + std::to_string(m_meshParts.size()) + "\n").c_str());
+    for (size_t i = 0; i < m_meshParts.size(); ++i) {
+        const auto& part = m_meshParts[i];
+        OutputDebugStringA(("  Mesh[" + std::to_string(i) + "]: indices=" + std::to_string(part.indexCount) +
+            ", texture=" + (part.texture ? "yes" : "no") +
+            ", normalMap=" + (part.normalMap ? "yes" : "no") + "\n").c_str());
+    }
+
+    OutputDebugStringA("========== END DEBUG INFO ==========\n\n");
+#endif
+}
+
+// ============================================================================
+// 🔥 КРИТИЧЕСКАЯ ДИАГНОСТИКА для нефтяного насоса
+// ============================================================================
+void AssimpModelClass::DebugAnimationBinding(const AnimationClip& anim) {
+    OutputDebugStringA("\n========== ANIMATION BINDING DEBUG ==========\n");
+
+    // 1. Список всех костей
+    OutputDebugStringA("--- Registered Bones ---\n");
+    for (const auto& [name, info] : m_boneInfoMap) {
+        OutputDebugStringA(("  BONE[" + std::to_string(info.boneIndex) + "]: '" + name + "'\n").c_str());
+    }
+
+    // 2. Список каналов анимации и их привязка
+    OutputDebugStringA("--- Animation Channels Binding ---\n");
+    int bound = 0, unbound = 0;
+
+    for (size_t c = 0; c < anim.channels.size(); ++c) {
+        const auto& ch = anim.channels[c];
+        auto it = m_boneInfoMap.find(ch.nodeName);
+
+        if (it != m_boneInfoMap.end()) {
+            OutputDebugStringA(("  ✓ CH[" + std::to_string(c) + "] '" + ch.nodeName +
+                "' -> BONE[" + std::to_string(it->second.boneIndex) + "]\n").c_str());
+            bound++;
+        }
+        else {
+            OutputDebugStringA(("  ✗ CH[" + std::to_string(c) + "] '" + ch.nodeName +
+                "' -> NOT FOUND in bone map!\n").c_str());
+            unbound++;
+        }
+    }
+
+    OutputDebugStringA(("Summary: bound=" + std::to_string(bound) +
+        ", unbound=" + std::to_string(unbound) + "\n").c_str());
+
+    // 3. Проверка первой матрицы
+    if (!m_finalBoneMatrices.empty()) {
+        XMFLOAT4X4& m = m_finalBoneMatrices[0];
+        bool isZero = (m._11 == 1 && m._22 == 1 && m._33 == 1 && m._44 == 1 &&
+            m._12 == 0 && m._13 == 0 && m._14 == 0 &&
+            m._21 == 0 && m._23 == 0 && m._24 == 0 &&
+            m._31 == 0 && m._32 == 0 && m._34 == 0 &&
+            m._41 == 0 && m._42 == 0 && m._43 == 0);
+
+        OutputDebugStringA(("First bone matrix: " + std::string(isZero ? "IDENTITY (not animated?)" : "MODIFIED") + "\n").c_str());
+    }
+
+    OutputDebugStringA("========== END BINDING DEBUG ==========\n");
 }

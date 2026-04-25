@@ -9,6 +9,7 @@
 #include "FileSystem.h"
 #include "ShaderManager.h"
 #include "PhysicsSystem.h"
+#include "../AnimationSystem.h"
 // ============================================================================
 // Конструктор
 // ============================================================================
@@ -47,6 +48,10 @@ Entity SceneManager::SpawnObject(AssimpModelClass* model, float x, float y, floa
     // ActiveComponent — тег: объект существует и должен рендериться
     // RemoveObject() удалит этот компонент → RenderSystem его пропустит
     m_registry.AddComponent<ActiveComponent>(e, {});
+
+    if (model && model->HasAnimations()) {
+        m_registry.AddComponent<AnimationComponent>(e, AnimationComponent{});
+    }
 
     return e;
 }
@@ -89,7 +94,7 @@ void SceneManager::UpdateAll(float deltaTime)
 {
     // Неделя 4: здесь будет UpdateSystem::Update(m_registry, deltaTime)
     // Пока — пусто, т.к. у нас нет логики обновления компонентов
-    (void)deltaTime;
+    AnimationSystem::Update(m_registry, deltaTime);
 }
 
 // ============================================================================
@@ -121,6 +126,7 @@ void SceneManager::RenderAllECS(
 
     auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
 
+
     // ── Проход 1: только непрозрачные объекты (запись в z-buffer) ────────────
     for (auto& [entity, mesh] : meshPool)
     {
@@ -143,9 +149,12 @@ void SceneManager::RenderAllECS(
             mat->GetShader()->GetType() == ShaderType::PBR) continue;
 
         XMMATRIX world = transform->GetWorldMatrix();
+
+        auto* animComp = m_registry.GetComponent<AnimationComponent>(entity);
+
         RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
             mat, lightColors, lightPositions, fog,
-            entity == selectedEntity, cameraPos, deltaTime);
+            entity == selectedEntity, cameraPos, deltaTime, animComp);
     }
 
     // ── Проход 2: прозрачные объекты (стекло) — z-buffer на чтение ──────────
@@ -219,8 +228,10 @@ void SceneManager::RenderAllECSExcluding(
         if (!mat) continue;
 
         XMMATRIX world = transform->GetWorldMatrix();
+        auto* animComp = m_registry.GetComponent<AnimationComponent>(entity);
+
         RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
-            mat, lightColors, lightPositions, fog, false, XMFLOAT3(), deltaTime);
+            mat, lightColors, lightPositions, fog, false, XMFLOAT3(), deltaTime, animComp);
     }
 }
 
