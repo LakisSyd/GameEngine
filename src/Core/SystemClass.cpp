@@ -173,12 +173,28 @@ bool SystemClass::Frame()
 // ============================================================================
 LRESULT CALLBACK SystemClass::MessageHandler(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
+
+    static int callCount = 0;
+    if (++callCount % 10 == 0) {
+        if (msg == WM_KEYDOWN || msg == WM_MOUSEMOVE) {
+            char buf[128];
+            sprintf_s(buf, "🎯 MessageHandler: msg=0x%X, wParam=0x%llX, m_Input=%p\n",
+                msg, wparam, *m_Input);
+            OutputDebugStringA(buf);
+        }
+    }
     switch (msg)
     {
         // ── Клавиатура ────────────────────────────────────────────────────────────
     case WM_KEYDOWN:
-        m_Input->KeyDown(static_cast<unsigned int>(wparam));
+    {
+        unsigned int key = static_cast<unsigned int>(wparam);
+        char buf[128];
+        sprintf_s(buf, "📥 WM_KEYDOWN: key=0x%X (%c)\n", key, (key >= 'A' && key <= 'Z') ? key : '?');
+        OutputDebugStringA(buf);
+        m_Input->KeyDown(key);
         return 0;
+    }
 
     case WM_KEYUP:
         m_Input->KeyUp(static_cast<unsigned int>(wparam));

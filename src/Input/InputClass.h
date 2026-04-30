@@ -28,13 +28,16 @@ public:
     void GetMouseDelta(int& dx, int& dy);
     void ResetMouseDelta();
 
+    void DumpKeyState(unsigned int key) const;
+   
+
     // 🔹 Захват мыши
     void SetMouseCapture(bool capture);
     bool IsMouseCaptured() const { return m_mouseCaptured; }
 
 private:
     bool m_keys[256];
-
+    
     // 🔹 Состояние мыши
     int m_mouseX = 0, m_mouseY = 0;
     int m_mouseDeltaX = 0, m_mouseDeltaY = 0;

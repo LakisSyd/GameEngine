@@ -42,3 +42,20 @@ public:
         }
     }
 };
+
+
+// 🔥 Публичный метод для переключения
+static void SetAnimation(ECSRegistry& registry, Entity entity, int animIndex, bool resetTime = true) {
+    auto* animComp = registry.GetComponents<AnimationComponent>().Get(entity);
+    auto* meshComp = registry.GetComponents<MeshRendererComponent>().Get(entity);
+
+    if (!animComp || !meshComp || !meshComp->model) return;
+
+    if (animIndex < 0 || animIndex >= meshComp->model->GetAnimationCount()) {
+        OutputDebugStringA("SetAnimation: index out of range\n");
+        return;
+    }
+
+    animComp->animationIndex = animIndex;
+    if (resetTime) animComp->currentTime = 0.0f;
+}

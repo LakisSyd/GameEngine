@@ -37,6 +37,9 @@
 #include "ShadowMap.h"
 #include "ShadowShaderClass.h"
 #include "CompartmentDebugRenderer.h"
+#include "../../Renderer.h"
+#include "../../CameraController.h"
+#include "../../DragDropSystem.h"
 
 const bool  FULL_SCREEN = false;
 const bool  VSYNC_ENABLED = true;
@@ -50,28 +53,31 @@ const float SPRITE_BASE_RADIUS_FACTOR = 0.5f;
 class ApplicationClass
 {
 public:
-    ApplicationClass();
+    ApplicationClass() = default; // Или просто пустой конструктор {}
+
     ~ApplicationClass() = default;
 
     bool Initialize(int screenWidth, int screenHeight, HWND hwnd);
     void CreatePhysicsTestScene();
     void Shutdown();
     bool Frame(float dt);
+    void SyncCompartmentPositions();
+    void UpdatePhysics(float dt);
+    void UpdateWaterAnimation(float dt);
+    void HandleCompartmentGizmo();
+    void ProcessEditorRequests();
     void SpawnObjectFromRequest(const EditorUI::SpawnRequest& req);
     void SetInput(InputClass* input) { m_input = input; }
 
 private:
     // ── Методы рендеринга ────────────────────────────────────────────────────
-    void Render3DObjects(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
-    void RenderLightSources(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
-    void RenderWorldSprites(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
+  
 
     // ── Вспомогательные методы ───────────────────────────────────────────────
   
 
     // ── Обработка ввода ──────────────────────────────────────────────────────
-    void HandleCameraMovement(float dt);
-    void HandleDragDrop();
+   
 
     // ── Вспомогательные методы drag-and-drop ─────────────────────────────────
   
@@ -84,22 +90,18 @@ private:
 
     void CreateTestSubmarine();
 
-    void Render3DObjectsExcluding(ID3D11DeviceContext* context,
-        const XMMATRIX& view,
-        const XMMATRIX& proj,
-        int excludeIndex);
-
+   
 private:
 
-    void Render3DObjectsToShadowMap(
-        ID3D11DeviceContext* context,
-        const XMMATRIX& lightViewProj);
+    
 
     void RenderCompartmentCornerHandles();
 
     void RenderCompoundCornerHandles();
 
     void RefreshRigidBodyExternal(ECSRegistry& registry, Entity entity, RigidBodyComponent* rb);
+
+    bool RayIntersectsGroundPlane(const CameraClass::Ray& ray, XMFLOAT3& outHit, float groundY);
 
 
     ShadowMap* m_shadowMap;
@@ -111,6 +113,11 @@ private:
     // ── Камера и ввод ───────────────────────────────────────────────────────
     std::unique_ptr<CameraClass> m_camera;
     InputClass* m_input = nullptr;
+
+
+    //--- RenderSystem----
+
+    
 
     // ── Render-to-Texture ───────────────────────────────────────────────────
     RenderTextureClass* m_renderTexture = nullptr;
@@ -188,6 +195,12 @@ private:
         CompartmentDebugRenderer* m_compartmentRenderer = nullptr;
 
     ID3D11RasterizerState* m_wireframeRS = nullptr;
+
+    Renderer* m_renderer = nullptr; // <-- Теперь это указатель
+
+    std::unique_ptr<CameraController> m_cameraController;
+
+    std::unique_ptr <DragDropSystem> m_dragDropSystem;
 };
 
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);

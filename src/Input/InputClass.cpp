@@ -1,5 +1,6 @@
 ﻿#include "InputClass.h"
 #include <windows.h>  // Для SetCursorPos, GetClientRect
+#include <stdio.h>
 
 InputClass::InputClass()
 {
@@ -48,6 +49,15 @@ void InputClass::ResetMouseDelta()
     m_mouseDeltaY = 0;
 }
 
+void InputClass::DumpKeyState(unsigned int key) const
+{
+    
+        char buf[256];
+        sprintf_s(buf, "Key %c (0x%X) = %d\n", key, key, (key < 256) ? m_keys[key] : 0);
+        OutputDebugStringA(buf);
+    
+}
+
 // ===== InputClass.cpp =====
 
 void InputClass::SetMouseCapture(bool capture)
@@ -82,14 +92,23 @@ void InputClass::SetMouseCapture(bool capture)
 void InputClass::KeyDown(unsigned int key)
 {
     if (key < 256)
+    {
         m_keys[key] = true;
+        char buf[256];
+        sprintf_s(buf, "[INPUT] KeyDown: %c (0x%X) from thread %d\n", key, key, GetCurrentThreadId());
+        OutputDebugStringA(buf);
+    }
 }
 
-// 🔹 ДОБАВЬТЕ ЭТУ ФУНКЦИЮ (её не хватало):
 void InputClass::KeyUp(unsigned int key)
 {
     if (key < 256)
-        m_keys[key] = false;  // Сбрасываем состояние клавиши
+    {
+        m_keys[key] = false;
+        char buf[256];
+        sprintf_s(buf, "[INPUT] KeyUp: %c (0x%X) from thread %d\n", key, key, GetCurrentThreadId());
+        OutputDebugStringA(buf);
+    }
 }
 
 bool InputClass::IsKeyDown(unsigned int key)

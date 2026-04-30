@@ -10,6 +10,7 @@
 #include "JointConnectionSystem.h"
 #include "../../SubmarineSystem.h"
 #include <imgui_demo.cpp>
+#include "../../AnimationComponent.h"
 inline btQuaternion XMFloat4ToBtQuaternion(const DirectX::XMFLOAT4& q)
 {
     return btQuaternion(q.x, q.y, q.z, q.w);
@@ -581,6 +582,19 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
     if (DragFloat3Colored("##ObjPos", pos, 0.1f))
         transform->position = { pos[0], pos[1], pos[2] };
 
+    auto anim = registry.GetComponent<AnimationComponent>(entity);
+    if (anim)
+    {
+        ImGui::TextColored(COL_TEXT_DIM, " Animation Index");
+        // Передаем адрес переменной &anim->animationIndex
+        if (ImGui::InputInt("##AnimIndex", &anim->animationIndex))
+        {
+            // Опционально: логика при изменении (сброс таймера, валидация и т.д.)
+           
+        }
+    }
+
+   
     ImGui::Spacing();
 
     float rot[3] = { transform->rotation.x, transform->rotation.y, transform->rotation.z };

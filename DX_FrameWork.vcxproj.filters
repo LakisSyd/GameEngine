@@ -64,6 +64,9 @@
     <Filter Include="Debug">
       <UniqueIdentifier>{6d5bac05-de90-4757-b97c-8d956e7310dc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Core\System">
+      <UniqueIdentifier>{52fc9c31-384c-4137-b574-61243d3f869c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Core\ApplicationClass.cpp">
@@ -230,6 +233,18 @@
     </ClCompile>
     <ClCompile Include="TinyGltfModelClass.cpp">
       <Filter>Render\Model</Filter>
+    </ClCompile>
+    <ClCompile Include="AnimationSystem.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer.cpp">
+      <Filter>Core\System</Filter>
+    </ClCompile>
+    <ClCompile Include="CameraController.cpp">
+      <Filter>Core\System</Filter>
+    </ClCompile>
+    <ClCompile Include="DragDropSystem.cpp">
+      <Filter>Core\System</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -439,6 +454,18 @@
     </ClInclude>
     <ClInclude Include="TinyGltfModelClass.h">
       <Filter>Render\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="AnimationComponent.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Renderer.h">
+      <Filter>Core\System</Filter>
+    </ClInclude>
+    <ClInclude Include="CameraController.h">
+      <Filter>Core\System</Filter>
+    </ClInclude>
+    <ClInclude Include="DragDropSystem.h">
+      <Filter>Core\System</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -20,6 +20,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AnimationSystem.h" />
+    <ClCompile Include="CameraController.cpp" />
+    <ClCompile Include="DragDropSystem.cpp" />
     <ClCompile Include="FileName.h" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_dx11.cpp" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_win32.cpp" />
@@ -28,6 +30,7 @@
     <ClCompile Include="lib\imgui-master\imgui_draw.cpp" />
     <ClCompile Include="lib\imgui-master\imgui_tables.cpp" />
     <ClCompile Include="lib\imgui-master\imgui_widgets.cpp" />
+    <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="src\Config\PickingSystem.cpp" />
     <ClCompile Include="src\Core\ApplicationClass.cpp" />
     <ClCompile Include="src\Core\main.cpp" />
@@ -78,12 +81,15 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnimationComponent.h" />
+    <ClInclude Include="CameraController.h" />
+    <ClInclude Include="DragDropSystem.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h" />
     <ClInclude Include="lib\imgui-master\ImGuizmo.h" />
     <ClInclude Include="lib\VHACD.h" />
     <ClInclude Include="PhysicsWorld.h" />
     <ClInclude Include="ProjectionShaderClass.h" />
+    <ClInclude Include="Renderer.h" />
     <ClInclude Include="src\Config\CollisionUtils.h" />
     <ClInclude Include="src\Config\GameSettings.h" />
     <ClInclude Include="src\Config\PickingSystem.h" />
