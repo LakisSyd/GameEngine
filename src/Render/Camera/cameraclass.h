@@ -18,6 +18,7 @@ public:
 
     void Render();
     void GetViewMatrix(XMMATRIX&);
+    void GetViewMatrixWithoutTranslation(XMMATRIX&);  // Для skybox - только вращение, без позиции
 
     // 🔹 RAY PICKING
     struct Ray {

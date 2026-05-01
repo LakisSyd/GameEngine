@@ -11,6 +11,8 @@
 #include "RenderTextureClass.h"
 #include "PhysicsDebugRenderer.h"
 #include "CompartmentDebugRenderer.h"
+#include "SkyboxClass.h"
+#include "SkyboxShaderClass.h"
 
 // ============================================================================
 Renderer::Renderer(D3DClass* d3d, CameraClass* camera,

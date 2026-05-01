@@ -27,6 +27,7 @@ public:
     void Render(ID3D11DeviceContext* deviceContext);
 
     ID3D11ShaderResourceView* GetTexture(int index);
+    int GetIndexCount() const { return m_indexCount; }  // Для использования в шейдере
 
 private:
     bool InitializeBuffers(ID3D11Device*);

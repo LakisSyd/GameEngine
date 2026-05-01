@@ -161,6 +161,29 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_shadowMap->SetLightViewProjection(lightView, lightProj);
 
     m_shadowMap->SetLightViewProjection(lightView, lightProj);
+
+    // ═════════════════════════════════════════════════════════=
+    // SKYBOX
+    // ═════════════════════════════════════════════════════════=
+    m_skybox = new SkyboxClass();
+    if (!m_skybox->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
+        "assets/texture/skybox_right.jpg",   // Right (+X)
+        "assets/texture/skybox_left.jpg",    // Left (-X)
+        "assets/texture/skybox_top.jpg",     // Top (+Y)
+        "assets/texture/skybox_bottom.jpg",  // Bottom (-Y)
+        "assets/texture/skybox_front.jpg",   // Front (+Z)
+        "assets/texture/skybox_back.jpg"))   // Back (-Z)
+    {
+        MessageBox(hwnd, L"Failed to initialize Skybox", L"Error", MB_OK);
+        return false;
+    }
+
+    m_skyboxShader = new SkyboxShaderClass();
+    if (!m_skyboxShader->Initialize(m_direct3D->GetDevice(), hwnd))
+    {
+        MessageBox(hwnd, L"Failed to initialize SkyboxShader", L"Error", MB_OK);
+        return false;
+    }
     // Создаём тестовую физическую сцену
    // CreatePhysicsTestScene();
 

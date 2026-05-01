@@ -40,6 +40,8 @@
 #include "../../Renderer.h"
 #include "../../CameraController.h"
 #include "../../DragDropSystem.h"
+#include "SkyboxClass.h"
+#include "SkyboxShaderClass.h"
 
 const bool  FULL_SCREEN = false;
 const bool  VSYNC_ENABLED = true;
@@ -201,6 +203,10 @@ private:
     std::unique_ptr<CameraController> m_cameraController;
 
     std::unique_ptr <DragDropSystem> m_dragDropSystem;
+
+    // ── Skybox ────────────────────────────────────────────────────────────────
+    SkyboxClass* m_skybox = nullptr;
+    SkyboxShaderClass* m_skyboxShader = nullptr;
 };
 
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);

@@ -18,6 +18,8 @@ class ColorShaderClass;
 class PhysicsDebugRenderer;
 class CompartmentDebugRenderer;
 class RenderTextureClass;
+class SkyboxClass;
+class SkyboxShaderClass;
 
 using namespace DirectX;
 
@@ -37,6 +39,9 @@ public:
     void SetCompartmentRenderer(CompartmentDebugRenderer* r) { m_compartmentRenderer = r; }
     void SetColorShader(ColorShaderClass* s) { m_colorShader = s; }
     void SetWireframeRS(ID3D11RasterizerState* rs) { m_wireframeRS = rs; }
+
+    void SetSkybox(SkyboxClass* skybox) { m_skybox = skybox; }
+    void SetSkyboxShader(SkyboxShaderClass* shader) { m_skyboxShader = shader; }
 
     void SetRenderTextures(RenderTextureClass* reflection,
         RenderTextureClass* refraction,
@@ -107,6 +112,10 @@ private:
     RenderTextureClass* m_reflectionTexture = nullptr;
     RenderTextureClass* m_refractionTexture = nullptr;
     RenderTextureClass* m_renderTexture = nullptr;
+
+    // ── Skybox ────────────────────────────────────────────────────────────────
+    SkyboxClass* m_skybox = nullptr;
+    SkyboxShaderClass* m_skyboxShader = nullptr;
 
     std::function<void(ID3D11ShaderResourceView*)> m_previewCallback;
 

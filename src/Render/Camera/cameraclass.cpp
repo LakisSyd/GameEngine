@@ -98,6 +98,50 @@ void CameraClass::GetViewMatrix(XMMATRIX& viewMatrix)
     return;
 }
 
+// GetViewMatrixWithoutTranslation возвращает матрицу вида без трансляции (только вращение)
+// Используется для skybox, чтобы небо вращалось вместе с камерой, но не двигалось
+void CameraClass::GetViewMatrixWithoutTranslation(XMMATRIX& viewMatrix)
+{
+    XMFLOAT3 up, lookAt;
+    XMVECTOR upVector, lookAtVector;
+    float yaw, pitch, roll;
+    XMMATRIX rotationMatrix;
+
+    // Вектор "верх" направлен по оси Y.
+    up.x = 0.0f;
+    up.y = 1.0f;
+    up.z = 0.0f;
+    upVector = XMLoadFloat3(&up);
+
+    // По умолчанию камера смотрит вдоль оси Z.
+    lookAt.x = 0.0f;
+    lookAt.y = 0.0f;
+    lookAt.z = 1.0f;
+    lookAtVector = XMLoadFloat3(&lookAt);
+
+    // Преобразуем углы Эйлера в радианы.
+    pitch = m_rotationX * 0.0174532925f;
+    yaw = m_rotationY * 0.0174532925f;
+    roll = m_rotationZ * 0.0174532925f;
+
+    // Создаем матрицу вращения.
+    rotationMatrix = XMMatrixRotationRollPitchYaw(pitch, yaw, roll);
+
+    // Поворачиваем векторы направления и верха.
+    lookAtVector = XMVector3TransformCoord(lookAtVector, rotationMatrix);
+    upVector = XMVector3TransformCoord(upVector, rotationMatrix);
+
+    // Создаем матрицу вида с позицией в начале координат (0, 0, 0)
+    // Это убирает трансляцию, оставляя только вращение камеры
+    XMFLOAT3 zeroPosition(0.0f, 0.0f, 0.0f);
+    XMVECTOR zeroPositionVector = XMLoadFloat3(&zeroPosition);
+    
+    lookAtVector = XMVectorAdd(zeroPositionVector, lookAtVector);
+    viewMatrix = XMMatrixLookAtLH(zeroPositionVector, lookAtVector, upVector);
+
+    return;
+}
+
 XMFLOAT3 CameraClass::UnProject(int mouseX, int mouseY,
     int screenWidth, int screenHeight,
     const XMMATRIX& view,
