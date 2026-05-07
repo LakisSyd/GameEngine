@@ -6,7 +6,7 @@
 #include "PhysicsSystem.h"
 #include "SubmarineJointSystem.h"
 #include "FloodingSystem.h"
-#include "SubmarineBuilder.h"
+
 #include "JointConnectionSystem.h"
 #include "../../SubmarineSystem.h"
 #include <imgui_demo.cpp>
@@ -565,10 +565,7 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
                 ImGui::TextColored(ImVec4(1, 1, 0, 1), "⚠ Press 'Rebuild' to apply");
             }
 
-            if (ImGui::Button("🔨 Rebuild Hull Physics"))
-            {
-                SubmarineBuilder::FinalizeSubmarinePhysics(sceneManager.GetECSRegistry(), entity);
-            }
+          
         }
     }
 

@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AnimationSystem.h" />
+    <ClCompile Include="DragDropSystem.cpp" />
     <ClCompile Include="FileName.h" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_dx11.cpp" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_win32.cpp" />
@@ -28,6 +29,8 @@
     <ClCompile Include="lib\imgui-master\imgui_draw.cpp" />
     <ClCompile Include="lib\imgui-master\imgui_tables.cpp" />
     <ClCompile Include="lib\imgui-master\imgui_widgets.cpp" />
+    <ClCompile Include="Renderer.cpp" />
+    <ClCompile Include="SkyShaderClass.cpp" />
     <ClCompile Include="src\Config\PickingSystem.cpp" />
     <ClCompile Include="src\Core\ApplicationClass.cpp" />
     <ClCompile Include="src\Core\main.cpp" />
@@ -39,7 +42,6 @@
     <ClCompile Include="src\ECS\System\JointConnectionSystem.cpp" />
     <ClCompile Include="src\ECS\System\PhysicsSystem.cpp" />
     <ClCompile Include="src\ECS\System\PressureSystem.cpp" />
-    <ClCompile Include="src\ECS\System\SubmarineBuilder.cpp" />
     <ClCompile Include="src\ECS\System\SubmarineJointSystem.cpp" />
     <ClCompile Include="src\Editor\EditorUI.cpp" />
     <ClCompile Include="src\Input\InputClass.cpp" />
@@ -78,17 +80,21 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnimationComponent.h" />
+    <ClInclude Include="CharacterSpawnSystem.h" />
+    <ClInclude Include="DragDropSystem.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h" />
     <ClInclude Include="lib\imgui-master\ImGuizmo.h" />
     <ClInclude Include="lib\VHACD.h" />
-    <ClInclude Include="PhysicsWorld.h" />
     <ClInclude Include="ProjectionShaderClass.h" />
+    <ClInclude Include="Renderer.h" />
+    <ClInclude Include="SkyShaderClass.h" />
     <ClInclude Include="src\Config\CollisionUtils.h" />
     <ClInclude Include="src\Config\GameSettings.h" />
     <ClInclude Include="src\Config\PickingSystem.h" />
     <ClInclude Include="src\Core\ApplicationClass.h" />
     <ClInclude Include="src\Core\FileSystem.h" />
+    <ClInclude Include="src\Core\PhysicsWorld.h" />
     <ClInclude Include="src\Core\SystemClass.h" />
     <ClInclude Include="src\Debug\CompartmentDebugRenderer.h" />
     <ClInclude Include="src\Debug\DebugPhysicsVisualizer.h" />
@@ -104,7 +110,6 @@
     <ClInclude Include="src\ECS\System\PressureSystem.h" />
     <ClInclude Include="src\ECS\System\RenderMesh.h" />
     <ClInclude Include="src\ECS\System\RenderSystem.h" />
-    <ClInclude Include="src\ECS\System\SubmarineBuilder.h" />
     <ClInclude Include="src\ECS\System\SubmarineJointSystem.h" />
     <ClInclude Include="src\ECS\System\TransformSystem.h" />
     <ClInclude Include="src\Editor\EditorUI.h" />
@@ -149,8 +154,11 @@
     <ClInclude Include="TinyGltfModelClass.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="packages.config" />
     <None Include="shadow.ps" />
     <None Include="shadow.vs" />
+    <None Include="SkyShader.ps" />
+    <None Include="SkyShader.vs" />
     <None Include="src\Render\Shader\fog_common.hlsli" />
     <None Include="src\Render\Shader\Ps\color.ps" />
     <None Include="src\Render\Shader\Ps\fog.ps" />
@@ -159,6 +167,7 @@
     <None Include="src\Render\Shader\Ps\Normalmap.ps" />
     <None Include="src\Render\Shader\Ps\pbr.ps" />
     <None Include="src\Render\Shader\Ps\projection.ps" />
+    <None Include="src\Render\Shader\Ps\SkyShader.ps" />
     <None Include="src\Render\Shader\texture.ps" />
     <None Include="src\Render\Shader\texture.vs" />
     <None Include="src\Render\Shader\Vs\color.vs" />
@@ -168,6 +177,7 @@
     <None Include="src\Render\Shader\Vs\Normalmap.vs" />
     <None Include="src\Render\Shader\Vs\pbr.vs" />
     <None Include="src\Render\Shader\Vs\projection.vs" />
+    <None Include="src\Render\Shader\Vs\SkyShader.vs" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
@@ -280,5 +290,12 @@
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
+    <Import Project="..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets" Condition="Exists('..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets')" />
   </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>Данный проект ссылается на пакеты NuGet, отсутствующие на этом компьютере. Используйте восстановление пакетов NuGet, чтобы скачать их.  Дополнительную информацию см. по адресу: http://go.microsoft.com/fwlink/?LinkID=322105. Отсутствует следующий файл: {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets'))" />
+  </Target>
 </Project>

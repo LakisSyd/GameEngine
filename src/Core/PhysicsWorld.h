@@ -72,6 +72,8 @@ public:
         {
             m_dynamicsWorld->stepSimulation(timestep, 1, timestep);
             accumulator -= timestep;
+           
+            
         }
     }
 
@@ -95,4 +97,6 @@ private:
     std::unique_ptr<btBroadphaseInterface> m_broadphase;
     std::unique_ptr<btSequentialImpulseConstraintSolver> m_solver;
     std::unique_ptr<btDiscreteDynamicsWorld> m_dynamicsWorld;
+
+    btActionInterface* action;
 };

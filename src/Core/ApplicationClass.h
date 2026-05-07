@@ -37,6 +37,10 @@
 #include "ShadowMap.h"
 #include "ShadowShaderClass.h"
 #include "CompartmentDebugRenderer.h"
+#include "../../DragDropSystem.h"
+
+class Renderer;
+class SkyShaderClass;
 
 const bool  FULL_SCREEN = false;
 const bool  VSYNC_ENABLED = true;
@@ -57,6 +61,11 @@ public:
     void CreatePhysicsTestScene();
     void Shutdown();
     bool Frame(float dt);
+    void SyncCompartmentPositions();
+    void UpdatePhysics(float dt);
+    void UpdateWaterAnimation(float dt);
+    void HandleCompartmentGizmo();
+    void ProcessEditorRequests();
     void SpawnObjectFromRequest(const EditorUI::SpawnRequest& req);
     void SetInput(InputClass* input) { m_input = input; }
 
@@ -101,6 +110,8 @@ private:
 
     void RefreshRigidBodyExternal(ECSRegistry& registry, Entity entity, RigidBodyComponent* rb);
 
+    void SpawnTestBot(ECSRegistry& registry, const XMFLOAT3& pos);
+
 
     ShadowMap* m_shadowMap;
     ShadowShaderClass* m_shadowShader;  // ← НОВОЕ
@@ -118,6 +129,10 @@ private:
     RenderTextureClass* m_refractionTexture = nullptr;
     BitmapClass* m_renderQuad = nullptr;
 
+
+    //System
+    std::unique_ptr<DragDropSystem> m_dragDropSystem;
+    Renderer* m_renderer = nullptr;
     // ── Базовые модели ─────────────────────────────────────────────────────
     AssimpModelClass* m_mainModel = nullptr;
     AssimpModelClass* m_lightSphereModel = nullptr;
@@ -142,6 +157,7 @@ private:
     ReflectionShaderClass* m_reflectionShader = nullptr;
     projectionShaderClass* m_projectionShader = nullptr;
     PBRShaderClass* m_pbrShader = nullptr;
+    SkyShaderClass* m_SkyShader = nullptr;
 
     // ── Размеры экрана ───────────────────────────────────────────────────────
     int m_screenWidth = 0;
@@ -188,6 +204,10 @@ private:
         CompartmentDebugRenderer* m_compartmentRenderer = nullptr;
 
     ID3D11RasterizerState* m_wireframeRS = nullptr;
+
+
+  
+    ID3D11ShaderResourceView* m_skySRV = nullptr;  // 🔥 НОВОЕ
 };
 
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);

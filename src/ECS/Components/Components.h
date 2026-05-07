@@ -5,6 +5,8 @@
 #include <btBulletDynamicsCommon.h>
 #include "ECSTypes.h"
 #include <vector>
+#include <BulletCollision/CollisionDispatch/btGhostObject.h>        // btPairCachingGhostObject
+#include <BulletDynamics/Character/btKinematicCharacterController.h> // btKinematicCharacterController
 using namespace DirectX;
 
 struct TransformComponent {
@@ -279,6 +281,87 @@ private:
         }
     }
 };
+
+struct CharacterController
+{
+    btPairCachingGhostObject* ghostObj = nullptr;
+    btKinematicCharacterController* controller = nullptr;
+    btCapsuleShape* capsuleShape = nullptr;
+
+    float stepHeight = 0.35f;
+    float jumpSpeed = 6.0f;
+    float gravity = 15.0f;
+    float maxSlope = 45.0f;
+
+    bool isGrounded = false;
+
+    // Запрет копирования
+    CharacterController() = default;
+    CharacterController(const CharacterController&) = delete;
+    CharacterController& operator=(const CharacterController&) = delete;
+
+    // Move-семантика (только перенос указателей)
+    CharacterController(CharacterController&& other) noexcept
+        : ghostObj(other.ghostObj)
+        , controller(other.controller)
+        , capsuleShape(other.capsuleShape)
+        , stepHeight(other.stepHeight)
+        , jumpSpeed(other.jumpSpeed)
+        , gravity(other.gravity)
+        , maxSlope(other.maxSlope)
+        , isGrounded(other.isGrounded)
+    {
+        other.ghostObj = nullptr;
+        other.controller = nullptr;
+        other.capsuleShape = nullptr;
+    }
+
+    CharacterController& operator=(CharacterController&& other) noexcept {
+        if (this == &other) return *this;
+
+        // Просто обнуляем текущие указатели (предполагаем, что система уже удалила ресурсы)
+        ghostObj = nullptr;
+        controller = nullptr;
+        capsuleShape = nullptr;
+
+        // Перенос
+        ghostObj = other.ghostObj;
+        controller = other.controller;
+        capsuleShape = other.capsuleShape;
+        stepHeight = other.stepHeight;
+        jumpSpeed = other.jumpSpeed;
+        gravity = other.gravity;
+        maxSlope = other.maxSlope;
+        isGrounded = other.isGrounded;
+
+        // Обнуление источника
+        other.ghostObj = nullptr;
+        other.controller = nullptr;
+        other.capsuleShape = nullptr;
+
+        return *this;
+    }
+
+    // ❌ Нет деструктора — ресурсы удаляются системой
+};
+
+struct CharacterMovement
+{
+    XMFLOAT3 walkDirection = { 0, 0, 0 };  // ✅ Явная инициализация
+    bool wantJump = false;                // ✅ По умолчанию — не прыгать
+
+    float moveSpeed = 3.5f;
+    float runSpeed = 6.0f;
+    float rotationSpeed = 3.0f;
+
+    bool isMoving = false;                // ✅ По умолчанию — стоит
+    bool isGrounded = false;              // ✅ По умолчанию — в воздухе (безопаснее)
+    float currentSpeed = 0.0f;
+
+    // Конструктор можно убрать — инициализация выше уже работает
+    // Но если хочешь оставить — ок:
+    CharacterMovement() = default;
+};;
 
 struct StaticColliderComponent
 {
@@ -556,3 +639,4 @@ struct SubmarineCollisionSetup
     // Коэффициент усадки (0.9–0.98) — задайте 0.95 для ~5% меньше корпуса
     float interiorShrinkFactor = 0.95f;
 };
+

@@ -1,0 +1,28 @@
+// SkyShader.ps
+TextureCube SkyTexture : register(t0);
+SamplerState SkySampler : register(s0);
+
+struct PixelInput {
+    float4 positionClip : SV_POSITION;
+    float3 worldPos : TEXCOORD0;
+};
+
+// 🔥 Идентичный буфер как в .vs (только матрица!)
+cbuffer SkyBuffer : register(b0)
+{
+    matrix modelViewProjection;
+};
+
+float3 ACESFilm(float3 x)
+{
+    float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+float4 SkyPS(PixelInput input) : SV_TARGET
+{
+    float3 hdrColor = SkyTexture.Sample(SkySampler, input.worldPos);
+    float3 ldrColor = ACESFilm(hdrColor);
+    ldrColor = pow(ldrColor, 1.0/2.2);
+    return float4(ldrColor, 1.0);
+}

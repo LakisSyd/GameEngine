@@ -1,1 +1,2 @@
-C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Ps\pbr.ps(147,21-55): error X3507: 'PBRPixelShader': Not all control paths return a value
+C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Ps\SkyShader.ps(24,12-67): warning X3206: implicit truncation of vector type
+error X3501: 'SkyPS': entrypoint not found

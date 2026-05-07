@@ -23,6 +23,34 @@ struct VertexType
 bool PhysicsSystem::InitializeWorld()
 {
     return PhysicsWorld::Get().Initialize();
+    // 🔥 ТЕСТОВЫЙ ПОЛ — для отладки коллизий
+    {
+        // Плоскость: нормаль (0,1,0) = вверх по Y, высота = 0
+        btCollisionShape* floorShape = new btStaticPlaneShape(btVector3(0, 1, 0), 0);
+
+        btDefaultMotionState* floorMS = new btDefaultMotionState(
+            btTransform::getIdentity());  // Плоскость уже в (0,0,0)
+
+        btRigidBody::btRigidBodyConstructionInfo floorCI(0, floorMS, floorShape);
+        btRigidBody* floor = new btRigidBody(floorCI);
+
+        // Статический объект
+        floor->setCollisionFlags(btCollisionObject::CF_STATIC_OBJECT);
+
+        // 🔥 КРИТИЧНО: правильные маски!
+        auto* world = PhysicsWorld::Get().GetWorld();
+        world->addRigidBody(
+            floor,
+            btBroadphaseProxy::StaticFilter,  // Группа: статика
+            btBroadphaseProxy::AllFilter      // Маска: коллизирует со ВСЕМ (для теста)
+        );
+
+        // ⚠️ Сохраните указатель, чтобы не удалить пол случайно!
+        // Например, добавьте в PhysicsSystem: btRigidBody* m_debugFloor;
+        // m_debugFloor = floor;
+
+        OutputDebugStringA("[Physics] ✅ Test floor created at Y=0\n");
+    }
 }
 
 btCollisionShape* PhysicsSystem::CreateBoxShape(
@@ -608,13 +636,26 @@ void PhysicsSystem::CreateRigidBody(ECSRegistry& registry, Entity entity)
         rb->body->setCcdSweptSphereRadius(0.2f);
     }
 
-    rb->body->setActivationState(DISABLE_DEACTIVATION);
+    // 🔥 ПРАВИЛЬНО: флаг статического объекта ТОЛЬКО для mass=0
+    if (rb->mass == 0.0f)
+    {
+        rb->body->setCollisionFlags(
+            rb->body->getCollisionFlags() | btCollisionObject::CF_STATIC_OBJECT
+        );
+        rb->body->setActivationState(DISABLE_DEACTIVATION);
+    }
+
     rb->body->setDamping(0.01f, 0.95f);
     rb->body->setFriction(0.8f);
     rb->body->setRollingFriction(0.3f);
     rb->body->setSpinningFriction(0.1f);
 
-    PhysicsWorld::Get().GetWorld()->addRigidBody(rb->body);
+    // Регистрация в мире
+    auto* world = PhysicsWorld::Get().GetWorld();
+    world->addRigidBody(rb->body,
+        rb->mass == 0.0f ? btBroadphaseProxy::StaticFilter : btBroadphaseProxy::DefaultFilter,
+        btBroadphaseProxy::AllFilter  // Для теста
+    );
 
     rb->lastSyncedPosition = transform->position;
     rb->lastSyncedRotation = transform->rotation;
@@ -931,6 +972,32 @@ void PhysicsSystem::Update(ECSRegistry& registry, float deltaTime, float waterLe
 
     // Шаг физики
     PhysicsWorld::Get().Update(deltaTime);
+    // 🔥 SYNC: Bullet (ghostObj) → ECS (TransformComponent)
+    auto& controllers = registry.GetComponents<CharacterController>();
+    
+
+    for (auto& [entity, ctrl] : controllers)
+    {
+        if (!ctrl.ghostObj) continue;
+
+        auto* tf = transforms.Get(entity);
+        if (!tf) continue;
+
+        // Получаем позицию из ghost object (контроллер обновляет именно его)
+        btVector3 bulletPos = ctrl.ghostObj->getWorldTransform().getOrigin();
+
+        // Защита от NaN
+        if (!isnan(bulletPos.x()) && !isnan(bulletPos.y()) && !isnan(bulletPos.z()))
+        {
+            tf->position = XMFLOAT3(bulletPos.x(), bulletPos.y(), bulletPos.z());
+
+            // Опционально: обновите lastSynced для детекта внешних изменений
+            if (auto* rb = registry.GetComponent<RigidBodyComponent>(entity))
+            {
+                rb->lastSyncedPosition = tf->position;
+            }
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════════════════
     // 🔥 FIX: REVERSE SYNC (Bullet → ECS) — только для DYNAMIC тел

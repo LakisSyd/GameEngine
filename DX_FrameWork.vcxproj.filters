@@ -192,9 +192,6 @@
     <ClCompile Include="src\ECS\System\PressureSystem.cpp">
       <Filter>ECS</Filter>
     </ClCompile>
-    <ClCompile Include="src\ECS\System\SubmarineBuilder.cpp">
-      <Filter>ECS</Filter>
-    </ClCompile>
     <ClCompile Include="src\Render\Shader\ProjectionShaderClass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
@@ -230,6 +227,18 @@
     </ClCompile>
     <ClCompile Include="TinyGltfModelClass.cpp">
       <Filter>Render\Model</Filter>
+    </ClCompile>
+    <ClCompile Include="AnimationSystem.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClCompile>
+    <ClCompile Include="DragDropSystem.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="SkyShaderClass.cpp">
+      <Filter>Render\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="Renderer.cpp">
+      <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -374,9 +383,6 @@
     <ClInclude Include="src\Core\FileSystem.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="PhysicsWorld.h">
-      <Filter>Core</Filter>
-    </ClInclude>
     <ClInclude Include="TimeManager.h">
       <Filter>Config</Filter>
     </ClInclude>
@@ -396,9 +402,6 @@
       <Filter>ECS</Filter>
     </ClInclude>
     <ClInclude Include="src\ECS\System\PressureSystem.h">
-      <Filter>ECS</Filter>
-    </ClInclude>
-    <ClInclude Include="src\ECS\System\SubmarineBuilder.h">
       <Filter>ECS</Filter>
     </ClInclude>
     <ClInclude Include="src\Render\Shader\ProjectionShaderClass.h">
@@ -439,6 +442,24 @@
     </ClInclude>
     <ClInclude Include="TinyGltfModelClass.h">
       <Filter>Render\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="AnimationComponent.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="DragDropSystem.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="Renderer.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="SkyShaderClass.h">
+      <Filter>Render\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="CharacterSpawnSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\PhysicsWorld.h">
+      <Filter>Core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -493,5 +514,14 @@
     <None Include="src\Render\Shader\Ps\color.ps">
       <Filter>Файлы ресурсов</Filter>
     </None>
+    <None Include="SkyShader.ps" />
+    <None Include="SkyShader.vs" />
+    <None Include="src\Render\Shader\Vs\SkyShader.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Ps\SkyShader.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

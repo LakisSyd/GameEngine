@@ -7,14 +7,137 @@
 #include "PressureSystem.h"
 #include "SubmarineJointSystem.h"
 #include "FloodingSystem.h"
-#include "SubmarineBuilder.h"
+
 #include "JointConnectionSystem.h"
 #include "../../SubmarineSystem.h"
 #include "PhysicsWorld.h"
-
+#include "../../Renderer.h"
+#include "../../SkyShaderClass.h"
+#include <DirectXTex.h>  
+#include "directxtk/DDSTextureLoader.h"
+#include <stb_image.h>
+#include "../../CharacterSpawnSystem.h"
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
 // ============================================================================
+
+
+ID3D11ShaderResourceView* LoadEquirectangularHDR(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context,
+    const std::string& path)
+{
+    int width = 0, height = 0, channels = 0;
+
+    // stb_image загружает HDR в float формате (32-bit per channel)
+    float* hdrData = stbi_loadf(path.c_str(), &width, &height, &channels, 3);
+    if (!hdrData)
+    {
+        OutputDebugStringA(("Failed to load HDR: " + path + "\n").c_str());
+        return nullptr;
+    }
+
+    // Создаём 2D текстуру с float форматом
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = width;
+    desc.Height = height;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_R32G32B32_FLOAT;  // 🔥 HDR формат
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = 0;
+
+    D3D11_SUBRESOURCE_DATA initData = {};
+    initData.pSysMem = hdrData;
+    initData.SysMemPitch = width * 3 * sizeof(float);  // 3 канала * 4 байта
+
+    ID3D11Texture2D* tex2D = nullptr;
+    if (FAILED(device->CreateTexture2D(&desc, &initData, &tex2D)))
+    {
+        stbi_image_free(hdrData);
+        return nullptr;
+    }
+
+    // Создаём SRV
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = desc.Format;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MostDetailedMip = 0;
+    srvDesc.Texture2D.MipLevels = 1;
+
+    ID3D11ShaderResourceView* srv = nullptr;
+    if (FAILED(device->CreateShaderResourceView(tex2D, &srvDesc, &srv)))
+    {
+        tex2D->Release();
+        stbi_image_free(hdrData);
+        return nullptr;
+    }
+
+    tex2D->Release();
+    stbi_image_free(hdrData);
+
+    OutputDebugStringA(("✅ HDR loaded: " + path + "\n").c_str());
+    return srv;
+}
+
+// В ApplicationClass.cpp
+
+
+ID3D11ShaderResourceView* LoadSkyboxCubeMap(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context,
+    const std::string& path)
+{
+    ID3D11Resource* resource = nullptr;
+    ID3D11ShaderResourceView* srv = nullptr;
+
+    HRESULT hr = CreateDDSTextureFromFile(
+        device,
+        context,
+        std::wstring(path.begin(), path.end()).c_str(),
+        &resource,
+        &srv);
+
+    if (FAILED(hr) || !srv)
+    {
+        OutputDebugStringA(("❌ Failed to load cube map: " + path + "\n").c_str());
+        if (resource) resource->Release();
+        return nullptr;
+    }
+
+    // 🔥 ПРАВИЛЬНАЯ ПРОВЕРКА: смотрим на ViewDimension в SRV
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srv->GetDesc(&srvDesc);
+
+    if (srvDesc.ViewDimension != D3D11_SRV_DIMENSION_TEXTURECUBE)
+    {
+        OutputDebugStringA("❌ Loaded SRV is not a TEXTURECUBE!\n");
+
+        // 🔍 Отладочная информация
+        char msg[256];
+        sprintf_s(msg, "   ViewDimension: %d (expected %d = TEXTURECUBE)\n",
+            srvDesc.ViewDimension, D3D11_SRV_DIMENSION_TEXTURECUBE);
+        OutputDebugStringA(msg);
+
+        if (srv) srv->Release();
+        if (resource) resource->Release();
+        return nullptr;
+    }
+
+    // Опционально: проверить формат
+    if (srvDesc.Format != DXGI_FORMAT_R16G16B16A16_FLOAT &&
+        srvDesc.Format != DXGI_FORMAT_R32G32B32A32_FLOAT)
+    {
+        OutputDebugStringA("⚠️ Warning: Cube map format may not be HDR float\n");
+    }
+
+    if (resource) resource->Release();  // SRV держит ссылку
+    OutputDebugStringA(("✅ Cube map loaded successfully: " + path + "\n").c_str());
+    return srv;
+}
+
 ApplicationClass::ApplicationClass() = default;
 
 // ============================================================================
@@ -101,6 +224,8 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_projectionShader = sm.Load<projectionShaderClass>("projection", m_direct3D->GetDevice(), hwnd);
     m_lightShader = sm.Load<LightShaderClass>("light", m_direct3D->GetDevice(), hwnd);
     m_pbrShader = sm.Load<PBRShaderClass>("pbr", m_direct3D->GetDevice(), hwnd);
+    m_SkyShader = sm.Load<SkyShaderClass>("sky",m_direct3D->GetDevice(), hwnd);
+    
 
     m_physicsDebugRenderer = new PhysicsDebugRenderer();
     if (!m_physicsDebugRenderer->Initialize(m_direct3D->GetDevice()))
@@ -285,56 +410,68 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     colorTex->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/stone.tga");
     mat->SetTexture(0, colorTex);
 
-    // Устанавливаем проекционную текстуру (слот 2)
-    TextureClass* projTex = new TextureClass();
-    projTex->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/projection.tga");
-    mat->SetTexture(2, projTex);
+   
 
-    // Задаём матрицы второй камеры (вид от проектора)
-    XMMATRIX view2 = XMMatrixLookAtLH({ -5,5,-5 }, { 0,0,0 }, { 0,1,0 });
-    XMMATRIX proj2 = XMMatrixPerspectiveFovLH(XMConvertToRadians(60.0f), 1.0f, 0.1f, 100.0f);
-    mat->SetProjectionView2(view2);
-    mat->SetProjectionProj2(proj2);
+    m_renderer = new Renderer(
+        m_direct3D.get(),           // D3DClass*
+        m_camera.get(),             // CameraClass*
+        &m_sceneManager,            // SceneManager*
+        m_shadowMap                 // ShadowMap*
+    );
+
+    // Теперь можно безопасно настраивать шейдеры:
+    m_renderer->SetLightShader(m_lightShader);
+    m_renderer->SetPBRShader(m_pbrShader);
+    m_renderer->SetSkyShader(m_SkyShader);
+    m_renderer->SetDefaultMaterial(m_defaultMaterial);
+    m_renderer->SetTextureShader(m_textureShader);
+    m_renderer->SetColorShader(m_colorShader);
+    m_renderer->SetShadowShader(m_shadowShader);
+
+    // Настройка рендер-текстур:
+    m_renderer->SetRenderTextures(
+        m_reflectionTexture,
+        m_refractionTexture,
+        m_renderTexture);
+
+    // Отладочные рендереры:
+    m_renderer->SetPhysicsDebugRenderer(m_physicsDebugRenderer);
+    m_renderer->SetCompartmentRenderer(m_compartmentRenderer);
+    m_renderer->SetWireframeRS(m_wireframeRS);
+
+   
+    m_dragDropSystem = std::make_unique<DragDropSystem>(
+        m_camera.get(), &m_inputManager, m_input, &m_editorUI, &m_sceneManager);
+
+    m_skySRV = LoadSkyboxCubeMap(
+        m_direct3D->GetDevice(),
+        m_direct3D->GetDeviceContext(),
+        "assets/texture/cubemap/sky_cube1.dds");  // Путь к сконвертированному файлу
+
+    if (!m_skySRV)
+    {
+        OutputDebugStringA("⚠️ Warning: Failed to load skybox, using fallback\n");
+        // Можно создать заглушку или продолжить без неба
+    }
+    else
+    {
+        OutputDebugStringA("✅ Skybox loaded successfully\n");
+    }
+
+    // Передаём в рендерер
+    if (m_renderer && m_SkyShader)
+    {
+        m_renderer->SetSkyShader(m_SkyShader);
+        m_SkyShader->SetSkyTexture(m_skySRV);  // ← Новый метод в шейдере
+    }
+
+    SpawnTestBot(m_sceneManager.GetECSRegistry(), { 0,0,0 });
 
     return true;
 }
 
 
 
-void ApplicationClass::CreatePhysicsTestScene()
-{
-    auto& registry = m_sceneManager.GetECSRegistry();
-
-    // Пол
-    Entity floor = m_sceneManager.SpawnObject(m_mainModel, 0, -2, 0);
-    registry.AddComponent<RigidBodyComponent>(floor, RigidBodyComponent{});
-    RigidBodyComponent* floorRb = registry.GetComponent<RigidBodyComponent>(floor);
-    if (floorRb)
-    {
-        floorRb->mass = 0.0f;
-        floorRb->shapeType = RigidBodyComponent::Plane;
-        floorRb->shapeSize = btVector3(10, 0.5f, 10);
-        PhysicsSystem::CreateRigidBody(registry, floor);
-    }
-
-    // Падающая сфера
-    Entity sphere = m_sceneManager.SpawnObject(m_lightSphereModel, 0, 3, 0);
-    registry.AddComponent<RigidBodyComponent>(sphere, RigidBodyComponent{});
-    RigidBodyComponent* sphereRb = registry.GetComponent<RigidBodyComponent>(sphere);
-    if (sphereRb)
-    {
-        sphereRb->mass = 1.0f;
-        sphereRb->shapeType = RigidBodyComponent::Sphere;
-        sphereRb->shapeSize = btVector3(0.5f, 0, 0);
-        PhysicsSystem::CreateRigidBody(registry, sphere);
-    }
-
-    // Лог количества тел в мире
-    int numBodies = PhysicsWorld::Get().GetWorld()->getNumCollisionObjects();
-    char buf[256];
-    sprintf_s(buf, "Num bodies after creation: %d\n", numBodies);
-    OutputDebugStringA(buf);
-}
 // ============================================================================
 // Shutdown
 // ============================================================================
@@ -438,491 +575,275 @@ void ApplicationClass::Shutdown()
     m_editorUI.Shutdown();
 }
 
-// ============================================================================
-// Frame
-// ============================================================================
 bool ApplicationClass::Frame(float dt)
 {
-    // Очищаем линии от предыдущего кадра
+    // 1. Получаем настройки отладки
     m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
 
-    {
-        auto& registry = m_sceneManager.GetECSRegistry();
-        auto& compartmentPool = registry.GetComponents<CompartmentComponent>();
-        auto& transformPool = registry.GetComponents<TransformComponent>();
-        auto& subPool = registry.GetComponents<SubmarineComponent>();
+    // 2. Синхронизируем позиции отсеков (связь с подлодкой)
+    SyncCompartmentPositions();
 
-        for (auto& [entity, comp] : compartmentPool)
-        {
-            auto* subLink = subPool.Get(entity);
-            if (!subLink || subLink->submarineRoot == INVALID_ENTITY) continue;
-            if (entity == subLink->submarineRoot) continue;  // ← Пропускаем корень!
+    // 3. Физика
+    UpdatePhysics(dt);
 
-            auto* rootTransform = transformPool.Get(subLink->submarineRoot);
-            auto* compartmentTransform = transformPool.Get(entity);
-            if (!rootTransform || !compartmentTransform) continue;
+    // 4. Анимация воды
+    UpdateWaterAnimation(dt);
 
-            // Поворачиваем локальное смещение на угол подлодки
-            XMMATRIX rootRotation = XMMatrixRotationRollPitchYaw(
-                rootTransform->rotation.x,
-                rootTransform->rotation.y,
-                rootTransform->rotation.z);
-
-            XMVECTOR localOffset = XMLoadFloat3(&comp.localCenter);
-            XMVECTOR rotatedOffset = XMVector3TransformCoord(localOffset, rootRotation);
-
-            // Прибавляем к позиции подлодки
-            XMVECTOR rootPos = XMLoadFloat3(&rootTransform->position);
-            XMVECTOR worldPos = XMVectorAdd(rootPos, rotatedOffset);
-
-            // Обновляем трансформ отсека
-            XMFLOAT3 newPos;
-            XMStoreFloat3(&newPos, worldPos);
-            compartmentTransform->position = newPos;
-            compartmentTransform->rotation = rootTransform->rotation;
-        }
-    }
-    // Построение визуализации коллизий
- // Вариант 1: Простое исправление
-    if (dt > 0.0f)
-    {
-        auto& registry = m_sceneManager.GetECSRegistry();
-        auto& subPool = registry.GetComponents<SubmarineComponent>();
-        auto& transformPool = registry.GetComponents<TransformComponent>();
-        // 1. Затопление отсеков (накопление воды через пробоины)
-        FloodingSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
-
-        // ═══════════════════════════════════════════════════════════════
-        // 🔥 FIX: Вызываем JointConnectionSystem ПЕРЕД физикой.
-        //    Этот вызов ОТСУТСТВОВАЛ — джойнты из редактора
-        //    никогда не создавались!
-        // ═══════════════════════════════════════════════════════════════
-        JointConnectionSystem::Update(registry);
-
-
-
-        for (auto& [entity, subComp] : subPool)
-        {
-            if (subComp.submarineRoot == entity)  // Только корневые
-            {
-                SubmarineSystem::UpdateSubmarine(registry, entity);
-            }
-        }
-
-        // 2. Физика (плавучесть + Bullet step + обратная синхронизация)
-        PhysicsSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
-
-        // ═══════════════════════════════════════════════════════════════
-        // 🔥 FIX: Вызываем SubmarineJointSystem ПОСЛЕ физики.
-        //    Этот вызов ОТСУТСТВОВАЛ — сломанные джойнты никогда
-        //    не обнаруживались и не помечались!
-        // ═══════════════════════════════════════════════════════════════
-        SubmarineJointSystem::Update(registry, dt);
-
-        // 3. Давление/ремонтные системы
-        PressureSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
-    }
-
-    if (m_lightShader)
-    {
-        // В Frame() — оба блока SetDirectionalLight (для lightShader и pbrShader):
-
-        XMFLOAT3 sunDirection = XMFLOAT3(0.3f, -1.0f, 0.5f);
-        XMFLOAT4 sunColor = XMFLOAT4(1.0f, 0.95f, 0.8f, 1.0f);
-        XMFLOAT4 ambientColor = XMFLOAT4(0.4f, 0.4f, 0.45f, 0.6f); // ← было 0.15/0.2/0.3/0.25
-        float     sunIntensity = 2.5f;                                 // ← было 1.0f
-
-        m_lightShader->SetDirectionalLight(
-            m_direct3D->GetDeviceContext(),
-            sunDirection,
-            sunColor,
-            ambientColor,
-            sunIntensity
-        );
-    }
-
-
-    {
-        auto& meshPool = m_sceneManager.GetECSRegistry()
-            .GetComponents<MeshRendererComponent>();
-
-
-
-        for (auto& [ent, mesh] : meshPool)
-        {
-            if (!m_sceneManager.IsObjectActive(ent)) continue;
-
-            auto* transform = m_sceneManager.GetObjectTransform(ent);
-            auto* mat = mesh.material;
-
-            if (!transform || !mesh.model) continue;
-            if (!mat || !mat->GetShader()) continue;
-
-            ShaderType st = mat->GetShader()->GetType();
-
-
-        }
-    }
-
-    m_shadowMap->SetRenderTarget(m_direct3D->GetDeviceContext());
-    m_shadowMap->ClearRenderTarget(m_direct3D->GetDeviceContext());
-
-    XMMATRIX lightVP = m_shadowMap->GetLightViewProjection();
-    Render3DObjectsToShadowMap(m_direct3D->GetDeviceContext(), lightVP);
-
-    // Восстанавливаем backbuffer
-    m_direct3D->SetBackBufferRenderTarget();
-    m_direct3D->ResetViewport();
-
-    // 🔥 ДОБАВИТЬ
-    if (m_pbrShader)
-    {
-
-        XMFLOAT3 sunDirection = XMFLOAT3(0.3f, -1.0f, 0.5f);
-
-        // Цвет солнца (тёплый жёлтый)
-        XMFLOAT4 sunColor = XMFLOAT4(1.0f, 0.95f, 0.8f, 1.0f);
-
-        // Ambient освещение (голубоватое небо)
-        XMFLOAT4 ambientColor = XMFLOAT4(0.15f, 0.2f, 0.3f, 0.25f); // a = сила
-
-        float sunIntensity = 1.0f;
-
-        m_pbrShader->SetDirectionalLight(
-            m_direct3D->GetDeviceContext(),
-            sunDirection, sunColor, ambientColor, sunIntensity);
-    }
+    // 5. Управление камерой
     m_inputManager.Update(m_input);
-    HandleCameraMovement(TimeManager::UnscaledDeltaTime());
+   
     m_sceneManager.UpdateAll(dt);
-
-
-
-
-    // Рендерим в shadow map (без текстур, только depth)
-
-
-
-
-
-    // ── Анимация воды: обновляем UV-смещение для всех Water-объектов ──────────
-    {
-        auto& meshPool = m_sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
-        for (auto& [entity, mesh] : meshPool)
-        {
-            if (!m_sceneManager.IsObjectActive(entity) || !mesh.material) continue;
-            auto* shader = mesh.material->GetShader();
-            if (!shader || shader->GetType() != ShaderType::Water) continue;
-
-            float t = mesh.material->GetWaterTranslation();
-            t += dt * 0.001f;
-            if (t > 1.0f) t -= 1.0f;
-            mesh.material->SetWaterTranslation(t);
-        }
-    }
-
     m_sceneManager.UpdateLights();
 
     m_camera->Render();
     m_camera->GetViewMatrix(m_viewMatrix);
     m_direct3D->GetProjectionMatrix(m_projMatrix);
 
-    // ВАЖНО: обновляем контакты до рендеринга — иначе Render() рисует по старым/пустым данным.
+    // 6. Debug visualizer update
     if (m_debugVisualizer)
-    {
         m_debugVisualizer->UpdateFromWorld(PhysicsWorld::Get().GetWorld());
-    }
 
-    // ── Обновляем reflection/refraction данные для Water и Reflection объектов ─
-    XMMATRIX reflectionMatrix = BuildReflectionMatrix(m_camera.get(), 0.0f);
-    {
-        auto& meshPool = m_sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
-        for (auto& [entity, mesh] : meshPool)
-        {
-            if (!m_sceneManager.IsObjectActive(entity) || !mesh.material) continue;
-            auto* shader = mesh.material->GetShader();
-            if (!shader) continue;
-
-            if (shader->GetType() == ShaderType::Water)
-            {
-                mesh.material->SetReflectionMatrix(reflectionMatrix);
-                mesh.material->SetReflectionSRV(m_reflectionTexture->GetShaderResourceView());
-                mesh.material->SetRefractionSRV(m_refractionTexture->GetShaderResourceView());
-            }
-            else if (shader->GetType() == ShaderType::Reflection)
-            {
-                mesh.material->SetReflectionMatrix(reflectionMatrix);
-                mesh.material->SetReflectionSRV(m_reflectionTexture->GetShaderResourceView());
-                mesh.material->SetReflectivity(0.5f);
-            }
-        }
-    }
-
-    // ── Pass 0: рендер ОТРАЖЕНИЯ → m_reflectionTexture ───────────────────────
-    m_reflectionTexture->SetRenderTarget(m_direct3D->GetDeviceContext());
-    m_reflectionTexture->ClearRenderTarget(m_direct3D->GetDeviceContext(), 0.0f, 0.0f, 0.0f, 1.0f);
-    Render3DObjectsExcluding(m_direct3D->GetDeviceContext(), reflectionMatrix, m_projMatrix, -1);
-    m_direct3D->SetBackBufferRenderTarget();
-    m_direct3D->ResetViewport();
-    {
-        ID3D11ShaderResourceView* nullSRVs[8] = {};
-        m_direct3D->GetDeviceContext()->PSSetShaderResources(0, 8, nullSRVs);
-    }
-
-    // ── Pass 1: рендер ПРЕЛОМЛЕНИЯ → m_refractionTexture ─────────────────────
-    m_refractionTexture->SetRenderTarget(m_direct3D->GetDeviceContext());
-    m_refractionTexture->ClearRenderTarget(m_direct3D->GetDeviceContext(), 0.0f, 0.0f, 0.0f, 1.0f);
-    {
-        auto& meshPool = m_sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
-        XMFLOAT4 lightColors[NUM_LIGHTS];
-        XMFLOAT4 lightPositions[NUM_LIGHTS];
-
-
-        for (auto& [entity, mesh] : meshPool)
-        {
-            if (!m_sceneManager.IsObjectActive(entity)) continue;
-
-            auto* transform = m_sceneManager.GetObjectTransform(entity);
-            if (!transform || !mesh.model) continue;
-
-            auto* mat = mesh.material ? mesh.material : m_defaultMaterial;
-            if (!mat) continue;
-
-            // Пропускаем Glass/Water — они используют refraction-текстуру
-            auto* shader = mat->GetShader();
-            if (shader)
-            {
-                ShaderType st = shader->GetType();
-                if (st == ShaderType::Glass || st == ShaderType::Water)
-                    continue;
-            }
-
-            XMMATRIX world = transform->GetWorldMatrix();
-            RenderMesh(m_direct3D->GetDeviceContext(), mesh.model, world, m_viewMatrix, m_projMatrix,
-                mat, lightColors, lightPositions,
-                m_sceneManager.GetFogSettings(), false);
-        }
-    }
-    m_direct3D->SetBackBufferRenderTarget();
-    m_direct3D->ResetViewport();
-    {
-        ID3D11ShaderResourceView* nullSRVs[8] = {};
-        m_direct3D->GetDeviceContext()->PSSetShaderResources(0, 8, nullSRVs);
-    }
-
-    // ── Pass 2: preview в RenderTexture (для EditorUI) ────────────────────────
-    m_renderTexture->SetRenderTarget(m_direct3D->GetDeviceContext());
-    m_renderTexture->ClearRenderTarget(m_direct3D->GetDeviceContext(),
-        m_sceneManager.GetFogSettings().color.x,
-        m_sceneManager.GetFogSettings().color.y,
-        m_sceneManager.GetFogSettings().color.z, 1.0f);
-    XMMATRIX rtProj;
-    m_renderTexture->GetProjectionMatrix(rtProj);
-    Render3DObjects(m_direct3D->GetDeviceContext(), m_viewMatrix, rtProj);
-    m_editorUI.SetScenePreviewTexture(m_renderTexture->GetShaderResourceView());
-    {
-        ID3D11ShaderResourceView* nullSRVs[8] = {};
-        m_direct3D->GetDeviceContext()->PSSetShaderResources(0, 8, nullSRVs);
-    }
-
-    // ── Pass 3: финальный рендер на экран ─────────────────────────────────────
-    m_direct3D->SetBackBufferRenderTarget();
-    m_direct3D->ResetViewport();
-
-    if (m_sceneManager.GetFogSettings().enabled)
-        m_direct3D->BeginScene(
-            m_sceneManager.GetFogSettings().color.x,
-            m_sceneManager.GetFogSettings().color.y,
-            m_sceneManager.GetFogSettings().color.z, 1.0f);
-    else
-        m_direct3D->BeginScene(0.0f, 0.0f, 0.0f, 1.0f);
-
-    Render3DObjects(m_direct3D->GetDeviceContext(), m_viewMatrix, m_projMatrix);
-
-    RenderWorldSprites(m_direct3D->GetDeviceContext(), m_viewMatrix, m_projMatrix);
-
-
-    if (m_compartmentRenderer && m_colorShader)
-    {
-        // Убеждаемся, что растеризатор в режиме SOLID (заполнение)
-        // Если m_wireframeRS — это wireframe, то нужно либо:
-        // а) Создать отдельный m_solidRS, либо
-        // б) Временно сбросить на nullptr (стандартный solid)
-
-        ID3D11RasterizerState* oldRS = nullptr;
-        m_direct3D->GetDeviceContext()->RSGetState(&oldRS);
-
-        // Переключаем на SOLID для отсеков
-        m_direct3D->GetDeviceContext()->RSSetState(nullptr); // nullptr = стандартный solid
-
-        m_compartmentRenderer->RenderCompartments(
-            m_sceneManager.GetECSRegistry(),
-            m_direct3D->GetDeviceContext(),
-            m_viewMatrix,
-            m_projMatrix,
-            m_colorShader
-        );
-
-        // Восстанавливаем предыдущий состояние (может быть wireframe)
-        m_direct3D->GetDeviceContext()->RSSetState(oldRS);
-        if (oldRS) oldRS->Release();
-    }
-
-    // ════════════════════════════════════════════════════════════════
-    // 2. РЕНДЕР ФИЗИКИ (wireframe, только если включено в настройках)
-    // ════════════════════════════════════════════════════════════════
-    if (m_physicsDebugSettings.showColliders || m_physicsDebugSettings.showAABB || m_physicsDebugSettings.showContacts)
-    {
-        ID3D11RasterizerState* oldRS = nullptr;
-        m_direct3D->GetDeviceContext()->RSGetState(&oldRS);
-
-        // Включаем wireframe ТОЛЬКО для физики
-        m_direct3D->GetDeviceContext()->RSSetState(m_wireframeRS);
-
-        if (m_physicsDebugRenderer && m_colorShader)
-        {
-            m_physicsDebugRenderer->Render(
-                m_sceneManager.GetECSRegistry(),
-                PhysicsWorld::Get().GetWorld(),
-                m_direct3D->GetDeviceContext(),
-                m_viewMatrix,
-                m_projMatrix,
-                m_colorShader,
-                m_physicsDebugSettings
-            );
-        }
-
-        // Восстанавливаем
-        m_direct3D->GetDeviceContext()->RSSetState(oldRS);
-        if (oldRS) oldRS->Release();
-    }
-
-    // УДАЛЁН: прежний вызов UpdateFromWorld здесь — он мешал отображению маркеров (обновление происходило ПОСЛЕ рендера)
-
+    // 7. Drag-drop система
     bool imguiWantsMouse = m_editorUI.WantCaptureMouse()
         || ImGuizmo::IsOver()
         || ImGuizmo::IsUsing();
     if (!imguiWantsMouse)
-        HandleDragDrop();
-
-
-    m_editorUI.Update(m_sceneManager);
-    RenderCompartmentCornerHandles();
-    RenderCompoundCornerHandles();
-    // ── Обработка запросов от EditorUI ───────────────────────────────────────
     {
-        auto spawnReq = m_editorUI.ConsumeSpawnRequest();
-        if (spawnReq.pending) SpawnObjectFromRequest(spawnReq);
-    }
-    {
-        auto saveReq = m_editorUI.ConsumeSaveRequest();
-        if (saveReq.pending)
-        {
-            if (m_sceneManager.SaveScene(saveReq.path))
-                OutputDebugStringA(("Scene saved to " + saveReq.path + "\n").c_str());
-            else
-                OutputDebugStringA(("Failed to save scene to " + saveReq.path + "\n").c_str());
-        }
-    }
-    {
-        auto loadReq = m_editorUI.ConsumeLoadRequest();
-        if (loadReq.pending)
-        {
-            m_sceneManager.LoadScene(loadReq.path,
-                m_direct3D->GetDevice(), m_direct3D->GetDeviceContext());
-            OutputDebugStringA(("Scene loaded from: " + loadReq.path + "\n").c_str());
-        }
+        m_dragDropSystem->Update(m_viewMatrix, m_projMatrix,
+            m_screenWidth, m_screenHeight, m_lightSpheres,
+            [this](const auto& req) { SpawnObjectFromRequest(req); });
     }
 
     // ════════════════════════════════════════════════════════════════════════════
-// 🔥 ImGuizmo для редактирования отсеков
-// ════════════════════════════════════════════════════════════════════════════
-    if (m_editorUI.IsEditingCompartment() && m_compartmentRenderer)
+    // ★ ЕДИНСТВЕННЫЙ ВЫЗОВ РЕНДЕРА — всё остальное внутри Renderer::RenderFrame()
+    // ════════════════════════════════════════════════════════════════════════════
+    Entity selectedEntity = (m_editorUI.GetSelectedType() == EditorUI::SelectedType::Object)
+        ? m_editorUI.GetSelectedEntity() : INVALID_ENTITY;
+
+    m_renderer->RenderFrame(m_direct3D->GetDeviceContext(), m_viewMatrix, m_projMatrix, selectedEntity, m_physicsDebugSettings);
+    
+    // 8. EditorUI
+    m_editorUI.Update(m_sceneManager);
+    RenderCompartmentCornerHandles();
+    RenderCompoundCornerHandles();
+    HandleCompartmentGizmo();
+    HandleCameraMovement(dt);
+    // 9. Editor requests (save/load/spawn)
+    ProcessEditorRequests();
+
+    // 10. ImGui render
+    m_editorUI.Render();
+    m_direct3D->EndScene();
+
+    return true;
+}
+
+// ============================================================================
+// SyncCompartmentPositions — синхронизация позиций отсеков с подлодкой
+// ============================================================================
+void ApplicationClass::SyncCompartmentPositions()
+{
+    auto& registry = m_sceneManager.GetECSRegistry();
+    auto& compartmentPool = registry.GetComponents<CompartmentComponent>();
+    auto& transformPool = registry.GetComponents<TransformComponent>();
+    auto& subPool = registry.GetComponents<SubmarineComponent>();
+
+    for (auto& [entity, comp] : compartmentPool)
     {
-        auto& registry = m_sceneManager.GetECSRegistry();
-        auto* comp = registry.GetComponent<CompartmentComponent>(m_editorUI.GetEditingCompartmentEntity());
+        auto* subLink = subPool.Get(entity);
+        if (!subLink || subLink->submarineRoot == INVALID_ENTITY) continue;
+        if (entity == subLink->submarineRoot) continue;  // Пропускаем корень
 
-        if (comp && m_camera)
+        auto* rootTransform = transformPool.Get(subLink->submarineRoot);
+        auto* compartmentTransform = transformPool.Get(entity);
+        if (!rootTransform || !compartmentTransform) continue;
+
+        // Поворачиваем локальное смещение на угол подлодки
+        XMMATRIX rootRotation = XMMatrixRotationRollPitchYaw(
+            rootTransform->rotation.x,
+            rootTransform->rotation.y,
+            rootTransform->rotation.z);
+
+        XMVECTOR localOffset = XMLoadFloat3(&comp.localCenter);
+        XMVECTOR rotatedOffset = XMVector3TransformCoord(localOffset, rootRotation);
+
+        // Мировая позиция = позиция подлодки + повёрнутое смещение
+        XMVECTOR rootPos = XMLoadFloat3(&rootTransform->position);
+        XMVECTOR worldPos = XMVectorAdd(rootPos, rotatedOffset);
+
+        // Обновляем трансформ отсека
+        XMFLOAT3 newPos;
+        XMStoreFloat3(&newPos, worldPos);
+        compartmentTransform->position = newPos;
+        compartmentTransform->rotation = rootTransform->rotation;
+    }
+}
+
+// ============================================================================
+// UpdatePhysics — все системы физики в правильном порядке
+// ============================================================================
+void ApplicationClass::UpdatePhysics(float dt)
+{   
+    if (dt <= 0.f) return;
+
+    auto& registry = m_sceneManager.GetECSRegistry();
+
+    // 1. Затопление отсеков
+    FloodingSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
+
+    // 2. Создание джойнтов из редактора (ДО физики!)
+    JointConnectionSystem::Update(registry);
+
+    // 3. Обновление подлодок
+    auto& subPool = registry.GetComponents<SubmarineComponent>();
+    for (auto& [entity, subComp] : subPool)
+    {
+        if (subComp.submarineRoot == entity)  // Только корневые
+            SubmarineSystem::UpdateSubmarine(registry, entity);
+    }
+
+    // 4. Физика
+    PhysicsSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
+
+    // 5. Обнаружение сломанных джойнтов (ПОСЛЕ физики!)
+    SubmarineJointSystem::Update(registry, dt);
+
+    // 6. Давление и ремонт
+    PressureSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
+}
+
+// ============================================================================
+// UpdateWaterAnimation — анимация воды (UV смещение)
+// ============================================================================
+void ApplicationClass::UpdateWaterAnimation(float dt)
+{
+    auto& meshPool = m_sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
+    for (auto& [entity, mesh] : meshPool)
+    {
+        if (!m_sceneManager.IsObjectActive(entity) || !mesh.material) continue;
+        auto* shader = mesh.material->GetShader();
+        if (!shader || shader->GetType() != ShaderType::Water) continue;
+
+        float t = mesh.material->GetWaterTranslation();
+        t += dt * 0.001f;
+        if (t > 1.0f) t -= 1.0f;
+        mesh.material->SetWaterTranslation(t);
+    }
+}
+
+// ============================================================================
+// HandleCompartmentGizmo — ImGuizmo для редактирования отсеков
+// ============================================================================
+void ApplicationClass::HandleCompartmentGizmo()
+{
+    if (!m_editorUI.IsEditingCompartment() || !m_compartmentRenderer)
+        return;
+
+    auto& registry = m_sceneManager.GetECSRegistry();
+    auto* comp = registry.GetComponent<CompartmentComponent>(
+        m_editorUI.GetEditingCompartmentEntity());
+
+    if (!comp || !m_camera) return;
+
+    // ── Находим мировую матрицу корневой подлодки ─────────────────────────────
+    XMMATRIX worldMatrix = XMMatrixIdentity();
+    {
+        auto& subPool = registry.GetComponents<SubmarineComponent>();
+        auto& transformPool = registry.GetComponents<TransformComponent>();
+
+        auto* subLink = subPool.Get(m_editorUI.GetEditingCompartmentEntity());
+        if (subLink && subLink->submarineRoot != INVALID_ENTITY)
         {
-            // Получаем матрицу подлодки (или мира, если подлодки нет)
-            XMMATRIX worldMatrix = XMMatrixIdentity();
-
-            auto& subPool = registry.GetComponents<SubmarineComponent>();
-            auto& transformPool = registry.GetComponents<TransformComponent>();
-
-            auto* subLink = subPool.Get(m_editorUI.GetEditingCompartmentEntity());
-            if (subLink && subLink->submarineRoot != INVALID_ENTITY)
-            {
-                auto* rootTransform = transformPool.Get(subLink->submarineRoot);
-                if (rootTransform)
-                    worldMatrix = rootTransform->GetWorldMatrix();
-            }
-            else
-            {
-                auto* selfTransform = transformPool.Get(m_editorUI.GetEditingCompartmentEntity());
-                if (selfTransform)
-                    worldMatrix = selfTransform->GetWorldMatrix();
-            }
-
-            // Включаем ImGuizmo
-            ImGuizmo::SetDrawlist(ImGui::GetWindowDrawList());
-            ImGuizmo::SetRect(0, 0, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
-
-
-            // Матрицы для гизмо
-            XMMATRIX view, projection;
-            m_camera->GetViewMatrix(view);
-            m_direct3D->GetProjectionMatrix(projection);  // Или m_camera->GetProjectionMatrix(projection);
-
-            // Текущая трансформация отсека (центр + размер как масштаб)
-            XMMATRIX compartmentTransform =
-                XMMatrixScaling(m_editorUI.GetCompartmentSize().x,
-                    m_editorUI.GetCompartmentSize().y,
-                    m_editorUI.GetCompartmentSize().z) *
-                XMMatrixTranslation(m_editorUI.GetCompartmentCenter().x,
-                    m_editorUI.GetCompartmentCenter().y,
-                    m_editorUI.GetCompartmentCenter().z);
-
-            // Конвертируем в массивы для ImGuizmo
-            float matrix[16];
-            XMStoreFloat4x4(reinterpret_cast<XMFLOAT4X4*>(matrix), compartmentTransform);
-
-            // Определяем операцию
-            ImGuizmo::OPERATION op = m_editorUI.GetCompartmentEditMode() == EditorUI::CompartmentEditMode::Move
-                ? ImGuizmo::TRANSLATE
-                : ImGuizmo::SCALE;
-
-            // Рисуем гизмо
-            if (ImGuizmo::Manipulate(
-                reinterpret_cast<const float*>(&view),
-                reinterpret_cast<const float*>(&projection),
-                op,
-                ImGuizmo::LOCAL,  // Локальное пространство (относительно подлодки)
-                matrix))
-            {
-                // Если гизмо изменился — обновляем кэш
-                XMFLOAT4X4 floatMat;
-                memcpy(&floatMat, matrix, sizeof(XMFLOAT4X4));  // Копируем данные из массива float[16]
-                XMMATRIX newTransform = XMLoadFloat4x4(&floatMat);  // Конвертируем в XMMATRIX
-
-                // Извлекаем позицию и масштаб
-                XMFLOAT3 newCenter, newScale;
-                XMStoreFloat3(&newCenter, newTransform.r[3]);  // Translation
-                XMStoreFloat3(&newScale, newTransform.r[0]);   // Scale X (предполагаем равномерный масштаб)
-
-                // Обновляем кэш редактора
-                m_editorUI.SetCompartmentCenter(newCenter);
-                m_editorUI.SetCompartmentSize(newScale);
-
-                // Применяем к компоненту
-                m_editorUI.ApplyCompartmentCacheToComponent(comp);
-            }
+            auto* rt = transformPool.Get(subLink->submarineRoot);
+            if (rt) worldMatrix = rt->GetWorldMatrix();
+        }
+        else
+        {
+            auto* st = transformPool.Get(m_editorUI.GetEditingCompartmentEntity());
+            if (st) worldMatrix = st->GetWorldMatrix();
         }
     }
 
-    m_editorUI.Render();
-    m_direct3D->EndScene();
-    return true;
+    ImGuizmo::SetDrawlist(ImGui::GetBackgroundDrawList());
+    ImGuizmo::SetRect(0, 0, ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y);
+
+    XMMATRIX view, proj;
+    m_camera->GetViewMatrix(view);
+    m_direct3D->GetProjectionMatrix(proj);
+
+    // Текущая трансформация отсека (центр + размер как масштаб)
+    XMMATRIX compartmentTransform =
+        XMMatrixScaling(m_editorUI.GetCompartmentSize().x,
+            m_editorUI.GetCompartmentSize().y,
+            m_editorUI.GetCompartmentSize().z) *
+        XMMatrixTranslation(m_editorUI.GetCompartmentCenter().x,
+            m_editorUI.GetCompartmentCenter().y,
+            m_editorUI.GetCompartmentCenter().z);
+
+    float matrix[16];
+    XMStoreFloat4x4(reinterpret_cast<XMFLOAT4X4*>(matrix), compartmentTransform);
+
+    ImGuizmo::OPERATION op = (m_editorUI.GetCompartmentEditMode() == EditorUI::CompartmentEditMode::Move)
+        ? ImGuizmo::TRANSLATE
+        : ImGuizmo::SCALE;
+
+    // Рисуем гизмо
+    if (ImGuizmo::Manipulate(
+        reinterpret_cast<const float*>(&view),
+        reinterpret_cast<const float*>(&proj),
+        op,
+        ImGuizmo::LOCAL,
+        matrix))
+    {
+        // Пересчитываем из матрицы обратно в позицию/размер
+        XMFLOAT4X4 floatMat;
+        memcpy(&floatMat, matrix, sizeof(XMFLOAT4X4));
+        XMMATRIX newTransform = XMLoadFloat4x4(&floatMat);
+
+        XMFLOAT3 newCenter, newScale;
+        XMStoreFloat3(&newCenter, newTransform.r[3]);
+        XMStoreFloat3(&newScale, newTransform.r[0]);
+
+        m_editorUI.SetCompartmentCenter(newCenter);
+        m_editorUI.SetCompartmentSize(newScale);
+        m_editorUI.ApplyCompartmentCacheToComponent(comp);
+    }
+}
+
+// ============================================================================
+// ProcessEditorRequests — обработка save/load/spawn запросов от EditorUI
+// ============================================================================
+void ApplicationClass::ProcessEditorRequests()
+{
+    // Spawn request
+    {
+        auto req = m_editorUI.ConsumeSpawnRequest();
+        if (req.pending)
+            SpawnObjectFromRequest(req);
+    }
+
+    // Save request
+    {
+        auto req = m_editorUI.ConsumeSaveRequest();
+        if (req.pending)
+        {
+            if (m_sceneManager.SaveScene(req.path))
+                OutputDebugStringA(("Scene saved to " + req.path + "\n").c_str());
+            else
+                OutputDebugStringA(("Failed to save scene to " + req.path + "\n").c_str());
+        }
+    }
+
+    // Load request
+    {
+        auto req = m_editorUI.ConsumeLoadRequest();
+        if (req.pending)
+        {
+            m_sceneManager.LoadScene(req.path,
+                m_direct3D->GetDevice(), m_direct3D->GetDeviceContext());
+            OutputDebugStringA(("Scene loaded from: " + req.path + "\n").c_str());
+        }
+    }
 }
 // ============================================================================
 // SpawnObjectFromRequest
@@ -2101,4 +2022,154 @@ void ApplicationClass::RefreshRigidBodyExternal(ECSRegistry& registry, Entity en
 
     // Пересоздаём
     PhysicsSystem::CreateRigidBody(registry, entity);
+}
+
+ID3D11ShaderResourceView* LoadSkyboxCubemap(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context,
+    const std::string& basePath)
+{
+    // 🔥 Порядок граней для DX11 кубмапа (важно!)
+    const char* faces[6] = {
+        "_px.jpg", "_nx.jpg",  // +X, -X (Right, Left)
+        "_py.jpg", "_ny.jpg",  // +Y, -Y (Up, Down)
+        "_pz.jpg", "_nz.jpg"   // +Z, -Z (Front, Back)
+    };
+
+    std::vector<unsigned char*> faceData(6, nullptr);
+    int width = 0, height = 0;
+
+    // 1. Загружаем все 6 граней через stb_image
+    for (int i = 0; i < 6; ++i)
+    {
+        std::string path = basePath + faces[i];
+        int channels = 0;
+
+        faceData[i] = stbi_load(path.c_str(), &width, &height, &channels, 4);
+        if (!faceData[i])
+        {
+            // Очистка при ошибке
+            for (int j = 0; j < i; ++j)
+                if (faceData[j]) stbi_image_free(faceData[j]);
+            return nullptr;
+        }
+    }
+
+    // 2. Создаём текстуру-куб
+    D3D11_TEXTURE2D_DESC desc = {};
+    desc.Width = width;
+    desc.Height = height;
+    desc.MipLevels = 1;  // Можно 0 для авто-генерации, но тогда нужна отдельная логика
+    desc.ArraySize = 6;  // 🔥 Ключевое: 6 граней
+    desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+    desc.CPUAccessFlags = 0;
+    desc.MiscFlags = D3D11_RESOURCE_MISC_TEXTURECUBE;  // 🔥 Флаг кубмапа!
+
+    ID3D11Texture2D* cubeTex = nullptr;
+    if (FAILED(device->CreateTexture2D(&desc, nullptr, &cubeTex)))
+    {
+        for (auto* data : faceData) if (data) stbi_image_free(data);
+        return nullptr;
+    }
+
+    // 3. Копируем данные каждой грани
+    for (int i = 0; i < 6; ++i)
+    {
+        context->UpdateSubresource(
+            cubeTex,
+            D3D11CalcSubresource(0, i, 1),  // Mip 0, ArraySlice i
+            0,
+            faceData[i],
+            width * 4,  // Row pitch: ширина * 4 байта на пиксель
+            0
+        );
+        stbi_image_free(faceData[i]);
+    }
+
+    // 4. Создаём SRV для кубмапа
+    D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Format = desc.Format;
+    srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
+    srvDesc.TextureCube.MostDetailedMip = 0;
+    srvDesc.TextureCube.MipLevels = 1;
+
+    ID3D11ShaderResourceView* skySRV = nullptr;
+    if (FAILED(device->CreateShaderResourceView(cubeTex, &srvDesc, &skySRV)))
+    {
+        cubeTex->Release();
+        return nullptr;
+    }
+
+    cubeTex->Release();  // SRV держит ссылку, текстуру можно освободить
+    return skySRV;
+}
+
+void ApplicationClass::SpawnTestBot(ECSRegistry& registry, const XMFLOAT3& pos)
+{
+    // ── 1. Создаём сущность ─────────────────────────────────────────────────
+    Entity bot = registry.CreateEntity();
+
+    // ── 2. Добавляем обязательные компоненты ────────────────────────────────
+    registry.AddComponent<TransformComponent>(bot,
+        TransformComponent{ pos, {0,0,0}, {1,1,1} });
+
+    // 🔥 КРИТИЧНО: Добавляем ActiveComponent, иначе объект не рендерится!
+    registry.AddComponent<ActiveComponent>(bot, ActiveComponent{});
+
+    // ── 3. Меш для визуализации ────────────────────────────────────────────
+    if (m_mainModel)
+    {
+        auto* mat = new MaterialClass();
+        if (!mat->Initialize(m_direct3D->GetDevice(), L"TestBotMat"))
+        {
+            delete mat;
+            OutputDebugStringA("[SpawnTestBot] Failed to init material\n");
+            return;
+        }
+
+        // Выбираем шейдер
+        mat->SetShader(m_lightShader);
+
+        // Текстура
+        if (m_defaultTexture) mat->SetMainTexture(m_defaultTexture);
+
+        registry.AddComponent<MeshRendererComponent>(bot,
+            MeshRendererComponent{ m_mainModel, mat });
+    }
+
+    // ── 4. Компоненты персонажа ────────────────────────────────────────────
+    registry.AddComponent<CharacterController>(bot, CharacterController{});
+    registry.AddComponent<CharacterMovement>(bot, CharacterMovement{});
+    registry.AddComponent<SubmarineComponent>(bot, SubmarineComponent{});
+    // ── 5. 🔥 РЕГИСТРАЦИЯ В SCENEMANAGER (критично!) ───────────────────────
+    // Это добавляет объект в списки рендера, редактора, обновления
+ 
+
+    // ── 6. Вызываем систему спавна (Bullet) ────────────────────────────────
+    CharacterSpawnSystem::Spawn(registry, bot, pos);
+
+    // ── 7. Отладочный вывод ────────────────────────────────────────────────
+    OutputDebugStringA(("[Test] Bot spawned: entity=" + std::to_string(bot) +
+        " at (" + std::to_string(pos.x) + ", " +
+        std::to_string(pos.y) + ", " +
+        std::to_string(pos.z) + ")\n").c_str());
+
+    // 🔥 Проверка: видим ли мы объект в менеджере?
+    if (m_sceneManager.IsObjectActive(bot))
+        OutputDebugStringA("[Test] ✅ Object is ACTIVE in SceneManager\n");
+    else
+        OutputDebugStringA("[Test] ❌ Object is NOT ACTIVE — check RegisterEntity!\n");
+
+    auto* move = registry.GetComponent<CharacterMovement>(bot);
+    if (move) {
+        move->walkDirection = XMFLOAT3(0, 0, 1);  // Вперёд по Z
+        move->moveSpeed = 3.5f;
+        OutputDebugStringA("[Test] Forced walk direction: forward\n");
+    }
+
+
+
 }

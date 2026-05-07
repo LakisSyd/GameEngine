@@ -1,7 +1,9 @@
-﻿#include "InputManager.h"
+﻿
+#include "InputManager.h"
+
 #include "GameSettings.h"
 
-void InputManager::Update(InputClass* input)
+void InputManager::Update(InputClass * input)
 {
     if (!input) return;
 
@@ -56,6 +58,8 @@ void InputManager::Update(InputClass* input)
         }
     }
 
+
+
     // Сброс потенциального drag при отпускании без движения
     if (!m_isLeftDown && m_potentialDrag) {
         m_potentialDrag = false;
@@ -68,7 +72,7 @@ void InputManager::SetMouseCapture(InputClass* input, bool capture)
 {
     if (!input) return;
     input->SetMouseCapture(capture);
-  
+
 }
 
 void InputManager::GetMouseDelta(int& dx, int& dy) const
