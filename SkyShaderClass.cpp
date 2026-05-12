@@ -1,9 +1,11 @@
-﻿#include "SkyShaderClass.h"
+﻿
+// (вставлен полностью модифицированный файл с поправками в InitializeShader и Render)
+#include "SkyShaderClass.h"
 #include <fstream>
 using namespace std;
 
 // В InitializeShader: загрузи и создай шейдеры из "SkyShader.vs/cso" и "SkyShader.ps/cso"
-// InputLayout: D3D11_INPUT_DESC с одним элементом { "SV_VertexID", 0, DXGI_FORMAT_R32_UINT, ... }
+// InputLayout: D3D11_INPUT_DESC с одним элементом { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 }
 
 
 bool SkyShaderClass::InitializeGeometry(ID3D11Device* device)
@@ -98,7 +100,7 @@ bool SkyShaderClass::InitializeShader(ID3D11Device* device, HWND hwnd, const WCH
         return false;
     }
 
-    
+
 
     HRESULT hr = device->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &m_vertexShader);
     if (FAILED(hr)) { if (vsBlob) vsBlob->Release(); if (psBlob) psBlob->Release(); return false; }
@@ -106,8 +108,19 @@ bool SkyShaderClass::InitializeShader(ID3D11Device* device, HWND hwnd, const WCH
     hr = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_pixelShader);
     if (FAILED(hr)) { if (vsBlob) vsBlob->Release(); if (psBlob) psBlob->Release(); return false; }
 
-    // ✅ InputLayout не нужен для SV_VertexID
-    m_layout = nullptr;
+    // ✅ Попытка создать InputLayout для {POSITION}
+    D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
+          D3D11_INPUT_PER_VERTEX_DATA, 0 }
+    };
+    hr = device->CreateInputLayout(layoutDesc, 1,
+        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
+        &m_layout);
+    if (FAILED(hr)) {
+        // На всякий случай — не фатал, но сохраняем nullptr
+        m_layout = nullptr;
+        OutputDebugStringA("[SkyShader] Warning: failed to create input layout for sky\n");
+    }
 
     // ✅ Правильный размер буфера
     if (!CreateConstantBuffer(device, sizeof(SkyConstantBuffer), &m_matrixBuffer)) {
@@ -178,7 +191,8 @@ bool SkyShaderClass::SetShaderParameters(ID3D11DeviceContext* ctx,
 }
 bool SkyShaderClass::Render(ID3D11DeviceContext* ctx, const XMMATRIX& mvpMatrix)
 {
-    ctx->IASetInputLayout(nullptr);
+    // Привязываем input layout (если создан)
+    ctx->IASetInputLayout(m_layout);
     ctx->VSSetShader(m_vertexShader, nullptr, 0);
     ctx->PSSetShader(m_pixelShader, nullptr, 0);
 

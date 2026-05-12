@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿
+#pragma once
 #include "BaseShader.h"
 
 class projectionShaderClass : public ShaderBaseClass
@@ -15,16 +16,18 @@ class projectionShaderClass : public ShaderBaseClass
     struct LightBufferType
     {
         XMFLOAT4 ambientColor;
-    
-          
+
+
         XMFLOAT4 diffuseColor;
         XMFLOAT3 lightDirection;
         float padding;
     };
-    
- 
+
+
     ID3D11SamplerState* m_sampleState = nullptr;
     ID3D11SamplerState* m_sampleState2 = nullptr;
+    // Sampler для сравнения (для shadow/compare sampling) — будет привязан в слот s7
+    ID3D11SamplerState* m_cmpSampler = nullptr;
 
 public:
     projectionShaderClass() = default;

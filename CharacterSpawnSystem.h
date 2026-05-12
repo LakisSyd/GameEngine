@@ -38,8 +38,7 @@ public:
             // ❌ Нет 4-го аргумента upAxis в старых версиях!
         );
 
-        // ── 4. Настройки (без setUpAxis!) ──────────────────────────────────
-        // ❌ controller->controller->setUpAxis(1);  // ← Убери эту строку!
+       
 
         controller->controller->setGravity(btVector3(0, -controller->gravity, 0));
         controller->controller->setMaxSlope(controller->maxSlope);
@@ -58,6 +57,7 @@ public:
 
         controller->ghostObj->setWorldTransform(startTransform);
 
+        
         // ── 5. Регистрация в мире ──────────────────────────────────────────
         auto* world = PhysicsWorld::Get().GetWorld();
 
@@ -94,45 +94,7 @@ public:
             firstSync = false;
         }
 
-#ifdef _DEBUG
-        OutputDebugStringA(
-            ("[CharDebug] entity=" + std::to_string(entity) +
-                " | onGround=" + std::to_string(controller->controller->onGround()) +
-                " | posY=" + std::to_string(startPosition.y) + "\n").c_str()
-        );
-#endif
 
-
-#ifdef _DEBUG
-        auto* ghost = controller->ghostObj;
-        char buf[256];
-
-        sprintf_s(buf,
-            "[CharCollision] ghost group=0x%X, mask=0x%X\n",
-            ghost->getBroadphaseHandle()->m_collisionFilterGroup,
-            ghost->getBroadphaseHandle()->m_collisionFilterMask
-        );
-        OutputDebugStringA(buf);
-
-        // Тест: создаём луч вниз и проверяем, детектируется ли пол
-        btCollisionWorld::ClosestRayResultCallback rayCallback(
-            btVector3(startPosition.x, startPosition.y + 1.0f, startPosition.z),
-            btVector3(startPosition.x, startPosition.y - 10.0f, startPosition.z)
-        );
-        rayCallback.m_collisionFilterGroup = btBroadphaseProxy::CharacterFilter;
-        rayCallback.m_collisionFilterMask = btBroadphaseProxy::StaticFilter;
-
-         world->rayTest(rayCallback.m_rayFromWorld, rayCallback.m_rayToWorld, rayCallback);
-
-        if (rayCallback.hasHit())
-        {
-            OutputDebugStringA("[CharCollision] ✅ Ray hit ground — masks OK\n");
-        }
-        else
-        {
-            OutputDebugStringA("[CharCollision] ❌ Ray missed — check floor masks!\n");
-        }
-#endif
 
     }
 

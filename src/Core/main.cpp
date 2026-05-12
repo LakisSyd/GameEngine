@@ -1,17 +1,21 @@
 ﻿#include "SystemClass.h"
 #include <windows.h>
-
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
 // 📌 WinMain — стандартная точка входа для оконных приложений Windows
 // ⚙️ Параметры:
 //   hInstance     — дескриптор текущего экземпляра приложения
 //   hPrevInstance — всегда NULL в современных Windows (устаревший параметр)
 //   pCmdLine      — командная строка запуска
-//   nCmdShow      — как показать окно (свернутое/развёрнутое)
+//   nCmdShow      — как показать окно (све рнутое/развёрнутое)
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow)
 {
+    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
+    _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
+   // _CrtSetBreakAlloc(4452);
     // 💡 DPI Awareness — отключаем автоматическое масштабирование Windows
     //    Без этого окно может "поплыть" на мониторах с высоким DPI (4K и т.д.)
     //    Важно для точного контроля над размерами рендера в DirectX

@@ -27,6 +27,8 @@ public:
         );
 
         m_dynamicsWorld->setGravity(btVector3(0, -9.81f, 0));
+        m_ghostCallback = std::make_unique<btGhostPairCallback>();
+        m_dynamicsWorld->getPairCache()->setInternalGhostPairCallback(m_ghostCallback.get());
 
         // ═══════════════════════════════════════════════════════════════
         // 🔥 REGISTER GImpact algorithm for dynamic concave mesh collision
@@ -81,17 +83,35 @@ public:
 
     void Shutdown()
     {
-        m_dynamicsWorld.reset();
-        m_solver.reset();
-        m_broadphase.reset();
-        m_dispatcher.reset();
-        m_collisionConfig.reset();
+        OutputDebugStringA("[PhysicsWorld] Shutdown() called\n");  // ← Проверьте, появляется ли это
+
+        // Порядок важен! Обратный порядку создания:
+        if (m_dynamicsWorld) {
+            // 1. Сначала удалить все тела из мира (если ещё не удалены через ECS)
+            for (int i = m_dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; --i) {
+                btCollisionObject* obj = m_dynamicsWorld->getCollisionObjectArray()[i];
+                btRigidBody* body = btRigidBody::upcast(obj);
+                if (body && body->getMotionState()) {
+                    delete body->getMotionState();
+                }
+                m_dynamicsWorld->removeCollisionObject(obj);
+                delete obj;  // shape удалится автоматически, если не compound
+            }
+        }
+
+        m_dynamicsWorld.reset();  // ~btDiscreteDynamicsWorld
+        m_solver.reset();         // ~btSequentialImpulseConstraintSolver
+        m_broadphase.reset();     // ~btDbvtBroadphase
+        m_dispatcher.reset();     // ~btCollisionDispatcher
+        m_collisionConfig.reset(); // ~btDefaultCollisionConfiguration ← освобождает пулы!
+
+        OutputDebugStringA("[PhysicsWorld] Shutdown() complete\n");
     }
 
 private:
     PhysicsWorld() = default;
     ~PhysicsWorld() = default;
-
+    std::unique_ptr<btGhostPairCallback> m_ghostCallback;
     std::unique_ptr<btDefaultCollisionConfiguration> m_collisionConfig;
     std::unique_ptr<btCollisionDispatcher> m_dispatcher;
     std::unique_ptr<btBroadphaseInterface> m_broadphase;

@@ -116,7 +116,25 @@ public:
 
 
 
+    static void UpdateCharacterPos(ECSRegistry& registry) {
+        auto& controllerPool = registry.GetComponents<CharacterController>();
+        auto& transformPool = registry.GetComponents<TransformComponent>();
 
+        for (auto& [entity, controller] : controllerPool) {
+            if (!controller.ghostObj) continue;
+
+            // 🔥 Читаем позицию ИЗ Bullet → в Transform
+            btTransform trans = controller.ghostObj->getWorldTransform();
+            btVector3 pos = trans.getOrigin();
+
+            if (auto* tf = transformPool.Get(entity)) {
+                tf->position = XMFLOAT3(pos.x(), pos.y(), pos.z());
+                // Опционально: поворот, если нужно
+                // btQuaternion rot = trans.getRotation();
+                // tf->rotation = ...;
+            }
+        }
+    }
 
     static btCollisionShape* CreateSphereShape(float radius, const XMFLOAT3& scale);
 

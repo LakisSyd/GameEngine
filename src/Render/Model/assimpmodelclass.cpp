@@ -74,12 +74,7 @@ static void PrintVector3(const XMFLOAT3& vec, const std::string& label) {
 }
 
 static void PrintQuaternion(const XMFLOAT4& quat, const std::string& label) {
-#if DEBUG_VERBOSE
-    char dbg[256];
-    sprintf_s(dbg, "%s: (%.4f, %.4f, %.4f, %.4f) [w=%.4f]\n",
-        label.c_str(), quat.x, quat.y, quat.z, quat.w);
-    OutputDebugStringA(dbg);
-#endif
+
 }
 
 // ============================================================================
@@ -319,10 +314,7 @@ void AssimpModelClass::LoadBones(const aiScene* scene)
     for (unsigned int m = 0; m < scene->mNumMeshes; ++m)
     {
         aiMesh* mesh = scene->mMeshes[m];
-#if DEBUG_VERBOSE
-        OutputDebugStringA(("Mesh " + std::to_string(m) + ": " + (mesh->mName.C_Str()[0] ? mesh->mName.C_Str() : "unnamed") + "\n").c_str());
-        OutputDebugStringA(("  Vertices: " + std::to_string(mesh->mNumVertices) + ", Bones: " + std::to_string(mesh->mNumBones) + "\n").c_str());
-#endif
+
 
         for (unsigned int b = 0; b < mesh->mNumBones; ++b)
         {
@@ -362,10 +354,7 @@ void AssimpModelClass::LoadBones(const aiScene* scene)
     XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
     for (auto& mat : m_finalBoneMatrices) mat = identity;
 
-#if DEBUG_VERBOSE
-    OutputDebugStringA(("Loaded " + std::to_string(boneCounter) + " unique bones\n").c_str());
-    OutputDebugStringA("========== END BONES ==========\n\n");
-#endif
+
 }
 
 // ============================================================================
@@ -375,10 +364,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
 {
     m_animations.clear();
 
-#if DEBUG_VERBOSE
-    OutputDebugStringA("\n========== LOADING ANIMATIONS ==========\n");
-    OutputDebugStringA(("Total animations: " + std::to_string(scene->mNumAnimations) + "\n").c_str());
-#endif
+
 
     for (unsigned int i = 0; i < scene->mNumAnimations; ++i)
     {

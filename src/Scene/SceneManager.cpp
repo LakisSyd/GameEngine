@@ -18,7 +18,7 @@ SceneManager::SceneManager()
     : m_defaultMaterial(nullptr)
     , m_mainModelFallback(nullptr)
 {
-    // Инициализация света больше не нужна — света создаются через SpawnLight()
+    
 }
 
 SceneManager::~SceneManager()
@@ -65,8 +65,16 @@ bool SceneManager::RemoveObject(Entity entity)
     if (!m_registry.HasComponent<TransformComponent>(entity))
         return false; // сущность не существует
 
+    
     // Убираем тег активности — RenderSystem пропустит эту сущность
     m_registry.RemoveComponent<ActiveComponent>(entity);
+    if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
+    {
+        if (mesh->material) {
+            delete mesh->material;  // ✅
+            mesh->material = nullptr;
+        }
+    }
 
     return true;
 }
@@ -79,6 +87,14 @@ void SceneManager::Clear()
     // Неделя 3: очищаем ECS реестр через пересоздание
     // (полный сброс — все Entity и все компоненты)
     m_registry = ECSRegistry{};
+    for (auto& [name, model] : m_modelCache)
+    {
+        delete model;  // Или model->Shutdown() если есть
+    }
+    m_modelCache.clear();
+
+    // В MaterialClass::~MaterialClass()
+  
 }
 
 // ============================================================================

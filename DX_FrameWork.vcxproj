@@ -263,14 +263,14 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Debug;C:\Users\Lakis\Desktop\vcpkg\packages\bullet3_x64-windows\include\bullet;C:\Users\Lakis\Desktop\vcpkg\packages\bullet3_x64-windows\include;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\System;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\Components;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Config;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Material;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\assimp;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\imgui-master;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene\Light;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Texture;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Model;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Camera;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\BitMap;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Input;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\HelpFunc;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Editor;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Program Files %28x86%29\Visual Leak Detector\include;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Debug;C:\Users\Lakis\Desktop\vcpkg\packages\bullet3_x64-windows\include\bullet;C:\Users\Lakis\Desktop\vcpkg\packages\bullet3_x64-windows\include;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\System;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS\Components;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\ECS;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Config;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Material;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\assimp;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\imgui-master;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Scene\Light;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Texture;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Model;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Camera;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\BitMap;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Input;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\HelpFunc;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Editor;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalLibraryDirectories>C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib;C:\Users\Lakis\Desktop\vcpkg\packages\bullet3_x64-windows\debug\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Program Files %28x86%29\Visual Leak Detector\lib\Win64;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib;C:\Users\Lakis\Desktop\vcpkg\packages\bullet3_x64-windows\debug\lib;C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies>assimp-vc143-mt.lib;BulletDynamics_Debug.lib;BulletCollision_Debug.lib;LinearMath_Debug.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -291,11 +291,13 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
     <Import Project="..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets" Condition="Exists('..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets')" />
+    <Import Project="..\packages\VisualLeakDetector.2.5.0.0\build\native\VisualLeakDetector.targets" Condition="Exists('..\packages\VisualLeakDetector.2.5.0.0\build\native\VisualLeakDetector.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>Данный проект ссылается на пакеты NuGet, отсутствующие на этом компьютере. Используйте восстановление пакетов NuGet, чтобы скачать их.  Дополнительную информацию см. по адресу: http://go.microsoft.com/fwlink/?LinkID=322105. Отсутствует следующий файл: {0}.</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets'))" />
+    <Error Condition="!Exists('..\packages\VisualLeakDetector.2.5.0.0\build\native\VisualLeakDetector.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\VisualLeakDetector.2.5.0.0\build\native\VisualLeakDetector.targets'))" />
   </Target>
 </Project>

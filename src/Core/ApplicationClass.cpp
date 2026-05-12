@@ -1,4 +1,5 @@
-﻿#include "applicationclass.h"
+﻿#include <vld.h>
+#include "applicationclass.h"
 #include <algorithm>
 #include "FileSystem.h"
 #include "PhysicsSystem.h"
@@ -17,6 +18,7 @@
 #include "directxtk/DDSTextureLoader.h"
 #include <stb_image.h>
 #include "../../CharacterSpawnSystem.h"
+
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
 // ============================================================================
@@ -207,6 +209,8 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         MessageBox(hwnd, L"Failed to load light sphere model", L"Error", MB_OK);
         return false;
     }
+  
+
 
     // ── Загрузка всех шейдеров ───────────────────────────────────────────────
     auto& sm = ShaderManager::Get();
@@ -569,9 +573,16 @@ void ApplicationClass::Shutdown()
         m_shadowMap = nullptr;
     }
 
+    if (m_renderer)  // Проверка перед удалением
+    {
+      
+        delete m_renderer;
+        m_renderer = nullptr;  // Обязательно обнуляем!
+    }
+
     if (m_direct3D)
         m_direct3D->Shutdown();
-
+    PhysicsWorld::Get().Shutdown();
     m_editorUI.Shutdown();
 }
 
@@ -579,32 +590,35 @@ bool ApplicationClass::Frame(float dt)
 {
     // 1. Получаем настройки отладки
     m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
-
+    bool imguiWantsMouse = m_editorUI.WantCaptureMouse() || ImGuizmo::IsOver();
+    if (!imguiWantsMouse) {
+        HandleCameraMovement(dt);  // ← Сразу применяем
+        m_camera->Render();         // ← Сразу обновляем матрицы
+    }
     // 2. Синхронизируем позиции отсеков (связь с подлодкой)
     SyncCompartmentPositions();
-
+    m_inputManager.Update(m_input);
     // 3. Физика
     UpdatePhysics(dt);
 
     // 4. Анимация воды
     UpdateWaterAnimation(dt);
 
-    // 5. Управление камерой
-    m_inputManager.Update(m_input);
-   
+  
     m_sceneManager.UpdateAll(dt);
     m_sceneManager.UpdateLights();
-
+   
     m_camera->Render();
     m_camera->GetViewMatrix(m_viewMatrix);
     m_direct3D->GetProjectionMatrix(m_projMatrix);
+
 
     // 6. Debug visualizer update
     if (m_debugVisualizer)
         m_debugVisualizer->UpdateFromWorld(PhysicsWorld::Get().GetWorld());
 
     // 7. Drag-drop система
-    bool imguiWantsMouse = m_editorUI.WantCaptureMouse()
+    imguiWantsMouse = m_editorUI.WantCaptureMouse()
         || ImGuizmo::IsOver()
         || ImGuizmo::IsUsing();
     if (!imguiWantsMouse)
@@ -627,7 +641,7 @@ bool ApplicationClass::Frame(float dt)
     RenderCompartmentCornerHandles();
     RenderCompoundCornerHandles();
     HandleCompartmentGizmo();
-    HandleCameraMovement(dt);
+  
     // 9. Editor requests (save/load/spawn)
     ProcessEditorRequests();
 
@@ -687,7 +701,7 @@ void ApplicationClass::UpdatePhysics(float dt)
     if (dt <= 0.f) return;
 
     auto& registry = m_sceneManager.GetECSRegistry();
-
+  
     // 1. Затопление отсеков
     FloodingSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
 
@@ -1133,6 +1147,9 @@ bool RayIntersectsSphere(const CameraClass::Ray& ray,
 // ============================================================================
 void ApplicationClass::HandleCameraMovement(float dt)
 {
+
+    if (m_editorUI.WantCaptureMouse()) return; // Пропускать ввод, если UI активен
+
     dt = min(dt, 0.05f);
 
     bool rightDown = m_inputManager.IsCameraMode();
@@ -1147,9 +1164,9 @@ void ApplicationClass::HandleCameraMovement(float dt)
         int deltaX, deltaY;
         m_input->GetMouseDelta(deltaX, deltaY);
         m_inputManager.ResetMouseDelta(m_input);
-
-        float rotX = m_camera->GetRotation().x + deltaY * Settings::CAMERA_SENSITIVITY;
-        float rotY = m_camera->GetRotation().y + deltaX * Settings::CAMERA_SENSITIVITY;
+        float mouseSensitivity = Settings::CAMERA_SENSITIVITY * dt * 120.0f; // 60 FPS как база
+       float rotX = m_camera->GetRotation().x + deltaY * mouseSensitivity;
+       float rotY = m_camera->GetRotation().y + deltaX * mouseSensitivity;
         rotX = clamp(rotX, -89.0f, 89.0f);
         m_camera->SetRotation(rotX, rotY, m_camera->GetRotation().z);
     }
@@ -2167,7 +2184,7 @@ void ApplicationClass::SpawnTestBot(ECSRegistry& registry, const XMFLOAT3& pos)
     if (move) {
         move->walkDirection = XMFLOAT3(0, 0, 1);  // Вперёд по Z
         move->moveSpeed = 3.5f;
-        OutputDebugStringA("[Test] Forced walk direction: forward\n");
+      OutputDebugStringA("[Test] Forced walk direction: forward\n");
     }
 
 

@@ -249,10 +249,28 @@ bool projectionShaderClass::InitializeShader(ID3D11Device* device, HWND hwnd,
     samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
     samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
     samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    // m_sampleState2 будет не-comparison по умолчанию (в некоторых шейдерах нужен простой CLAMP)
+    // при необходимости можно настроить ComparisonFunc отдельно.
 
     if (FAILED(device->CreateSamplerState(&samplerDesc, &m_sampleState2)))
     {
         OutputDebugStringA("ProjectionShaderClass: CreateSamplerState(s1) FAILED!\n");
+        return false;
+    }
+
+    // ── Сэмплер для сравнения (для shadow/compare sampling) → слот s7 ───────
+    D3D11_SAMPLER_DESC cmpDesc = {};
+    cmpDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR;
+    cmpDesc.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    cmpDesc.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    cmpDesc.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    cmpDesc.ComparisonFunc = D3D11_COMPARISON_LESS_EQUAL; // типичная настройка для shadow maps
+    cmpDesc.MinLOD = 0.0f;
+    cmpDesc.MaxLOD = D3D11_FLOAT32_MAX;
+
+    if (FAILED(device->CreateSamplerState(&cmpDesc, &m_cmpSampler)))
+    {
+        OutputDebugStringA("ProjectionShaderClass: CreateSamplerState(cmp) FAILED!\n");
         return false;
     }
 
@@ -262,6 +280,7 @@ bool projectionShaderClass::InitializeShader(ID3D11Device* device, HWND hwnd,
 
 void projectionShaderClass::ShutdownShader()
 {
+    if (m_cmpSampler) { m_cmpSampler->Release(); m_cmpSampler = nullptr; }
     if (m_sampleState2) { m_sampleState2->Release(); m_sampleState2 = nullptr; }
     if (m_lightBuffer) { m_lightBuffer->Release();  m_lightBuffer = nullptr; }
     if (m_matrixBuffer) { m_matrixBuffer->Release(); m_matrixBuffer = nullptr; }
@@ -274,5 +293,7 @@ void projectionShaderClass::RenderShader(ID3D11DeviceContext* deviceContext, int
     deviceContext->PSSetShader(m_pixelShader, NULL, 0);
     deviceContext->PSSetSamplers(0, 1, &m_sampleState);
     deviceContext->PSSetSamplers(1, 1, &m_sampleState2);
+    // Привязать comparison-sampler в слот 7 — требуется шейдером, ожидающим sampler с comparison-фильтрацией.
+    if (m_cmpSampler) deviceContext->PSSetSamplers(7, 1, &m_cmpSampler);
     deviceContext->DrawIndexed(indexCount, 0, 0);
 }

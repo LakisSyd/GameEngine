@@ -31,6 +31,11 @@ void MaterialClass::Shutdown()
     // Они управляются ResourceManager / SceneManager
     m_shader = nullptr;
     m_textures.clear();
+    for (auto& t : m_textures)
+    {
+		t->GetTexture()->Release(); 
+        t = nullptr;
+    }
 }
 
 void MaterialClass::Bind(ID3D11DeviceContext* context)

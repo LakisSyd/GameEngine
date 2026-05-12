@@ -282,6 +282,7 @@ private:
     }
 };
 
+
 struct CharacterController
 {
     btPairCachingGhostObject* ghostObj = nullptr;
@@ -294,6 +295,10 @@ struct CharacterController
     float maxSlope = 45.0f;
 
     bool isGrounded = false;
+
+    // Последняя синхронизированная позиция/ротация — для детекции изменений из редактора
+    XMFLOAT3 lastSyncedPosition = { 0.0f, 0.0f, 0.0f };
+    XMFLOAT3 lastSyncedRotation = { 0.0f, 0.0f, 0.0f };
 
     // Запрет копирования
     CharacterController() = default;
@@ -310,6 +315,8 @@ struct CharacterController
         , gravity(other.gravity)
         , maxSlope(other.maxSlope)
         , isGrounded(other.isGrounded)
+        , lastSyncedPosition(other.lastSyncedPosition)
+        , lastSyncedRotation(other.lastSyncedRotation)
     {
         other.ghostObj = nullptr;
         other.controller = nullptr;
@@ -319,12 +326,6 @@ struct CharacterController
     CharacterController& operator=(CharacterController&& other) noexcept {
         if (this == &other) return *this;
 
-        // Просто обнуляем текущие указатели (предполагаем, что система уже удалила ресурсы)
-        ghostObj = nullptr;
-        controller = nullptr;
-        capsuleShape = nullptr;
-
-        // Перенос
         ghostObj = other.ghostObj;
         controller = other.controller;
         capsuleShape = other.capsuleShape;
@@ -333,8 +334,9 @@ struct CharacterController
         gravity = other.gravity;
         maxSlope = other.maxSlope;
         isGrounded = other.isGrounded;
+        lastSyncedPosition = other.lastSyncedPosition;
+        lastSyncedRotation = other.lastSyncedRotation;
 
-        // Обнуление источника
         other.ghostObj = nullptr;
         other.controller = nullptr;
         other.capsuleShape = nullptr;
@@ -342,9 +344,30 @@ struct CharacterController
         return *this;
     }
 
-    // ❌ Нет деструктора — ресурсы удаляются системой
-};
+    ~CharacterController()
+    {
+        if (ghostObj)
+        {
+            delete ghostObj;
+            ghostObj = nullptr;
+        }
+        if(controller)
+        {
+            delete controller;
+            controller = nullptr;
+		}
 
+        if(capsuleShape)
+        {
+            delete capsuleShape;
+            capsuleShape = nullptr;
+		}
+
+       
+    }
+
+   
+};
 struct CharacterMovement
 {
     XMFLOAT3 walkDirection = { 0, 0, 0 };  // ✅ Явная инициализация
@@ -355,7 +378,7 @@ struct CharacterMovement
     float rotationSpeed = 3.0f;
 
     bool isMoving = false;                // ✅ По умолчанию — стоит
-    bool isGrounded = false;              // ✅ По умолчанию — в воздухе (безопаснее)
+    bool isGrounded = false;              // ✅ По умолчанию — в воздухе (безопаснее) 
     float currentSpeed = 0.0f;
 
     // Конструктор можно убрать — инициализация выше уже работает
@@ -568,6 +591,7 @@ struct SubmarineJointComponent
     {
         if (joint)
         {
+            delete joint;
             joint = nullptr;
         }
     }

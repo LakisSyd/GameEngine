@@ -45,6 +45,15 @@ public:
         return GetOrCreatePool<T>();
     }
 
+    //~ECSRegistry()
+    //{
+    //    for (auto& [type, pool] : m_pools)
+    //    {
+    //        pool.reset();  // unique_ptr сам удалит объект
+    //    }
+    //    m_pools.clear();  // Очищаем карту
+    //}
+
 private:
     Entity nextEntity = 0;
     std::unordered_map<std::type_index, std::unique_ptr<IComponentPool>> m_pools;

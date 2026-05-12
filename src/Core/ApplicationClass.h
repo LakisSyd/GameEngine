@@ -100,6 +100,9 @@ private:
 
 private:
 
+
+	HWND m_hwnd = nullptr;  // Сохранение HWND для использования в других методах
+
     void Render3DObjectsToShadowMap(
         ID3D11DeviceContext* context,
         const XMMATRIX& lightViewProj);

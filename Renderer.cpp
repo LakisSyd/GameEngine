@@ -14,12 +14,27 @@
     #include "SkyShaderClass.h"
 
     // ============================================================================
-    Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
-        SceneManager* sceneManager, ShadowMap* shadowMap)
-        : m_direct3D(d3d)
-        , m_camera(camera)
-        , m_sceneManager(sceneManager)
-        , m_shadowMap(shadowMap)
+Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
+    SceneManager* sceneManager, ShadowMap* shadowMap)
+    : m_direct3D(d3d)
+    , m_camera(camera)
+    , m_sceneManager(sceneManager)
+    , m_shadowMap(shadowMap)
+    // ✅ Инициализируй ВСЕ указатели в списке инициализации:
+    , m_skyDepthState(nullptr)
+    , m_lightShader(nullptr)
+    , m_pbrShader(nullptr)
+    , m_skyShader(nullptr)
+    , m_textureShader(nullptr)
+    , m_colorShader(nullptr)
+    , m_wireframeRS(nullptr)
+    , m_reflectionTexture(nullptr)
+    , m_refractionTexture(nullptr)
+    , m_renderTexture(nullptr)
+    , m_physicsDebugRenderer(nullptr)
+    , m_compartmentRenderer(nullptr)
+    , m_defaultMaterial(nullptr)
+    , m_previewCallback(nullptr)
     {
         D3D11_DEPTH_STENCIL_DESC dsDesc = {};  // ✅ Обнуляем всё
         dsDesc.DepthEnable = TRUE;
@@ -45,7 +60,32 @@
         const PhysicsDebugSettings& debugSettings)
     {
 
+#ifdef _DEBUG
+        OutputDebugStringA("[Renderer] RenderFrame START\n");
 
+        // Проверка критических указателей
+        if (m_direct3D == nullptr) OutputDebugStringA("❌ m_direct3D is null\n");
+        if (m_camera == nullptr) OutputDebugStringA("❌ m_camera is null\n");
+        if (m_sceneManager == nullptr) OutputDebugStringA("❌ m_sceneManager is null\n");
+
+        // Проверка шейдеров
+        auto checkPtr = [](void* p, const char* name) {
+            if (p == nullptr) return;
+            __try {
+                volatile uintptr_t test = reinterpret_cast<uintptr_t>(p);
+                (void)test;
+            }
+            __except (EXCEPTION_EXECUTE_HANDLER) {
+                char buf[256];
+                sprintf_s(buf, "❌ %s is CORRUPTED (0x%p)\n", name, p);
+                OutputDebugStringA(buf);
+            }
+            };
+
+        checkPtr(m_lightShader, "m_lightShader");
+        checkPtr(m_pbrShader, "m_pbrShader");
+        checkPtr(m_skyShader, "m_skyShader");
+#endif
 
         // 0. Обновляем направленный свет в шейдерах
         UpdateDirectionalLight(context);
@@ -379,12 +419,16 @@
         const XMFLOAT4 ambientPBR = { 0.15f, 0.2f, 0.3f, 0.25f };
         const XMFLOAT4 ambientLight = { 0.4f,  0.4f, 0.45f, 0.6f };
 
-        // 🔥 Защитная проверка: валидный ли это объект?
-        if (m_lightShader && reinterpret_cast<uintptr_t>(m_lightShader) > 0x10000)
+        // ✅ ПРАВИЛЬНАЯ проверка: просто на nullptr
+        if (m_lightShader != nullptr)
+        {
             m_lightShader->SetDirectionalLight(context, sunDir, sunColor, ambientLight, 2.5f);
+        }
 
-        if (m_pbrShader && reinterpret_cast<uintptr_t>(m_pbrShader) > 0x10000)
+        if (m_pbrShader != nullptr)
+        {
             m_pbrShader->SetDirectionalLight(context, sunDir, sunColor, ambientPBR, 1.0f);
+        }
     }
     XMMATRIX Renderer::BuildReflectionMatrix(float reflectY) const
     {

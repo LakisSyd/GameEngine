@@ -31,6 +31,7 @@ class ShaderBaseClass
 {
 public:
     ShaderBaseClass();
+
     virtual ~ShaderBaseClass();
     virtual bool Initialize(ID3D11Device* device, HWND hwnd) { return true; }
     virtual void Shutdown();  // Не pure virtual!
