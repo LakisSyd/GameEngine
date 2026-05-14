@@ -644,16 +644,23 @@ void ApplicationClass::Shutdown()
 
 bool ApplicationClass::Frame(float dt)
 {
-    // 1. Получаем настройки отладки
+    // 1. Получаем настройки отладки и обновляем input в начале кадра.
+    // Camera movement must use the current right-button state; updating input
+    // after camera handling made capture/movement one frame late and jittery.
     m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
+    m_inputManager.Update(m_input);
+
     bool imguiWantsMouse = m_editorUI.WantCaptureMouse() || ImGuizmo::IsOver();
     if (!imguiWantsMouse) {
         HandleCameraMovement(dt);  // ← Сразу применяем
         m_camera->Render();         // ← Сразу обновляем матрицы
     }
+    else if (m_inputManager.IsMouseCaptured(m_input)) {
+        m_inputManager.SetMouseCapture(m_input, false);
+        m_inputManager.ResetMouseDelta(m_input);
+    }
     // 2. Синхронизируем позиции отсеков (связь с подлодкой)
     SyncCompartmentPositions();
-    m_inputManager.Update(m_input);
     // 3. Физика
     UpdatePhysics(dt);
 
@@ -1220,11 +1227,20 @@ void ApplicationClass::HandleCameraMovement(float dt)
         int deltaX, deltaY;
         m_input->GetMouseDelta(deltaX, deltaY);
         m_inputManager.ResetMouseDelta(m_input);
-        float mouseSensitivity = Settings::CAMERA_SENSITIVITY * dt * 120.0f; // 60 FPS как база
-       float rotX = m_camera->GetRotation().x + deltaY * mouseSensitivity;
-       float rotY = m_camera->GetRotation().y + deltaX * mouseSensitivity;
-        rotX = clamp(rotX, -89.0f, 89.0f);
-        m_camera->SetRotation(rotX, rotY, m_camera->GetRotation().z);
+
+        // Mouse delta is already accumulated per frame, so it must not be
+        // multiplied by dt. Scaling by dt made rotation depend on frame time
+        // twice: longer frames collect more mouse pixels and then amplified
+        // those pixels by a larger dt, causing visible stutter while moving.
+        deltaX = std::clamp(deltaX, -200, 200);
+        deltaY = std::clamp(deltaY, -200, 200);
+
+        const float mouseSensitivity = Settings::CAMERA_SENSITIVITY;
+        XMFLOAT3 rotation = m_camera->GetRotation();
+        float rotX = rotation.x + deltaY * mouseSensitivity;
+        float rotY = rotation.y + deltaX * mouseSensitivity;
+        rotX = std::clamp(rotX, -89.0f, 89.0f);
+        m_camera->SetRotation(rotX, rotY, rotation.z);
     }
 
     {
