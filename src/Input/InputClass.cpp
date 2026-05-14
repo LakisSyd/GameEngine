@@ -48,6 +48,32 @@ void InputClass::ResetMouseDelta()
     m_mouseDeltaY = 0;
 }
 
+void InputClass::UpdateCapturedMouseDelta(HWND hwnd)
+{
+    if (!m_mouseCaptured || !hwnd) return;
+
+    RECT rect;
+    if (!GetClientRect(hwnd, &rect)) return;
+
+    POINT center = {
+        rect.left + (rect.right - rect.left) / 2,
+        rect.top + (rect.bottom - rect.top) / 2
+    };
+    ClientToScreen(hwnd, &center);
+
+    POINT cursor;
+    if (!GetCursorPos(&cursor)) return;
+
+    int dx = cursor.x - center.x;
+    int dy = cursor.y - center.y;
+
+    if (dx != 0 || dy != 0)
+    {
+        AddMouseDelta(dx, dy);
+        SetCursorPos(center.x, center.y);
+    }
+}
+
 // ===== InputClass.cpp =====
 
 void InputClass::SetMouseCapture(bool capture)

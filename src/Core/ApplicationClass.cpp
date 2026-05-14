@@ -204,6 +204,7 @@ ApplicationClass::ApplicationClass() = default;
 // ============================================================================
 bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 {
+    m_hwnd = hwnd;
     m_screenWidth = screenWidth;
     m_screenHeight = screenHeight;
 
@@ -1224,6 +1225,8 @@ void ApplicationClass::HandleCameraMovement(float dt)
 
     if (m_inputManager.IsMouseCaptured(m_input))
     {
+        m_input->UpdateCapturedMouseDelta(m_hwnd);
+
         int deltaX, deltaY;
         m_input->GetMouseDelta(deltaX, deltaY);
         m_inputManager.ResetMouseDelta(m_input);

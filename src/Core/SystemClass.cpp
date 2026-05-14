@@ -192,23 +192,10 @@ LRESULT CALLBACK SystemClass::MessageHandler(HWND hwnd, UINT msg, WPARAM wparam,
 
         if (m_Input->IsMouseCaptured())
         {
-            // Режим захвата: считаем дельту относительно центра окна,
-            // затем возвращаем курсор в центр (FPS-управление)
-            RECT rect;
-            GetClientRect(hwnd, &rect);
-            POINT center = {
-                rect.left + (rect.right - rect.left) / 2,
-                rect.top + (rect.bottom - rect.top) / 2
-            };
-
-            int deltaX = mouseX - center.x;
-            int deltaY = mouseY - center.y;
-
-            m_Input->AddMouseDelta(deltaX, deltaY);
-
-            // Возвращаем курсор в центр — следующее WM_MOUSEMOVE снова даст дельту
-            ClientToScreen(hwnd, &center);
-            SetCursorPos(center.x, center.y);
+            // Captured mouse is sampled once per frame by InputClass. Re-centering
+            // from WM_MOUSEMOVE creates extra WM_MOUSEMOVE messages and can flood
+            // the message queue while rotating and moving the camera.
+            return 0;
         }
         else
         {
