@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "ECSRegistry .h"
+#include "ECSRegistry.h"
 #include "ECSTypes.h"
 #include "assimpmodelclass.h"
 #include "AnimationComponent.h"

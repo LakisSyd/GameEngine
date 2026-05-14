@@ -341,7 +341,7 @@
     <ClInclude Include="src\Render\Shader\FogShaderClass.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
-    <ClInclude Include="src\ECS\ECSRegistry .h">
+    <ClInclude Include="src\ECS\ECSRegistry.h">
       <Filter>ECS</Filter>
     </ClInclude>
     <ClInclude Include="src\ECS\ECSTypes.h">
