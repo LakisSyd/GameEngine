@@ -186,12 +186,12 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
 
         if (m_skyShader && m_skyShader->GetSkyTexture())
         {
-            // 🔥 1. Получаем позицию камеры
-            XMFLOAT3 camPos = m_camera->GetPosition();
-
-            // 🔥 2. Создаём матрицу НЕБА: только проекция, БЕЗ view!
-            // Небо НЕ должно вращаться с камерой!
-            XMMATRIX skyMVP = projection;
+            // Skybox follows camera rotation, but ignores camera translation.
+            // This keeps the cube visually infinitely far away while allowing
+            // the player to look around inside the cubemap naturally.
+            XMMATRIX skyView = view;
+            skyView.r[3] = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
+            XMMATRIX skyMVP = skyView * projection;
 
             // 3. Сохраняем старые состояния
             ID3D11DepthStencilState* oldDS = nullptr;

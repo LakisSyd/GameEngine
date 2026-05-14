@@ -21,7 +21,7 @@ float3 ACESFilm(float3 x)
 
 float4 SkyPS(PixelInput input) : SV_TARGET
 {
-    float3 hdrColor = SkyTexture.Sample(SkySampler, input.worldPos);
+    float3 hdrColor = SkyTexture.Sample(SkySampler, normalize(input.worldPos)).rgb;
     float3 ldrColor = ACESFilm(hdrColor);
     ldrColor = pow(ldrColor, 1.0/2.2);
     return float4(ldrColor, 1.0);
