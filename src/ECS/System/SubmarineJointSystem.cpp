@@ -1,7 +1,7 @@
 ﻿#include "SubmarineJointSystem.h"
 #include "Components.h"
 #include "PhysicsWorld.h"
-#include "ECSRegistry .h"
+#include "ECSRegistry.h"
 void SubmarineJointSystem::CreateJoint(ECSRegistry& registry, Entity a, Entity b,
     const btVector3& pivotA_local, const btVector3& pivotB_local, float breakForce)
 {

@@ -1,4 +1,4 @@
-﻿#include <vld.h>
+﻿
 #include "applicationclass.h"
 #include <algorithm>
 #include <array>

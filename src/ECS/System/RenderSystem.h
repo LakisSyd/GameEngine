@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "ECSRegistry .h"
+#include "ECSRegistry.h"
 #include "Components.h"
 #include "RenderMesh.h"
 #include "GameSettings.h"

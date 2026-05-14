@@ -18,7 +18,7 @@
 #include "MaterialClass.h"
 #include "Json/json.hpp"
 #include "GameSettings.h"
-#include "ECSRegistry .h"
+#include "ECSRegistry.h"
 #include "RenderSystem.h"
 
 using namespace DirectX;
@@ -195,6 +195,8 @@ public:
         }
 
     }
+
+    bool SetObjectActive(Entity entity, bool active);
 
 
 

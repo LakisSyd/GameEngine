@@ -1,6 +1,6 @@
 ﻿#pragma once
 #pragma once
-#include "ECSRegistry .h"
+#include "ECSRegistry.h"
 
 class FloodingSystem
 {

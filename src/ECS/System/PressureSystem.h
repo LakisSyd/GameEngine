@@ -6,7 +6,7 @@
 // Âûחמג: Â ApplicationClass::Frame, ןמסכו PhysicsSystem::Update
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "ECSRegistry .h"
+#include "ECSRegistry.h"
 
 class PressureSystem
 {

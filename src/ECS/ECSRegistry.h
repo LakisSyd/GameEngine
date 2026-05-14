@@ -44,16 +44,16 @@ public:
     ComponentManager<T>& GetComponents() {
         return GetOrCreatePool<T>();
     }
-
-    //~ECSRegistry()
-    //{
-    //    for (auto& [type, pool] : m_pools)
-    //    {
-    //        pool.reset();  // unique_ptr сам удалит объект
-    //    }
-    //    m_pools.clear();  // Очищаем карту
-    //}
-
+    template<typename T, typename Fn>
+    void ForEach(Fn&& fn)
+    {
+        auto& pool = GetComponents<T>();
+        for (auto& [entity, component] : pool)
+        {
+            fn(entity, component);
+        }
+    }
+    
 private:
     Entity nextEntity = 0;
     std::unordered_map<std::type_index, std::unique_ptr<IComponentPool>> m_pools;

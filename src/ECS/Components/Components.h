@@ -26,6 +26,14 @@ struct TransformComponent {
     }
 };
 
+
+struct NameComponent
+{
+    std::string name = "Entity";
+
+};
+
+
 struct LightComponent
 {
     XMFLOAT4 color = { 1.0f, 1.0f, 1.0f, 1.0f };

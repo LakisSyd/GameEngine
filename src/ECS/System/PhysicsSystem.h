@@ -1,5 +1,5 @@
 ﻿#pragma once
-#include "ECSRegistry .h"
+#include "ECSRegistry.h"
 #include <DirectXMath.h>
 #include <cmath>
 #include "CollisionUtils.h"

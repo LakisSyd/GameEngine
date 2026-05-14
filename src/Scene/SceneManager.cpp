@@ -44,6 +44,8 @@ Entity SceneManager::SpawnObject(AssimpModelClass* model, float x, float y, floa
 
     m_registry.AddComponent<MeshRendererComponent>(e,
         MeshRendererComponent{ model, nullptr });
+    m_registry.AddComponent<NameComponent>(e, NameComponent{ "Object" });
+   
 
     // ActiveComponent — тег: объект существует и должен рендериться
     // RemoveObject() удалит этот компонент → RenderSystem его пропустит
@@ -75,6 +77,8 @@ bool SceneManager::RemoveObject(Entity entity)
             mesh->material = nullptr;
         }
     }
+    m_registry.DestroyEntity(entity);
+   
 
     return true;
 }
@@ -1083,6 +1087,24 @@ void SceneManager::SetLightColor(Entity entity, const XMFLOAT4& color)
 {
     if (auto* light = m_registry.GetComponent<LightComponent>(entity))
         light->color = color;
+}
+
+bool SceneManager::SetObjectActive(Entity entity, bool active)
+{
+    if (!m_registry.HasComponent<TransformComponent>(entity))
+    {
+        return false;
+    }
+    bool IsActive = m_registry.HasComponent < ActiveComponent>(entity);
+
+    if (active && IsActive)
+    {
+        m_registry.AddComponent<ActiveComponent>(entity, ActiveComponent{});
+    }
+    else if(!active && IsActive)
+    {
+        m_registry.RemoveComponent<ActiveComponent>(entity);
+    }
 }
 
 void SceneManager::SetLightPosition(Entity entity, const XMFLOAT3& position)
