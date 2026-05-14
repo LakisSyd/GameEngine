@@ -1,6 +1,7 @@
 ﻿#include <vld.h>
 #include "applicationclass.h"
 #include <algorithm>
+#include <array>
 #include "FileSystem.h"
 #include "PhysicsSystem.h"
 #include "helper.h"
@@ -138,6 +139,62 @@ ID3D11ShaderResourceView* LoadSkyboxCubeMap(
     if (resource) resource->Release();  // SRV держит ссылку
     OutputDebugStringA(("✅ Cube map loaded successfully: " + path + "\n").c_str());
     return srv;
+}
+
+ID3D11ShaderResourceView* LoadSkyboxCubemap(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context,
+    const std::string& basePath);
+
+struct SkyboxPreset
+{
+    const char* name;
+    const char* ddsPath;
+    const char* faceBasePath;
+};
+
+ID3D11ShaderResourceView* LoadFirstAvailableSkybox(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context)
+{
+    // Preferred layout:
+    //   assets/texture/cubemap/day.dds
+    //   assets/texture/cubemap/evening.dds
+    //   assets/texture/cubemap/night.dds
+    // Alternative 6-face layout uses suffixes: _px, _nx, _py, _ny, _pz, _nz.
+    // Example: assets/texture/cubemap/day/sky_px.jpg ... sky_nz.jpg
+    constexpr std::array<SkyboxPreset, 4> presets = {{
+        { "day",     "assets/texture/cubemap/day.dds",     "assets/texture/cubemap/day/sky" },
+        { "evening", "assets/texture/cubemap/evening.dds", "assets/texture/cubemap/evening/sky" },
+        { "night",   "assets/texture/cubemap/night.dds",   "assets/texture/cubemap/night/sky" },
+        { "legacy",  "assets/texture/cubemap/sky_cube1.dds", nullptr }
+    }};
+
+    for (const auto& preset : presets)
+    {
+        if (preset.ddsPath)
+        {
+            if (auto* srv = LoadSkyboxCubeMap(device, context, preset.ddsPath))
+            {
+                OutputDebugStringA((std::string("✅ Skybox preset loaded from DDS: ") +
+                    preset.name + "\n").c_str());
+                return srv;
+            }
+        }
+
+        if (preset.faceBasePath)
+        {
+            if (auto* srv = LoadSkyboxCubemap(device, context, preset.faceBasePath))
+            {
+                OutputDebugStringA((std::string("✅ Skybox preset loaded from 6 faces: ") +
+                    preset.name + "\n").c_str());
+                return srv;
+            }
+        }
+    }
+
+    OutputDebugStringA("⚠️ No skybox preset found. See docs/SKYBOX_ASSETS.md\n");
+    return nullptr;
 }
 
 ApplicationClass::ApplicationClass() = default;
@@ -447,10 +504,9 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_dragDropSystem = std::make_unique<DragDropSystem>(
         m_camera.get(), &m_inputManager, m_input, &m_editorUI, &m_sceneManager);
 
-    m_skySRV = LoadSkyboxCubeMap(
+    m_skySRV = LoadFirstAvailableSkybox(
         m_direct3D->GetDevice(),
-        m_direct3D->GetDeviceContext(),
-        "assets/texture/cubemap/sky_cube1.dds");  // Путь к сконвертированному файлу
+        m_direct3D->GetDeviceContext());
 
     if (!m_skySRV)
     {
