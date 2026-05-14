@@ -1,6 +1,7 @@
 ﻿#include <vld.h>
 #include "applicationclass.h"
 #include <algorithm>
+#include <array>
 #include "FileSystem.h"
 #include "PhysicsSystem.h"
 #include "helper.h"
@@ -140,6 +141,62 @@ ID3D11ShaderResourceView* LoadSkyboxCubeMap(
     return srv;
 }
 
+ID3D11ShaderResourceView* LoadSkyboxCubemap(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context,
+    const std::string& basePath);
+
+struct SkyboxPreset
+{
+    const char* name;
+    const char* ddsPath;
+    const char* faceBasePath;
+};
+
+ID3D11ShaderResourceView* LoadFirstAvailableSkybox(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context)
+{
+    // Preferred layout:
+    //   assets/texture/cubemap/day.dds
+    //   assets/texture/cubemap/evening.dds
+    //   assets/texture/cubemap/night.dds
+    // Alternative 6-face layout uses suffixes: _px, _nx, _py, _ny, _pz, _nz.
+    // Example: assets/texture/cubemap/day/sky_px.jpg ... sky_nz.jpg
+    constexpr std::array<SkyboxPreset, 4> presets = {{
+        { "day",     "assets/texture/cubemap/day.dds",     "assets/texture/cubemap/day/sky" },
+        { "evening", "assets/texture/cubemap/evening.dds", "assets/texture/cubemap/evening/sky" },
+        { "night",   "assets/texture/cubemap/night.dds",   "assets/texture/cubemap/night/sky" },
+        { "legacy",  "assets/texture/cubemap/sky_cube1.dds", nullptr }
+    }};
+
+    for (const auto& preset : presets)
+    {
+        if (preset.ddsPath)
+        {
+            if (auto* srv = LoadSkyboxCubeMap(device, context, preset.ddsPath))
+            {
+                OutputDebugStringA((std::string("✅ Skybox preset loaded from DDS: ") +
+                    preset.name + "\n").c_str());
+                return srv;
+            }
+        }
+
+        if (preset.faceBasePath)
+        {
+            if (auto* srv = LoadSkyboxCubemap(device, context, preset.faceBasePath))
+            {
+                OutputDebugStringA((std::string("✅ Skybox preset loaded from 6 faces: ") +
+                    preset.name + "\n").c_str());
+                return srv;
+            }
+        }
+    }
+
+    OutputDebugStringA("⚠️ No skybox preset found. See docs/SKYBOX_ASSETS.md\n");
+    return nullptr;
+}
+
 ApplicationClass::ApplicationClass() = default;
 
 // ============================================================================
@@ -147,6 +204,7 @@ ApplicationClass::ApplicationClass() = default;
 // ============================================================================
 bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 {
+    m_hwnd = hwnd;
     m_screenWidth = screenWidth;
     m_screenHeight = screenHeight;
 
@@ -447,10 +505,9 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_dragDropSystem = std::make_unique<DragDropSystem>(
         m_camera.get(), &m_inputManager, m_input, &m_editorUI, &m_sceneManager);
 
-    m_skySRV = LoadSkyboxCubeMap(
+    m_skySRV = LoadFirstAvailableSkybox(
         m_direct3D->GetDevice(),
-        m_direct3D->GetDeviceContext(),
-        "assets/texture/cubemap/sky_cube1.dds");  // Путь к сконвертированному файлу
+        m_direct3D->GetDeviceContext());
 
     if (!m_skySRV)
     {
@@ -588,16 +645,23 @@ void ApplicationClass::Shutdown()
 
 bool ApplicationClass::Frame(float dt)
 {
-    // 1. Получаем настройки отладки
+    // 1. Получаем настройки отладки и обновляем input в начале кадра.
+    // Camera movement must use the current right-button state; updating input
+    // after camera handling made capture/movement one frame late and jittery.
     m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
+    m_inputManager.Update(m_input);
+
     bool imguiWantsMouse = m_editorUI.WantCaptureMouse() || ImGuizmo::IsOver();
     if (!imguiWantsMouse) {
         HandleCameraMovement(dt);  // ← Сразу применяем
         m_camera->Render();         // ← Сразу обновляем матрицы
     }
+    else if (m_inputManager.IsMouseCaptured(m_input)) {
+        m_inputManager.SetMouseCapture(m_input, false);
+        m_inputManager.ResetMouseDelta(m_input);
+    }
     // 2. Синхронизируем позиции отсеков (связь с подлодкой)
     SyncCompartmentPositions();
-    m_inputManager.Update(m_input);
     // 3. Физика
     UpdatePhysics(dt);
 
@@ -1161,14 +1225,25 @@ void ApplicationClass::HandleCameraMovement(float dt)
 
     if (m_inputManager.IsMouseCaptured(m_input))
     {
+        m_input->UpdateCapturedMouseDelta(m_hwnd);
+
         int deltaX, deltaY;
         m_input->GetMouseDelta(deltaX, deltaY);
         m_inputManager.ResetMouseDelta(m_input);
-        float mouseSensitivity = Settings::CAMERA_SENSITIVITY * dt * 120.0f; // 60 FPS как база
-       float rotX = m_camera->GetRotation().x + deltaY * mouseSensitivity;
-       float rotY = m_camera->GetRotation().y + deltaX * mouseSensitivity;
-        rotX = clamp(rotX, -89.0f, 89.0f);
-        m_camera->SetRotation(rotX, rotY, m_camera->GetRotation().z);
+
+        // Mouse delta is already accumulated per frame, so it must not be
+        // multiplied by dt. Scaling by dt made rotation depend on frame time
+        // twice: longer frames collect more mouse pixels and then amplified
+        // those pixels by a larger dt, causing visible stutter while moving.
+        deltaX = std::clamp(deltaX, -200, 200);
+        deltaY = std::clamp(deltaY, -200, 200);
+
+        const float mouseSensitivity = Settings::CAMERA_SENSITIVITY;
+        XMFLOAT3 rotation = m_camera->GetRotation();
+        float rotX = rotation.x + deltaY * mouseSensitivity;
+        float rotY = rotation.y + deltaX * mouseSensitivity;
+        rotX = std::clamp(rotX, -89.0f, 89.0f);
+        m_camera->SetRotation(rotX, rotY, rotation.z);
     }
 
     {

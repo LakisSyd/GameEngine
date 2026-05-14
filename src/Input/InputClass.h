@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+struct HWND__;
+
 class InputClass
 {
 public:
@@ -27,6 +29,7 @@ public:
     void AddMouseDelta(int dx, int dy);
     void GetMouseDelta(int& dx, int& dy);
     void ResetMouseDelta();
+    void UpdateCapturedMouseDelta(HWND__* hwnd);
 
     // 🔹 Захват мыши
     void SetMouseCapture(bool capture);
