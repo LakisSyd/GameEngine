@@ -30,6 +30,21 @@ public:
     Renderer(D3DClass* d3d, CameraClass* camera,
         SceneManager* sceneManager, ShadowMap* shadowMap);
 
+    ~Renderer()
+    {
+        if (m_skyRS)
+        {
+            m_skyRS->Release();
+            m_skyRS = nullptr;
+        }
+
+        if (m_skyDepthState)
+        {
+            m_skyDepthState->Release();
+            m_skyDepthState = nullptr;
+        }
+    }
+
     // ── Setters — вызывай после конструктора, до первого кадра ──────────────
     void SetShadowShader(ShadowShaderClass* s) { m_shadowShader = s; }
     void SetLightShader(LightShaderClass* s) { m_lightShader = s; }
@@ -111,11 +126,13 @@ private:
     RenderTextureClass* m_reflectionTexture = nullptr;
     RenderTextureClass* m_refractionTexture = nullptr;
     RenderTextureClass* m_renderTexture = nullptr;
+    ID3D11RasterizerState* m_skyRS = nullptr;
+    ID3D11DepthStencilState* m_skyDepthState = nullptr;
 
     SkyShaderClass* m_skyShader = nullptr;
     XMFLOAT3 m_skyTop = XMFLOAT3(0.15f, 0.4f, 0.8f);      // голубой верх
     XMFLOAT3 m_skyHorizon = XMFLOAT3(0.6f, 0.75f, 0.9f);  // светлый горизонт
-    ID3D11DepthStencilState* m_skyDepthState = nullptr;   // depth read-only
+  
 
     std::function<void(ID3D11ShaderResourceView*)> m_previewCallback;
 

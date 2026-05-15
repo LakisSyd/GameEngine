@@ -42,6 +42,30 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         dsDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
         dsDesc.StencilEnable = FALSE;  // на всякий случай
 
+
+         
+        D3D11_RASTERIZER_DESC rsDesc = {};
+        rsDesc.FillMode = D3D11_FILL_SOLID;
+        rsDesc.CullMode = D3D11_CULL_FRONT;        // для skybox изнутри
+        rsDesc.FrontCounterClockwise = FALSE;
+        rsDesc.DepthClipEnable = FALSE;
+
+        HRESULT hr = m_direct3D->GetDevice()->CreateRasterizerState(&rsDesc, &m_skyRS);
+        if (FAILED(hr))
+        {
+            OutputDebugStringA("Failed to create sky rasterizer state\n");
+        }
+
+       
+
+        hr = m_direct3D->GetDevice()->CreateDepthStencilState(&dsDesc, &m_skyDepthState);
+        if (FAILED(hr))
+        {
+            OutputDebugStringA("Failed to create sky depth stencil state\n");
+        }
+
+       
+
         if (FAILED(m_direct3D->GetDevice()->CreateDepthStencilState(&dsDesc, &m_skyDepthState)))
     
             // Обработка ошибки
@@ -60,8 +84,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         const PhysicsDebugSettings& debugSettings)
     {
 
-#ifdef _DEBUG
-        OutputDebugStringA("[Renderer] RenderFrame START\n");
+
 
         // Проверка критических указателей
         if (m_direct3D == nullptr) OutputDebugStringA("❌ m_direct3D is null\n");
@@ -85,7 +108,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         checkPtr(m_lightShader, "m_lightShader");
         checkPtr(m_pbrShader, "m_pbrShader");
         checkPtr(m_skyShader, "m_skyShader");
-#endif
+
 
         // 0. Обновляем направленный свет в шейдерах
         UpdateDirectionalLight(context);
@@ -199,29 +222,20 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             context->OMGetDepthStencilState(&oldDS, nullptr);
             context->RSGetState(&oldRS);
 
-            // 🔥 4. Rasterizer: отсекаем ВНЕШНИЕ грани
-            D3D11_RASTERIZER_DESC rsDesc = {};
-            rsDesc.CullMode = D3D11_CULL_FRONT;  // ← Важно!
-            rsDesc.FillMode = D3D11_FILL_SOLID;
-            rsDesc.FrontCounterClockwise = FALSE;
-            rsDesc.DepthClipEnable = FALSE;  // ← Отключаем clip для надёжности
+            
 
-            ID3D11RasterizerState* skyRS = nullptr;
-            m_direct3D->GetDevice()->CreateRasterizerState(&rsDesc, &skyRS);
-            context->RSSetState(skyRS);
-
-            // 5. Depth state
+           
+            
+            context->RSSetState(m_skyRS);
             context->OMSetDepthStencilState(m_skyDepthState, 0);
 
-            // 6. Рисуем
             m_skyShader->Render(context, skyMVP);
 
-            // 7. Восстанавливаем состояния
             context->RSSetState(oldRS);
             context->OMSetDepthStencilState(oldDS, 0);
+
             if (oldDS) oldDS->Release();
             if (oldRS) oldRS->Release();
-            if (skyRS) skyRS->Release();
         }
 
         Render3DObjects(context, view, projection,
