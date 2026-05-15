@@ -208,6 +208,7 @@ private:
 
     ID3D11RasterizerState* m_wireframeRS = nullptr;
 
+	Entity TestEntity = INVALID_ENTITY;
 
   
     ID3D11ShaderResourceView* m_skySRV = nullptr;  // 🔥 НОВОЕ

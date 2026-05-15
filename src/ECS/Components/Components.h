@@ -394,6 +394,11 @@ struct CharacterMovement
     CharacterMovement() = default;
 };;
 
+struct PlayerGameTag
+{
+    // Пустой компонент — служит только для идентификации игрока
+};
+
 struct StaticColliderComponent
 {
     btCollisionShape* shape = nullptr;

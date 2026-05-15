@@ -461,6 +461,9 @@
     <ClInclude Include="src\Core\PhysicsWorld.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="CharacterMovementSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\Render\Shader\Vs\Lightmap.vs">

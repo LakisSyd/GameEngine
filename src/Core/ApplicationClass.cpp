@@ -19,7 +19,7 @@
 #include "directxtk/DDSTextureLoader.h"
 #include <stb_image.h>
 #include "../../CharacterSpawnSystem.h"
-
+#include "../../CharacterMovementSystem.h"
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
 // ============================================================================
@@ -380,8 +380,9 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 
 
 
+   
 
-
+	TestEntity = m_sceneManager.SpawnObject(m_mainModel, 0, 0, 0);
 
     m_editorUI.RefreshShaderList();
 
@@ -526,7 +527,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         m_SkyShader->SetSkyTexture(m_skySRV);  // ← Новый метод в шейдере
     }
 
-    SpawnTestBot(m_sceneManager.GetECSRegistry(), { 0,0,0 });
+    
 
     return true;
 }
@@ -676,7 +677,7 @@ bool ApplicationClass::Frame(float dt)
     m_camera->GetViewMatrix(m_viewMatrix);
     m_direct3D->GetProjectionMatrix(m_projMatrix);
 
-
+	ChatacterMovementSystem::Update(m_sceneManager.GetECSRegistry(), dt, TestEntity, m_input);
     // 6. Debug visualizer update
     if (m_debugVisualizer)
         m_debugVisualizer->UpdateFromWorld(PhysicsWorld::Get().GetWorld());
