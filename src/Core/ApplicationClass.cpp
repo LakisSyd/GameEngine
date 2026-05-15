@@ -2,6 +2,7 @@
 #include "applicationclass.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include "FileSystem.h"
 #include "PhysicsSystem.h"
 #include "helper.h"
@@ -383,6 +384,14 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
    
 
 	TestEntity = m_sceneManager.SpawnObject(m_mainModel, 0, 0, 0);
+    if (TestEntity != INVALID_ENTITY)
+    {
+        auto& registry = m_sceneManager.GetECSRegistry();
+        registry.AddComponent<PlayerGameTag>(TestEntity, PlayerGameTag{});
+        registry.AddComponent<CharacterMovement>(TestEntity, CharacterMovement{});
+        if (auto* name = registry.GetComponent<NameComponent>(TestEntity))
+            name->name = "Player";
+    }
 
     m_editorUI.RefreshShaderList();
 
@@ -651,15 +660,16 @@ bool ApplicationClass::Frame(float dt)
     // after camera handling made capture/movement one frame late and jittery.
     m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
     m_inputManager.Update(m_input);
+    UpdateCameraControlMode();
 
     bool imguiWantsMouse = m_editorUI.WantCaptureMouse() || ImGuizmo::IsOver();
-    if (!imguiWantsMouse) {
-        HandleCameraMovement(dt);  // ← Сразу применяем
-        m_camera->Render();         // ← Сразу обновляем матрицы
+    if (imguiWantsMouse)
+    {
+        ReleaseMouseCapture();
     }
-    else if (m_inputManager.IsMouseCaptured(m_input)) {
-        m_inputManager.SetMouseCapture(m_input, false);
-        m_inputManager.ResetMouseDelta(m_input);
+    else if (m_cameraControlMode == CameraControlMode::Free)
+    {
+        HandleCameraMovement(dt);
     }
     // 2. Синхронизируем позиции отсеков (связь с подлодкой)
     SyncCompartmentPositions();
@@ -670,6 +680,12 @@ bool ApplicationClass::Frame(float dt)
     UpdateWaterAnimation(dt);
 
   
+    if (!imguiWantsMouse && m_cameraControlMode == CameraControlMode::FollowTarget)
+        CharacterMovementSystem::Update(m_sceneManager.GetECSRegistry(), dt, TestEntity, m_input);
+
+    if (m_cameraControlMode == CameraControlMode::FollowTarget)
+        UpdateFollowCamera(dt);
+
     m_sceneManager.UpdateAll(dt);
     m_sceneManager.UpdateLights();
    
@@ -677,7 +693,6 @@ bool ApplicationClass::Frame(float dt)
     m_camera->GetViewMatrix(m_viewMatrix);
     m_direct3D->GetProjectionMatrix(m_projMatrix);
 
-	ChatacterMovementSystem::Update(m_sceneManager.GetECSRegistry(), dt, TestEntity, m_input);
     // 6. Debug visualizer update
     if (m_debugVisualizer)
         m_debugVisualizer->UpdateFromWorld(PhysicsWorld::Get().GetWorld());
@@ -1205,6 +1220,79 @@ bool RayIntersectsSphere(const CameraClass::Ray& ray,
     XMVECTOR sphereCenterVec = XMLoadFloat3(&sphereCenter);
     float dist = XMVectorGetX(XMVector3Length(XMVectorSubtract(closest, sphereCenterVec)));
     return dist <= sphereRadius;
+}
+
+// ============================================================================
+// UpdateCameraControlMode — переключение между свободной камерой и привязкой
+// ============================================================================
+void ApplicationClass::UpdateCameraControlMode()
+{
+    const bool toggleDown = m_inputManager.IsKeyDown(m_input, 'C');
+    if (toggleDown && !m_cameraModeToggleWasDown && !m_editorUI.WantCaptureMouse())
+    {
+        m_cameraControlMode = (m_cameraControlMode == CameraControlMode::Free)
+            ? CameraControlMode::FollowTarget
+            : CameraControlMode::Free;
+
+        ReleaseMouseCapture();
+
+        OutputDebugStringA(m_cameraControlMode == CameraControlMode::Free
+            ? "[Camera] Mode: Free (RMB + WASD/R/F)\n"
+            : "[Camera] Mode: FollowTarget (WASD controls player)\n");
+    }
+
+    m_cameraModeToggleWasDown = toggleDown;
+}
+
+// ============================================================================
+// ReleaseMouseCapture — единая точка освобождения мыши
+// ============================================================================
+void ApplicationClass::ReleaseMouseCapture()
+{
+    if (!m_inputManager.IsMouseCaptured(m_input)) return;
+    m_inputManager.SetMouseCapture(m_input, false);
+    m_inputManager.ResetMouseDelta(m_input);
+}
+
+// ============================================================================
+// UpdateFollowCamera — камера следует за тестовым игроком
+// ============================================================================
+void ApplicationClass::UpdateFollowCamera(float dt)
+{
+    if (!m_camera || TestEntity == INVALID_ENTITY) return;
+
+    auto* transform = m_sceneManager.GetECSRegistry().GetComponent<TransformComponent>(TestEntity);
+    if (!transform) return;
+
+    dt = std::min(dt, 0.05f);
+
+    XMFLOAT3 current = m_camera->GetPosition();
+    XMFLOAT3 desired = {
+        transform->position.x + m_followCameraOffset.x,
+        transform->position.y + m_followCameraOffset.y,
+        transform->position.z + m_followCameraOffset.z
+    };
+
+    const float followSpeed = 12.0f;
+    const float t = std::clamp(followSpeed * dt, 0.0f, 1.0f);
+
+    XMFLOAT3 next = {
+        current.x + (desired.x - current.x) * t,
+        current.y + (desired.y - current.y) * t,
+        current.z + (desired.z - current.z) * t
+    };
+    m_camera->SetPosition(next.x, next.y, next.z);
+
+    XMVECTOR cameraPos = XMLoadFloat3(&next);
+    XMVECTOR targetPos = XMLoadFloat3(&transform->position);
+    XMVECTOR direction = XMVector3Normalize(XMVectorSubtract(targetPos, cameraPos));
+
+    XMFLOAT3 dir;
+    XMStoreFloat3(&dir, direction);
+
+    const float yaw = XMConvertToDegrees(std::atan2(dir.x, dir.z));
+    const float pitch = XMConvertToDegrees(std::asin(std::clamp(-dir.y, -1.0f, 1.0f)));
+    m_camera->SetRotation(pitch, yaw, 0.0f);
 }
 
 // ============================================================================
