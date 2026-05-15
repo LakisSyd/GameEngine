@@ -1,2 +1,2 @@
 # GameEngine
-DIRECTX11 game engine
+DIRECTX11 Learning
