@@ -2,6 +2,7 @@
 #include "applicationclass.h"
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include "FileSystem.h"
 #include "PhysicsSystem.h"
 #include "helper.h"
@@ -661,6 +662,7 @@ bool ApplicationClass::Frame(float dt)
     // after camera handling made capture/movement one frame late and jittery.
     m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
     m_inputManager.Update(m_input);
+    UpdateCameraControlMode();
 
     bool imguiWantsMouse = m_editorUI.WantCaptureMouse() || ImGuizmo::IsOver();
     m_cameraController.UpdateModeToggle(imguiWantsMouse);
