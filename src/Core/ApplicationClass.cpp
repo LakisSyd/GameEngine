@@ -248,6 +248,8 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     if (!m_camera) return false;
     m_camera->SetPosition(0.0f, 2.0f, -10.0f);
     m_camera->SetRotation(0.0f, 0.0f, 0.0f);
+    m_cameraController.SetCamera(m_camera.get());
+    m_cameraController.SetInput(&m_inputManager, m_input, m_hwnd);
 
     // ── Fallback модель (для SpawnObject без указания модели) ─────────────────
     m_mainModel = new AssimpModelClass;
@@ -383,6 +385,14 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
    
 
 	TestEntity = m_sceneManager.SpawnObject(m_mainModel, 0, 0, 0);
+    if (TestEntity != INVALID_ENTITY)
+    {
+        auto& registry = m_sceneManager.GetECSRegistry();
+        registry.AddComponent<PlayerGameTag>(TestEntity, PlayerGameTag{});
+        registry.AddComponent<CharacterMovement>(TestEntity, CharacterMovement{});
+        if (auto* name = registry.GetComponent<NameComponent>(TestEntity))
+            name->name = "Player";
+    }
 
     m_editorUI.RefreshShaderList();
 
@@ -653,13 +663,14 @@ bool ApplicationClass::Frame(float dt)
     m_inputManager.Update(m_input);
 
     bool imguiWantsMouse = m_editorUI.WantCaptureMouse() || ImGuizmo::IsOver();
-    if (!imguiWantsMouse) {
-        HandleCameraMovement(dt);  // ← Сразу применяем
-        m_camera->Render();         // ← Сразу обновляем матрицы
+    m_cameraController.UpdateModeToggle(imguiWantsMouse);
+    if (m_cameraController.IsFreeMode())
+    {
+        m_cameraController.UpdateFree(dt, imguiWantsMouse);
     }
-    else if (m_inputManager.IsMouseCaptured(m_input)) {
-        m_inputManager.SetMouseCapture(m_input, false);
-        m_inputManager.ResetMouseDelta(m_input);
+    else if (imguiWantsMouse)
+    {
+        m_cameraController.ReleaseMouseCapture();
     }
     // 2. Синхронизируем позиции отсеков (связь с подлодкой)
     SyncCompartmentPositions();
@@ -670,6 +681,15 @@ bool ApplicationClass::Frame(float dt)
     UpdateWaterAnimation(dt);
 
   
+    if (!imguiWantsMouse && m_cameraController.IsFollowMode())
+        CharacterMovementSystem::Update(m_sceneManager.GetECSRegistry(), dt, TestEntity, m_input);
+
+    if (m_cameraController.IsFollowMode())
+    {
+        auto* targetTransform = m_sceneManager.GetECSRegistry().GetComponent<TransformComponent>(TestEntity);
+        m_cameraController.UpdateFollow(dt, targetTransform);
+    }
+
     m_sceneManager.UpdateAll(dt);
     m_sceneManager.UpdateLights();
    
@@ -677,7 +697,6 @@ bool ApplicationClass::Frame(float dt)
     m_camera->GetViewMatrix(m_viewMatrix);
     m_direct3D->GetProjectionMatrix(m_projMatrix);
 
-	ChatacterMovementSystem::Update(m_sceneManager.GetECSRegistry(), dt, TestEntity, m_input);
     // 6. Debug visualizer update
     if (m_debugVisualizer)
         m_debugVisualizer->UpdateFromWorld(PhysicsWorld::Get().GetWorld());
@@ -1205,69 +1224,6 @@ bool RayIntersectsSphere(const CameraClass::Ray& ray,
     XMVECTOR sphereCenterVec = XMLoadFloat3(&sphereCenter);
     float dist = XMVectorGetX(XMVector3Length(XMVectorSubtract(closest, sphereCenterVec)));
     return dist <= sphereRadius;
-}
-
-// ============================================================================
-// HandleCameraMovement
-// ============================================================================
-void ApplicationClass::HandleCameraMovement(float dt)
-{
-
-    if (m_editorUI.WantCaptureMouse()) return; // Пропускать ввод, если UI активен
-
-    dt = min(dt, 0.05f);
-
-    bool rightDown = m_inputManager.IsCameraMode();
-
-    if (rightDown && !m_inputManager.IsMouseCaptured(m_input) && !m_editorUI.WantCaptureMouse())
-        m_inputManager.SetMouseCapture(m_input, true);
-    else if (!rightDown && m_inputManager.IsMouseCaptured(m_input))
-        m_inputManager.SetMouseCapture(m_input, false);
-
-    if (m_inputManager.IsMouseCaptured(m_input))
-    {
-        m_input->UpdateCapturedMouseDelta(m_hwnd);
-
-        int deltaX, deltaY;
-        m_input->GetMouseDelta(deltaX, deltaY);
-        m_inputManager.ResetMouseDelta(m_input);
-
-        // Mouse delta is already accumulated per frame, so it must not be
-        // multiplied by dt. Scaling by dt made rotation depend on frame time
-        // twice: longer frames collect more mouse pixels and then amplified
-        // those pixels by a larger dt, causing visible stutter while moving.
-        deltaX = std::clamp(deltaX, -200, 200);
-        deltaY = std::clamp(deltaY, -200, 200);
-
-        const float mouseSensitivity = Settings::CAMERA_SENSITIVITY;
-        XMFLOAT3 rotation = m_camera->GetRotation();
-        float rotX = rotation.x + deltaY * mouseSensitivity;
-        float rotY = rotation.y + deltaX * mouseSensitivity;
-        rotX = std::clamp(rotX, -89.0f, 89.0f);
-        m_camera->SetRotation(rotX, rotY, rotation.z);
-    }
-
-    {
-        float posX = m_camera->GetPosition().x;
-        float posY = m_camera->GetPosition().y;
-        float posZ = m_camera->GetPosition().z;
-
-        float speed = Settings::INPUT_MOVE_SPEED;
-        if (m_inputManager.IsKeyDown(m_input, VK_SHIFT))   speed *= 2.0f;
-        if (m_inputManager.IsKeyDown(m_input, VK_CONTROL)) speed *= 0.5f;
-
-        float yawRad = XMConvertToRadians(m_camera->GetRotation().y);
-        float sinYaw = sinf(yawRad), cosYaw = cosf(yawRad);
-
-        if (m_inputManager.IsKeyDown(m_input, 'W')) { posX += sinYaw * speed * dt; posZ += cosYaw * speed * dt; }
-        if (m_inputManager.IsKeyDown(m_input, 'S')) { posX -= sinYaw * speed * dt; posZ -= cosYaw * speed * dt; }
-        if (m_inputManager.IsKeyDown(m_input, 'A')) { posX -= cosYaw * speed * dt; posZ += sinYaw * speed * dt; }
-        if (m_inputManager.IsKeyDown(m_input, 'D')) { posX += cosYaw * speed * dt; posZ -= sinYaw * speed * dt; }
-        if (m_inputManager.IsKeyDown(m_input, 'R')) posY += speed * dt;
-        if (m_inputManager.IsKeyDown(m_input, 'F')) posY -= speed * dt;
-
-        m_camera->SetPosition(posX, posY, posZ);
-    }
 }
 
 // ============================================================================

@@ -69,6 +69,9 @@
     <ClCompile Include="src\Core\ApplicationClass.cpp">
       <Filter>Core</Filter>
     </ClCompile>
+    <ClCompile Include="src\Core\CameraController.cpp">
+      <Filter>Core</Filter>
+    </ClCompile>
     <ClCompile Include="src\Core\main.cpp">
       <Filter>Core</Filter>
     </ClCompile>
@@ -246,6 +249,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="src\Core\ApplicationClass.h">
+      <Filter>Core</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Core\CameraController.h">
       <Filter>Core</Filter>
     </ClInclude>
     <ClInclude Include="src\Core\SystemClass.h">
