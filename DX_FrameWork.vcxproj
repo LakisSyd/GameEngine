@@ -32,6 +32,7 @@
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="SkyShaderClass.cpp" />
     <ClCompile Include="src\Config\PickingSystem.cpp" />
+    <ClCompile Include="src\Core\CameraController.cpp" />
     <ClCompile Include="src\Core\ApplicationClass.cpp" />
     <ClCompile Include="src\Core\main.cpp" />
     <ClCompile Include="src\Core\SystemClass.cpp" />
@@ -93,6 +94,7 @@
     <ClInclude Include="src\Config\CollisionUtils.h" />
     <ClInclude Include="src\Config\GameSettings.h" />
     <ClInclude Include="src\Config\PickingSystem.h" />
+    <ClInclude Include="src\Core\CameraController.h" />
     <ClInclude Include="src\Core\ApplicationClass.h" />
     <ClInclude Include="src\Core\FileSystem.h" />
     <ClInclude Include="src\Core\PhysicsWorld.h" />

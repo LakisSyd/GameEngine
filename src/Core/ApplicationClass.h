@@ -18,6 +18,7 @@
 #include "GameSettings.h"
 #include "PickingSystem.h"
 #include "InputManager.h"
+#include "CameraController.h"
 #include "Multitextureshaderclass.h"
 #include "LightMapShaderClass.h"
 #include "NormalMapShaderClass.h"
@@ -67,7 +68,7 @@ public:
     void HandleCompartmentGizmo();
     void ProcessEditorRequests();
     void SpawnObjectFromRequest(const EditorUI::SpawnRequest& req);
-    void SetInput(InputClass* input) { m_input = input; }
+    void SetInput(InputClass* input) { m_input = input; m_cameraController.SetInput(&m_inputManager, m_input, m_hwnd); }
 
 private:
     // ── Методы рендеринга ────────────────────────────────────────────────────
@@ -78,17 +79,7 @@ private:
     // ── Вспомогательные методы ───────────────────────────────────────────────
   
 
-    enum class CameraControlMode
-    {
-        Free,
-        FollowTarget
-    };
-
-    // ── Обработка ввода и камеры ──────────────────────────────────────────────
-    void UpdateCameraControlMode();
-    void HandleCameraMovement(float dt);
-    void UpdateFollowCamera(float dt);
-    void ReleaseMouseCapture();
+    // ── Обработка ввода ──────────────────────────────────────────────────────
     void HandleDragDrop();
 
     // ── Вспомогательные методы drag-and-drop ─────────────────────────────────
@@ -219,9 +210,7 @@ private:
 
 	Entity TestEntity = INVALID_ENTITY;
 
-    CameraControlMode m_cameraControlMode = CameraControlMode::FollowTarget;
-    bool m_cameraModeToggleWasDown = false;
-    XMFLOAT3 m_followCameraOffset = { 0.0f, 6.0f, -10.0f };
+    CameraController m_cameraController;
 
   
     ID3D11ShaderResourceView* m_skySRV = nullptr;  // 🔥 НОВОЕ
