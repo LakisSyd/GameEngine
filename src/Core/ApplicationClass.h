@@ -78,8 +78,17 @@ private:
     // ── Вспомогательные методы ───────────────────────────────────────────────
   
 
-    // ── Обработка ввода ──────────────────────────────────────────────────────
+    enum class CameraControlMode
+    {
+        Free,
+        FollowTarget
+    };
+
+    // ── Обработка ввода и камеры ──────────────────────────────────────────────
+    void UpdateCameraControlMode();
     void HandleCameraMovement(float dt);
+    void UpdateFollowCamera(float dt);
+    void ReleaseMouseCapture();
     void HandleDragDrop();
 
     // ── Вспомогательные методы drag-and-drop ─────────────────────────────────
@@ -209,6 +218,10 @@ private:
     ID3D11RasterizerState* m_wireframeRS = nullptr;
 
 	Entity TestEntity = INVALID_ENTITY;
+
+    CameraControlMode m_cameraControlMode = CameraControlMode::FollowTarget;
+    bool m_cameraModeToggleWasDown = false;
+    XMFLOAT3 m_followCameraOffset = { 0.0f, 6.0f, -10.0f };
 
   
     ID3D11ShaderResourceView* m_skySRV = nullptr;  // 🔥 НОВОЕ
