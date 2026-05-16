@@ -221,6 +221,7 @@ private:
     ID3D11ShaderResourceView* m_skySRV = nullptr;  // 🔥 НОВОЕ
 
     bool m_wasF5Down = false;
+    bool m_wasF1Down = false;
 };
 
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);
