@@ -19,6 +19,7 @@ public:
     void NewFrame();
     void RenderMainMenu(SceneManager& sceneManager);
     void Update(SceneManager& sceneManager);
+    void UpdateDebugOverlay(SceneManager& sceneManager);
     void BeginMainMenuBar(SceneManager& sceneManager);
     void Render();
 
@@ -99,6 +100,8 @@ public:
 
 
     bool WantCaptureMouse() const;
+    void ToggleObjectDebugWindow() { m_showObjectDebugWindow = !m_showObjectDebugWindow; }
+    bool IsObjectDebugWindowVisible() const { return m_showObjectDebugWindow; }
     void RefreshShaderList() { m_shaderNames = ShaderManager::Get().GetNames(); }
 
 private:
@@ -106,6 +109,7 @@ private:
     SelectedType m_selectedType = SelectedType::None;
     Entity       m_selectedEntity = INVALID_ENTITY;
     int          m_selectedLegacyIndex = -1;
+    bool         m_showObjectDebugWindow = false;
 
     void RenderPhysicsDebugPanel();
     void CreateNewCompartment(ECSRegistry& registry, Entity submarineRoot);

@@ -1,6 +1,7 @@
 ﻿#include "EditorUI.h"
 #include <string>
 #include "SceneManager.h"
+#include "ObjectDebugWindow.h"
 #include <backends/imgui_impl_win32.h>
 #include <imgui-master/backends/imgui_impl_dx11.h>
 #include "PhysicsSystem.h"
@@ -392,6 +393,13 @@ void EditorUI::Update(SceneManager& sceneManager)
     RenderCompartmentEditor(sceneManager);
     RenderDetailsPanel(sceneManager);
     RenderScenePreview();
+    EditorDebug::RenderObjectDebugWindow(sceneManager, m_selectedEntity, m_showObjectDebugWindow);
+}
+
+void EditorUI::UpdateDebugOverlay(SceneManager& sceneManager)
+{
+    NewFrame();
+    EditorDebug::RenderObjectDebugWindow(sceneManager, m_selectedEntity, m_showObjectDebugWindow);
 }
 
 void EditorUI::BeginMainMenuBar(SceneManager& sceneManager)
@@ -498,7 +506,6 @@ void EditorUI::RenderDetailsPanel(SceneManager& sceneManager)
 
     ImGui::End();
 }
-
 
 
 //=============================================================================
