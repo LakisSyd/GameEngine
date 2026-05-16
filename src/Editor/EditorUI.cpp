@@ -10,12 +10,57 @@
 #include "JointConnectionSystem.h"
 #include "../../SubmarineSystem.h"
 #include <imgui_demo.cpp>
+
 inline btQuaternion XMFloat4ToBtQuaternion(const DirectX::XMFLOAT4& q)
 {
     return btQuaternion(q.x, q.y, q.z, q.w);
 }
 
+void EditorUI::RenderDebug(ECSRegistry& registry)
+{
+    ImGui::Begin("Debug");
 
+
+   
+
+    int entityCount = 0;
+    registry.ForEach<TransformComponent>(
+        [&](Entity, TransformComponent&) { entityCount++; });
+
+    ImGui::Text("Entities with Transform: %d", entityCount);
+
+    Entity player = INVALID_ENTITY;
+    registry.ForEach<PlayerGameTag>(
+        [&](Entity e, PlayerGameTag&) { player = e; });
+
+    ImGui::Text("Player Entity: %u", player);
+
+    if (player != INVALID_ENTITY)
+    {
+        auto* t = registry.GetComponent<TransformComponent>(player);
+        auto* move = registry.GetComponent<CharacterMovement>(player);
+        auto* anim = registry.GetComponent<AnimationComponent>(player);
+
+        if (t)
+            ImGui::Text("Player Pos: %.2f %.2f %.2f",
+                t->position.x, t->position.y, t->position.z);
+
+        if (move)
+        {
+            ImGui::Text("Speed: %.2f", move->currentSpeed);
+            ImGui::Text("Moving: %s", move->isMoving ? "true" : "false");
+        }
+
+        if (anim)
+        {
+            ImGui::Text("Anim Index: %d", anim->animationIndex);
+            ImGui::Text("Anim Time: %.2f", anim->currentTime);
+            ImGui::Text("Playing: %s", anim->isPlaying ? "true" : "false");
+        }
+    }
+
+    ImGui::End();
+}
 
 
 
@@ -392,6 +437,7 @@ void EditorUI::Update(SceneManager& sceneManager)
     RenderCompartmentEditor(sceneManager);
     RenderDetailsPanel(sceneManager);
     RenderScenePreview();
+	RenderDebug(sceneManager.GetECSRegistry());
 }
 
 void EditorUI::BeginMainMenuBar(SceneManager& sceneManager)

@@ -7,11 +7,13 @@
 #include "FileSystem.h"
 #include "ShaderManager.h"
 #include "PhysicsDebugRenderer.h"
+#include "../../GameplayController.h"
 
 class EditorUI
 {
 public:
     EditorUI() = default;
+    void RenderDebug(ECSRegistry& registry);
     ~EditorUI();
 
     bool Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* context, FileSystem* fs);
@@ -274,6 +276,8 @@ private:
   
     XMFLOAT3 m_cornerDragStartMin = {};
     XMFLOAT3 m_cornerDragStartMax = {};
+
+    
  
 
     // Синхронизация кэша из внешнего кода (ApplicationClass → corner drag)

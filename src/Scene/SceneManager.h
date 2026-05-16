@@ -159,11 +159,7 @@ public:
     // Light-сферы (только для редактора, не часть ECS)
     // =========================================================================
     void SetupLightSpheres(std::vector<GameObject>& spheres, AssimpModelClass* model);
-    void RenderLightSpheres(std::vector<GameObject>& spheres,
-        ID3D11DeviceContext* context,
-        XMMATRIX view, XMMATRIX projection,
-        TextureShaderClass* shader);
-
+    
     // =========================================================================
     // Настройки
     // =========================================================================

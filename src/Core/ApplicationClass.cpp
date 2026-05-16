@@ -255,14 +255,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_cameraController.SetInput(&m_inputManager, m_input, m_hwnd);
 
     // ── Fallback модель (для SpawnObject без указания модели) ─────────────────
-    m_mainModel = new AssimpModelClass;
-    if (!m_mainModel->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
-        "assets/model/sphere.obj", "assets/texture/stone.tga"))
-    {
-        MessageBox(hwnd, L"Failed to load main model", L"Error", MB_OK);
-        return false;
-    }
-    m_sceneManager.SetFallbackModel(m_mainModel);
+ 
     m_sceneManager.SetLightModel(m_lightSphereModel);   // ✅ НОВОЕ
     // ── Модель для сфер-индикаторов света ────────────────────────────────────
     m_lightSphereModel = new AssimpModelClass;
@@ -300,6 +293,8 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         MessageBox(hwnd, L"Failed to initialize PhysicsDebugRenderer", L"Error", MB_OK);
         return false;
     }
+
+  
 
     m_compartmentRenderer = new CompartmentDebugRenderer();
     if (!m_compartmentRenderer->Initialize(m_direct3D->GetDevice()))
@@ -657,6 +652,7 @@ bool ApplicationClass::Frame(float dt)
     // =====================================================
     m_inputManager.Update(m_input);
 
+    
     // =====================================================
     // 1. Engine mode toggle: F5 = Editor / Play
     // =====================================================
@@ -726,6 +722,8 @@ bool ApplicationClass::Frame(float dt)
         );
         CharacterControllerSystem::Update(m_sceneManager.GetECSRegistry(), dt);
         AnimationController::Update(m_sceneManager.GetECSRegistry(), dt);
+        
+       
     }
 
     // =====================================================
