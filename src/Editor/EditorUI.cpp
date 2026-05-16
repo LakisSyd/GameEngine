@@ -1,5 +1,6 @@
 ﻿#include "EditorUI.h"
 #include <string>
+#include <cstdint>
 #include "SceneManager.h"
 #include "ObjectDebugWindow.h"
 #include <backends/imgui_impl_win32.h>

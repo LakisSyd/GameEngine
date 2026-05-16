@@ -160,6 +160,8 @@ private:
     void RenderSidebar(SceneManager& sceneManager);
     void RenderSceneOutliner(SceneManager& sceneManager);
     void RenderDetailsPanel(SceneManager& sceneManager);
+    void RenderObjectDebugWindow(SceneManager& sceneManager);
+    void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity entity);
     void RenderSpawnPanel(SceneManager& sceneManager);
     void RenderFogPanel(SceneManager& sceneManager);
     void RenderScenePreview();
