@@ -35,7 +35,7 @@ public:
         float radius);
 
 private:
-    void StartDraggingObject(int index, const CameraClass::Ray& ray, const XMFLOAT3& pos);
+    void StartDraggingObject(int index, const CameraClass::Ray& ray, const XMFLOAT3& dragAnchor);
     void StartDraggingSprite(int index, const CameraClass::Ray& ray, const XMFLOAT3& pos);
     void UpdateDraggedPosition(const CameraClass::Ray& ray);
     void StopDragging();

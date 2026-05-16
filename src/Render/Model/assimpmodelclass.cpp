@@ -793,12 +793,12 @@ bool AssimpModelClass::Initialize(
                 v.boneWeights[2] /= sum; v.boneWeights[3] /= sum;
             }
             else {
-                v.boneIDs[0] = 0; v.boneWeights[0] = 1.0f;
-            }
-            if (mesh->mNumBones == 0) {
-                // 🔥 Устанавливаем корневую кость для нодовой анимации
-                v.boneIDs[0] = 0;      // вместо -1
-                v.boneWeights[0] = 1.0f;
+                // Static meshes must keep boneIDs at -1 so the PBR vertex shader
+                // uses the original vertex position instead of a stale bone buffer.
+                for (int b = 0; b < 4; ++b) {
+                    v.boneIDs[b] = -1;
+                    v.boneWeights[b] = 0.0f;
+                }
             }
             vertices.push_back(v);
         }
