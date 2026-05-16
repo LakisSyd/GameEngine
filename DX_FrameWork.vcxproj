@@ -22,6 +22,7 @@
     <ClCompile Include="AnimationSystem.h" />
     <ClCompile Include="DragDropSystem.cpp" />
     <ClCompile Include="FileName.h" />
+    <ClCompile Include="GameplayController.cpp" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_dx11.cpp" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_win32.cpp" />
     <ClCompile Include="lib\imgui-master\imgui.cpp" />
@@ -84,6 +85,7 @@
     <ClInclude Include="CharacterSpawnSystem.h" />
     <ClInclude Include="CharacterMovementSystem.h" />
     <ClInclude Include="DragDropSystem.h" />
+    <ClInclude Include="GameplayController.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h" />
     <ClInclude Include="lib\imgui-master\ImGuizmo.h" />

@@ -21,6 +21,7 @@
 #include <stb_image.h>
 #include "../../CharacterSpawnSystem.h"
 #include "../../CharacterMovementSystem.h"
+
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
 // ============================================================================
@@ -385,15 +386,8 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 
    
 
-	TestEntity = m_sceneManager.SpawnObject(m_mainModel, 0, 0, 0);
-    if (TestEntity != INVALID_ENTITY)
-    {
-        auto& registry = m_sceneManager.GetECSRegistry();
-        registry.AddComponent<PlayerGameTag>(TestEntity, PlayerGameTag{});
-        registry.AddComponent<CharacterMovement>(TestEntity, CharacterMovement{});
-        if (auto* name = registry.GetComponent<NameComponent>(TestEntity))
-            name->name = "Player";
-    }
+	
+ 
 
     m_editorUI.RefreshShaderList();
 
@@ -657,82 +651,187 @@ void ApplicationClass::Shutdown()
 
 bool ApplicationClass::Frame(float dt)
 {
-    // 1. Получаем настройки отладки и обновляем input в начале кадра.
-    // Camera movement must use the current right-button state; updating input
-    // after camera handling made capture/movement one frame late and jittery.
-    m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
+    // =====================================================
+    // 0. Input
+    // =====================================================
     m_inputManager.Update(m_input);
-    UpdateCameraControlMode();
 
-    bool imguiWantsMouse = m_editorUI.WantCaptureMouse() || ImGuizmo::IsOver();
-    m_cameraController.UpdateModeToggle(imguiWantsMouse);
-    if (m_cameraController.IsFreeMode())
+    // =====================================================
+    // 1. Engine mode toggle: F5 = Editor / Play
+    // =====================================================
+    const bool f5Down = m_input && m_input->IsKeyDown(VK_F5);
+
+   if (f5Down && !m_wasF5Down)
+{
+    if (m_engineMode == EngineMode::Editor)
     {
-        m_cameraController.UpdateFree(dt, imguiWantsMouse);
+        m_engineMode = EngineMode::Play;
+        m_cameraController.EnterPlayMode();
     }
-    else if (imguiWantsMouse)
+    else
     {
-        m_cameraController.ReleaseMouseCapture();
+        m_engineMode = EngineMode::Editor;
+        m_cameraController.ExitPlayMode();
     }
-    // 2. Синхронизируем позиции отсеков (связь с подлодкой)
+}
+
+    m_wasF5Down = f5Down;
+
+    const bool isEditorMode = m_engineMode == EngineMode::Editor;
+    const bool isPlayMode = m_engineMode == EngineMode::Play;
+
+    // =====================================================
+    // 2. Editor input / camera
+    // =====================================================
+    bool imguiWantsMouse = false;
+
+    if (isEditorMode)
+    {
+        m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
+
+        imguiWantsMouse =
+            m_editorUI.WantCaptureMouse()
+            || ImGuizmo::IsOver()
+            || ImGuizmo::IsUsing();
+
+        m_cameraController.UpdateModeToggle(imguiWantsMouse);
+
+        if (m_cameraController.IsFreeMode())
+        {
+            m_cameraController.UpdateFree(dt, imguiWantsMouse);
+        }
+        else if (imguiWantsMouse)
+        {
+            m_cameraController.ReleaseMouseCapture();
+        }
+    
+    }
+    
+
+    // =====================================================
+    // 3. World systems
+    // =====================================================
     SyncCompartmentPositions();
-    // 3. Физика
     UpdatePhysics(dt);
-
-    // 4. Анимация воды
     UpdateWaterAnimation(dt);
 
-  
-    if (!imguiWantsMouse && m_cameraController.IsFollowMode())
-        CharacterMovementSystem::Update(m_sceneManager.GetECSRegistry(), dt, TestEntity, m_input);
-
-    if (m_cameraController.IsFollowMode())
+    // =====================================================
+    // 4. Gameplay
+    // =====================================================
+    if (isPlayMode)
     {
-        auto* targetTransform = m_sceneManager.GetECSRegistry().GetComponent<TransformComponent>(TestEntity);
-        m_cameraController.UpdateFollow(dt, targetTransform);
+        m_gameplayController.Update(
+            m_sceneManager.GetECSRegistry(),
+            dt,
+            m_input,
+            false
+        );
+
+        auto& registry = m_sceneManager.GetECSRegistry();
+
+        Entity player = INVALID_ENTITY;
+
+        registry.ForEach<PlayerGameTag>(
+            [&](Entity entity, PlayerGameTag& tag)
+            {
+                player = entity;
+            });
+
+        if (player != INVALID_ENTITY)
+        {
+            auto* transform =
+                registry.GetComponent<TransformComponent>(player);
+
+            if (transform)
+            {
+                m_cameraController.UpdateFollow(dt, transform);
+            }
+        }
     }
 
+    // =====================================================
+    // 5. Scene update
+    // =====================================================
     m_sceneManager.UpdateAll(dt);
     m_sceneManager.UpdateLights();
-   
+
     m_camera->Render();
     m_camera->GetViewMatrix(m_viewMatrix);
     m_direct3D->GetProjectionMatrix(m_projMatrix);
 
-    // 6. Debug visualizer update
+    // =====================================================
+    // 6. Debug visualizer
+    // =====================================================
     if (m_debugVisualizer)
-        m_debugVisualizer->UpdateFromWorld(PhysicsWorld::Get().GetWorld());
-
-    // 7. Drag-drop система
-    imguiWantsMouse = m_editorUI.WantCaptureMouse()
-        || ImGuizmo::IsOver()
-        || ImGuizmo::IsUsing();
-    if (!imguiWantsMouse)
     {
-        m_dragDropSystem->Update(m_viewMatrix, m_projMatrix,
-            m_screenWidth, m_screenHeight, m_lightSpheres,
-            [this](const auto& req) { SpawnObjectFromRequest(req); });
+        m_debugVisualizer->UpdateFromWorld(
+            PhysicsWorld::Get().GetWorld()
+        );
     }
 
-    // ════════════════════════════════════════════════════════════════════════════
-    // ★ ЕДИНСТВЕННЫЙ ВЫЗОВ РЕНДЕРА — всё остальное внутри Renderer::RenderFrame()
-    // ════════════════════════════════════════════════════════════════════════════
-    Entity selectedEntity = (m_editorUI.GetSelectedType() == EditorUI::SelectedType::Object)
-        ? m_editorUI.GetSelectedEntity() : INVALID_ENTITY;
+    // =====================================================
+    // 7. Editor-only tools
+    // =====================================================
+    if (isEditorMode)
+    {
+        imguiWantsMouse =
+            m_editorUI.WantCaptureMouse()
+            || ImGuizmo::IsOver()
+            || ImGuizmo::IsUsing();
 
-    m_renderer->RenderFrame(m_direct3D->GetDeviceContext(), m_viewMatrix, m_projMatrix, selectedEntity, m_physicsDebugSettings);
-    
-    // 8. EditorUI
-    m_editorUI.Update(m_sceneManager);
-    RenderCompartmentCornerHandles();
-    RenderCompoundCornerHandles();
-    HandleCompartmentGizmo();
-  
-    // 9. Editor requests (save/load/spawn)
-    ProcessEditorRequests();
+        if (!imguiWantsMouse && m_dragDropSystem)
+        {
+            m_dragDropSystem->Update(
+                m_viewMatrix,
+                m_projMatrix,
+                m_screenWidth,
+                m_screenHeight,
+                m_lightSpheres,
+                [this](const auto& req)
+                {
+                    SpawnObjectFromRequest(req);
+                });
+        }
+    }
 
-    // 10. ImGui render
-    m_editorUI.Render();
+    // =====================================================
+    // 8. Render 3D scene
+    // =====================================================
+    Entity selectedEntity = INVALID_ENTITY;
+
+    if (isEditorMode &&
+        m_editorUI.GetSelectedType() == EditorUI::SelectedType::Object)
+    {
+        selectedEntity = m_editorUI.GetSelectedEntity();
+    }
+
+    m_renderer->RenderFrame(
+        m_direct3D->GetDeviceContext(),
+        m_viewMatrix,
+        m_projMatrix,
+        selectedEntity,
+        m_physicsDebugSettings
+    );
+
+    // =====================================================
+    // 9. Editor UI
+    // =====================================================
+    if (isEditorMode)
+    {
+        m_editorUI.Update(m_sceneManager);
+
+        RenderCompartmentCornerHandles();
+        RenderCompoundCornerHandles();
+        HandleCompartmentGizmo();
+
+        ProcessEditorRequests();
+
+        m_editorUI.Render();
+    }
+
+    // =====================================================
+    // 10. Present
+    // =====================================================
     m_direct3D->EndScene();
 
     return true;
@@ -2223,4 +2322,19 @@ void ApplicationClass::SpawnTestBot(ECSRegistry& registry, const XMFLOAT3& pos)
 
 
 
+}
+
+void ApplicationClass::UpdateCameraControlMode()
+{
+    bool imguiWantsMouse =
+        m_editorUI.WantCaptureMouse() ||
+        ImGuizmo::IsOver() ||
+        ImGuizmo::IsUsing();
+
+    m_cameraController.UpdateModeToggle(imguiWantsMouse);
+
+    if (imguiWantsMouse)
+    {
+        m_cameraController.ReleaseMouseCapture();
+    }
 }

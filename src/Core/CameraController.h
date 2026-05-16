@@ -31,10 +31,15 @@ public:
     void UpdateFree(float dt, bool inputBlockedByUi);
     void UpdateFollow(float dt, const TransformComponent* targetTransform);
     void ReleaseMouseCapture();
+    void EnterPlayMode();
+
+    void ExitPlayMode();
 
 private:
     void ApplyFreeLook(float dt);
     void ApplyFreeMove(float dt);
+
+ 
 
 private:
     CameraClass* m_camera = nullptr;
@@ -45,4 +50,11 @@ private:
     Mode m_mode = Mode::FollowTarget;
     bool m_toggleWasDown = false;
     DirectX::XMFLOAT3 m_followOffset = { 0.0f, 6.0f, -10.0f };
+
+    float m_followYaw = 0.0f;
+    float m_followPitch = 20.0f;
+    float m_followDistance = 8.0f;
+
+    float m_followMinPitch = -20.0f;
+    float m_followMaxPitch = 70.0f;
 };

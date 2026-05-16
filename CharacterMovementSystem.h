@@ -8,22 +8,30 @@
 class CharacterMovementSystem
 {
 public:
-    static void Update(ECSRegistry& registry, float deltaTime, Entity playerEntity, InputClass* input)
+    static void Update(ECSRegistry& registry, float deltaTime, InputClass* input)
     {
-        if (!input || playerEntity == INVALID_ENTITY)
+        if (!input) return;
+
+        Entity player = INVALID_ENTITY;
+
+        registry.ForEach<PlayerGameTag>([&](Entity entity, PlayerGameTag& tag)
+            {
+                player = entity;
+            });
+
+        if (player == INVALID_ENTITY)
             return;
 
-        if (!registry.HasComponent<PlayerGameTag>(playerEntity))
-            return;
+        auto* transform = registry.GetComponent<TransformComponent>(player);
+        auto* movement = registry.GetComponent<CharacterMovement>(player);
 
-        auto* transform = registry.GetComponent<TransformComponent>(playerEntity);
-        auto* movement = registry.GetComponent<CharacterMovement>(playerEntity);
         if (!transform || !movement)
             return;
 
         using namespace DirectX;
 
         XMFLOAT3 inputDirection = { 0.0f, 0.0f, 0.0f };
+
         if (input->IsKeyDown('W')) inputDirection.z += 1.0f;
         if (input->IsKeyDown('S')) inputDirection.z -= 1.0f;
         if (input->IsKeyDown('A')) inputDirection.x -= 1.0f;
@@ -45,6 +53,7 @@ public:
         constexpr unsigned int KEY_SHIFT = 0x10;
         const bool running = input->IsKeyDown(KEY_SHIFT);
         const float speed = running ? movement->runSpeed : movement->moveSpeed;
+
         movement->currentSpeed = speed;
 
         XMVECTOR position = XMLoadFloat3(&transform->position);

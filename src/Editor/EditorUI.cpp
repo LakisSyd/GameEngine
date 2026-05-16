@@ -733,266 +733,19 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
         }
     }
 
-    if (registry.HasComponent<SubmarineCollisionSetup>(entity))
-    {
-
-        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.25f, 0.35f, 1.0f)); // 🔵 Синий
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.35f, 0.48f, 1.0f));
-        bool open = ImGui::CollapsingHeader("  cOLISSION Component##comp", ImGuiTreeNodeFlags_DefaultOpen);
-        ImGui::PopStyleColor(2);
-        if (open) {
-			DrawSubmarineCollisionSetup(sceneManager.GetECSRegistry(), entity);
-        }
-    }
+    
         
 
-    if (registry.HasComponent<CompartmentComponent>(entity))
+    if(registry.HasComponent<PlayerGameTag>(entity))
     {
-        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.25f, 0.35f, 1.0f)); // 🔵 Синий
-        ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.35f, 0.48f, 1.0f));
-        bool open = ImGui::CollapsingHeader("  Compartment Component##comp", ImGuiTreeNodeFlags_DefaultOpen);
-        ImGui::PopStyleColor(2);
-
-        if (open)
-        {
-            auto* comp = registry.GetComponent<CompartmentComponent>(entity);
-            if (!comp) { ImGui::TextColored(COL_RED, "Component error"); return; }
-
-            ImGui::Spacing();
-
-            // ── AABB отсека ────────────────────────────────────────────
-            ImGui::TextColored(COL_TEXT_DIM, " Compartment Bounds (Local)");
-            float min[3] = { comp->localMin.x, comp->localMin.y, comp->localMin.z };
-            float max[3] = { comp->localMax.x, comp->localMax.y, comp->localMax.z };
-
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-            ImGui::TextColored(COL_TEXT_DIM, " Compartment Bounds");
-
-            // Переключатель: Центр+Размер ИЛИ Мин/Макс
-            static bool useCenterSize = true;
-            ImGui::Checkbox(" Use Center + Size", &useCenterSize);
-            ImGui::SameLine();
-            if (ImGui::SmallButton("Reset View")) { useCenterSize = true; }
-
-            if (useCenterSize)
-            {
-                // 🔹 Вычисляем центр и размер из min/max (если ещё не кэшировано)
-                if (m_editingCompartment != entity)
-                {
-                    StartCompartmentEdit(entity);
-                }
-
-                // Редактирование ЦЕНТРА (относительно подлодки)
-                ImGui::TextColored(COL_TEXT_DIM, " Center Offset (Local)");
-                float center[3] = { m_compartmentCenter.x, m_compartmentCenter.y, m_compartmentCenter.z };
-
-                // Цветные поля для осей
-                if (DragFloat3Colored("##CompCenter", center, 0.1f))
-                {
-                    m_compartmentCenter = { center[0], center[1], center[2] };
-                    UpdateCompartmentFromCache(comp);  // Применяем изменения
-                }
-
-                // Редактирование РАЗМЕРА
-                ImGui::Spacing();
-                ImGui::TextColored(COL_TEXT_DIM, " Size (X, Y, Z)");
-                float size[3] = { m_compartmentSize.x, m_compartmentSize.y, m_compartmentSize.z };
-                if (DragFloat3Colored("##CompSize", size, 0.1f))
-                {
-                    // Не даём размеру стать отрицательным или нулевым
-                    m_compartmentSize = {
-                        fmaxf(0.5f, size[0]),
-                        fmaxf(0.5f, size[1]),
-                        fmaxf(0.5f, size[2])
-                    };
-                    XMFLOAT3 oldMin = comp->localMin;
-                    XMFLOAT3 oldMax = comp->localMax;
-                    UpdateCompartmentFromCache(comp);
-                    UpdateBreachesOnResize(comp, oldMin, oldMax); // <--- добавьте этот вызов
-                }
-
-                // Пресеты размеров
-                ImGui::Spacing();
-                ImGui::TextColored(COL_TEXT_DIM, " Preset Sizes:");
-                if (ImGui::SmallButton("Small (1×1×1)")) { m_compartmentSize = { 1,1,1 }; UpdateCompartmentFromCache(comp); }
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Medium (2×2×3)")) { m_compartmentSize = { 2,2,3 }; UpdateCompartmentFromCache(comp); }
-                ImGui::SameLine();
-                if (ImGui::SmallButton("Large (4×3×5)")) { m_compartmentSize = { 4,3,5 }; UpdateCompartmentFromCache(comp); }
-            }
-            else
-            {
-                // 🔹 Старый режим: прямой редактирование Min/Max
-                ImGui::TextColored(COL_TEXT_DIM, " Min Bounds (Local)");
-                float min[3] = { comp->localMin.x, comp->localMin.y, comp->localMin.z };
-                if (DragFloat3Colored("##CompMin", min, 0.1f))
-                {
-                    comp->localMin = { min[0], min[1], min[2] };
-                    comp->RecalculateVolume();
-                }
-
-                ImGui::Spacing();
-                ImGui::TextColored(COL_TEXT_DIM, " Max Bounds (Local)");
-                float max[3] = { comp->localMax.x, comp->localMax.y, comp->localMax.z };
-                if (DragFloat3Colored("##CompMax", max, 0.1f))
-                {
-                    comp->localMax = { max[0], max[1], max[2] };
-                    comp->RecalculateVolume();
-                }
-            }
-
-            // 🔹 Кнопки быстрого позиционирования (только для режима Center+Size)
-            if (useCenterSize)
-            {
-                ImGui::Spacing();
-                ImGui::Separator();
-                ImGui::Spacing();
-                ImGui::TextColored(COL_TEXT_DIM, " Quick Position (relative to submarine):");
-
-                // Кнопки-пресеты для позиционирования
-                const float btnW = (ImGui::GetContentRegionAvail().x - 8.0f) / 3.0f;
-
-                // Перед/Центр/Зад
-                if (ImGui::Button("Front", ImVec2(btnW, 0))) { m_compartmentCenter.z = 4.0f; UpdateCompartmentFromCache(comp); }
-                ImGui::SameLine(0, 4);
-                if (ImGui::Button("Center", ImVec2(btnW, 0))) { m_compartmentCenter = { 0,0,0 }; UpdateCompartmentFromCache(comp); }
-                ImGui::SameLine(0, 4);
-                if (ImGui::Button("Rear", ImVec2(btnW, 0))) { m_compartmentCenter.z = -4.0f; UpdateCompartmentFromCache(comp); }
-
-                // Верх/Средина/Низ
-                if (ImGui::Button("Top", ImVec2(btnW, 0))) { m_compartmentCenter.y = 2.0f; UpdateCompartmentFromCache(comp); }
-                ImGui::SameLine(0, 4);
-                if (ImGui::Button("Middle", ImVec2(btnW, 0))) { m_compartmentCenter.y = 0.0f; UpdateCompartmentFromCache(comp); }
-                ImGui::SameLine(0, 4);
-                if (ImGui::Button("Bottom", ImVec2(btnW, 0))) { m_compartmentCenter.y = -2.0f; UpdateCompartmentFromCache(comp); }
-
-                // Лево/Центр/Право
-                if (ImGui::Button("Left", ImVec2(btnW, 0))) { m_compartmentCenter.x = -2.0f; UpdateCompartmentFromCache(comp); }
-                ImGui::SameLine(0, 4);
-                if (ImGui::Button("Center X", ImVec2(btnW, 0))) { m_compartmentCenter.x = 0.0f; UpdateCompartmentFromCache(comp); }
-                ImGui::SameLine(0, 4);
-                if (ImGui::Button("Right", ImVec2(btnW, 0))) { m_compartmentCenter.x = 2.0f; UpdateCompartmentFromCache(comp); }
-            }
-
-            // 🔹 Визуализация в 3D: кнопка включения гизмо
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            bool gizmoEnabled = (m_compartmentEditMode != CompartmentEditMode::None && m_editingCompartment == entity);
-            if (ImGui::Checkbox("🖱️ Edit in Viewport (Gizmo)", &gizmoEnabled))
-            {
-                if (gizmoEnabled)
-                    StartCompartmentEdit(entity);
-                else
-                    m_compartmentEditMode = CompartmentEditMode::None;
-            }
-
-            if (gizmoEnabled)
-            {
-                ImGui::SameLine();
-                // Переключатель: перемещение или масштабирование
-                static bool isMoveMode = true;
-                if (ImGui::SmallButton(isMoveMode ? "Mode: Move" : "Mode: Scale"))
-                    isMoveMode = !isMoveMode;
-
-                m_compartmentEditMode = isMoveMode ? CompartmentEditMode::Move : CompartmentEditMode::Resize;
-
-                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
-                    "  ← Drag axes in viewport to move/resize");
-            }
-
-            ImGui::Spacing();
-            ImGui::Text("Volume: %.2f m³", comp->volume);
-
-            // ── Состояние затопления ───────────────────────────────────
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-            ImGui::TextColored(COL_TEXT_DIM, " Flooding Status");
-
-            float waterPercent = (comp->waterVolume / comp->volume) * 100.0f;
-            ImGui::ProgressBar(waterPercent / 100.0f, ImVec2(-1, 0),
-                (std::to_string((int)waterPercent) + "%% flooded").c_str());
-
-            ImGui::Text("Water Level: %.2f m", comp->waterLevel);
-            ImGui::Text("Breaches: %zu", comp->breaches.size());
-
-            // ── Список пробоин ──────────────────────────────────────────
-            if (comp->breaches.size() > 0)
-            {
-                ImGui::Spacing();
-                ImGui::TextColored(COL_TEXT_DIM, " Breach List:");
-                for (size_t i = 0; i < comp->breaches.size(); ++i)
-                {
-                    auto& breach = comp->breaches[i];
-                    ImGui::PushID((int)i);
-
-                    ImGui::Text("[%zu] Size: %.2fm Flow: %.3f m³/s %s",
-                        i, breach.size, breach.flowRate,
-                        breach.isSealed ? "(SEALED)" : "");
-
-                    ImGui::SameLine();
-                    if (!breach.isSealed && ImGui::SmallButton("Seal"))
-                    {
-                        FloodingSystem::SealBreach(registry, entity, i);
-                    }
-
-                    ImGui::PopID();
-                }
-            }
-
-            // ── Кнопка создания пробоины (для теста) ───────────────────
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            static float testBreachSize = 0.5f;
-            ImGui::DragFloat("Test Breach Size", &testBreachSize, 0.1f, 0.1f, 2.0f);
-
-            if (ImGui::Button(" Create Test Breach", ImVec2(-1, 0)))
-            {
-                // 🔥 ВАЖНО: Пробоина в ЛОКАЛЬНЫХ координатах отсека!
-                // Создаём в нижней части отсека
-                XMFLOAT3 localBreachPos = {
-                    (comp->localMin.x + comp->localMax.x) * 0.5f,  // Center X
-                    comp->localMin.y,                        // 🔥 У ДНА отсека
-                    (comp->localMin.z + comp->localMax.z) * 0.5f   // Center Z
-                };
-
-                FloodingSystem::CreateBreach(registry, entity, localBreachPos, testBreachSize);
-
-                OutputDebugStringA(
-                    ("✅ Created breach at local pos: " +
-                        std::to_string(localBreachPos.x) + ", " +
-                        std::to_string(localBreachPos.y) + ", " +
-                        std::to_string(localBreachPos.z) + "\n").c_str()
-                );
-            }
-
-            // ── Настройки герметичности и систем ────────────────────────
-            ImGui::Spacing();
-            ImGui::Separator();
-            ImGui::Spacing();
-
-            ImGui::Checkbox("Sealed (Doors Closed)", &comp->isSealed);
-            ImGui::Checkbox("Has Power", &comp->hasPower);
-
-            ImGui::DragFloat("Pump Rate (m³/s)", &comp->pumpRate, 0.01f, 0.0f, 1.0f);
-
-            // ── Удаление компонента ─────────────────────────────────────
-            ImGui::Spacing();
-            ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
-            if (ImGui::Button(" Remove Compartment Component", ImVec2(-1, 0)))
-            {
-                registry.RemoveComponent<CompartmentComponent>(entity);
-            }
-            ImGui::PopStyleColor(2);
-        }
-    }
+        ImGui::TextColored(COL_ACCENT, "🚹 Player Object");
+        ImGui::Spacing();
+        ImGui::TextColored(COL_TEXT_DIM, "This object is tagged as the player.");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+	}
+           
 
     // ── LightComponent ────────────────────────────────────────────────────────
     if (registry.HasComponent<LightComponent>(entity))
@@ -1757,6 +1510,19 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 ImGui::TextColored(COL_TEXT_DIM, "(already added)");
             }
         }
+
+        {
+			const bool hasPlayer = registry.HasComponent<PlayerGameTag>(entity);
+			ImGui::BeginDisabled(hasPlayer);
+            if (ImGui::Selectable("  Player GameTag"))
+            {
+                registry.AddComponent<PlayerGameTag>(entity, PlayerGameTag{});
+                registry.AddComponent<CharacterMovement>(entity, CharacterMovement{});
+				ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+        }
+
         {
             const bool coll = registry.HasComponent<SubmarineCollisionSetup>(entity);
             ImGui::BeginDisabled(coll);

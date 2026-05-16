@@ -39,7 +39,7 @@
 #include "ShadowShaderClass.h"
 #include "CompartmentDebugRenderer.h"
 #include "../../DragDropSystem.h"
-
+#include "../../GameplayController.h"
 class Renderer;
 class SkyShaderClass;
 
@@ -114,6 +114,8 @@ private:
     void RefreshRigidBodyExternal(ECSRegistry& registry, Entity entity, RigidBodyComponent* rb);
 
     void SpawnTestBot(ECSRegistry& registry, const XMFLOAT3& pos);
+
+    void UpdateCameraControlMode();
 
 
     ShadowMap* m_shadowMap;
@@ -212,8 +214,13 @@ private:
 
     CameraController m_cameraController;
 
+    EngineMode m_engineMode = EngineMode::Editor;
+
+	GamePlayController m_gameplayController;
   
     ID3D11ShaderResourceView* m_skySRV = nullptr;  // 🔥 НОВОЕ
+
+    bool m_wasF5Down = false;
 };
 
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);

@@ -51,37 +51,91 @@ void CameraController::UpdateFree(float dt, bool inputBlockedByUi)
 
 void CameraController::UpdateFollow(float dt, const TransformComponent* targetTransform)
 {
-    if (!m_camera || !targetTransform)
+    if (!m_camera || !targetTransform || !m_inputManager || !m_input)
         return;
 
     dt = std::min(dt, 0.05f);
 
-    XMFLOAT3 current = m_camera->GetPosition();
-    XMFLOAT3 desired = {
-        targetTransform->position.x + m_followOffset.x,
-        targetTransform->position.y + m_followOffset.y,
-        targetTransform->position.z + m_followOffset.z
+    // В PlayMode мышь всегда захвачена
+    if (!m_inputManager->IsMouseCaptured(m_input))
+    {
+        m_inputManager->SetMouseCapture(m_input, true);
+    }
+
+    m_input->UpdateCapturedMouseDelta(m_hwnd);
+
+    int dx = 0;
+    int dy = 0;
+    m_input->GetMouseDelta(dx, dy);
+    m_inputManager->ResetMouseDelta(m_input);
+
+    dx = std::clamp(dx, -200, 200);
+    dy = std::clamp(dy, -200, 200);
+
+    const float sensitivity = Settings::CAMERA_SENSITIVITY;
+
+    m_followYaw += dx * sensitivity;
+    m_followPitch += dy * sensitivity;
+
+    m_followPitch = std::clamp(
+        m_followPitch,
+        m_followMinPitch,
+        m_followMaxPitch
+    );
+    
+   
+
+    using namespace DirectX;
+
+    const float yawRad = XMConvertToRadians(m_followYaw);
+    const float pitchRad = XMConvertToRadians(m_followPitch);
+
+    XMFLOAT3 target = targetTransform->position;
+
+    // Небольшая высота точки, в которую смотрим
+    target.y += 1.5f;
+
+    const float cosPitch = cosf(pitchRad);
+    const float sinPitch = sinf(pitchRad);
+    const float sinYaw = sinf(yawRad);
+    const float cosYaw = cosf(yawRad);
+
+    XMFLOAT3 desired =
+    {
+        target.x - sinYaw * cosPitch * m_followDistance,
+        target.y + sinPitch * m_followDistance,
+        target.z - cosYaw * cosPitch * m_followDistance
     };
+
+    XMFLOAT3 current = m_camera->GetPosition();
 
     const float followSpeed = 12.0f;
     const float t = std::clamp(followSpeed * dt, 0.0f, 1.0f);
 
-    XMFLOAT3 next = {
+    XMFLOAT3 next =
+    {
         current.x + (desired.x - current.x) * t,
         current.y + (desired.y - current.y) * t,
         current.z + (desired.z - current.z) * t
     };
+        
     m_camera->SetPosition(next.x, next.y, next.z);
 
     XMVECTOR cameraPos = XMLoadFloat3(&next);
-    XMVECTOR targetPos = XMLoadFloat3(&targetTransform->position);
-    XMVECTOR direction = XMVector3Normalize(XMVectorSubtract(targetPos, cameraPos));
+    XMVECTOR targetPos = XMLoadFloat3(&target);
+    XMVECTOR direction = XMVector3Normalize(
+        XMVectorSubtract(targetPos, cameraPos)
+    );
 
     XMFLOAT3 dir;
     XMStoreFloat3(&dir, direction);
 
-    const float yaw = XMConvertToDegrees(std::atan2(dir.x, dir.z));
-    const float pitch = XMConvertToDegrees(std::asin(std::clamp(-dir.y, -1.0f, 1.0f)));
+    const float yaw =
+        XMConvertToDegrees(std::atan2(dir.x, dir.z));
+
+    const float pitch =
+        XMConvertToDegrees(std::asin(std::clamp(-dir.y, -1.0f, 1.0f)));
+
     m_camera->SetRotation(pitch, yaw, 0.0f);
 }
 
@@ -158,4 +212,14 @@ void CameraController::ApplyFreeMove(float dt)
     if (m_inputManager->IsKeyDown(m_input, 'F')) position.y -= speed * dt;
 
     m_camera->SetPosition(position.x, position.y, position.z);
+}
+void CameraController::EnterPlayMode()
+{
+    if (m_inputManager && m_input)
+        m_inputManager->SetMouseCapture(m_input, true);
+}
+
+void CameraController::ExitPlayMode()
+{
+    ReleaseMouseCapture();
 }
