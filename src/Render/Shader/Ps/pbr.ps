@@ -152,6 +152,7 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     float  texAlpha = albedoSample.a;
 
     float4 mrSample  = metalnessMap.Sample(SampleType, input.tex);
+    float4 roughSample = roughnessMap.Sample(SampleType, input.tex);
     float  metalness = mrSample.b;
 
     // ════════════════════════════════════════════════════════
@@ -164,7 +165,10 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     float baseAlpha = isGlass ? glassOpacity : texAlpha;
 
     // Roughness: для стекла принудительно очень низкий (0.02-0.05)
-    float rawRoughness = mrSample.g;
+    // glTF usually stores roughness in the G channel of the metallic-roughness map.
+    // When Assimp exposes roughness as a separate grayscale texture, all channels are equal,
+    // so reading G still works and keeps the convention consistent.
+    float rawRoughness = roughSample.g;
     float roughness;
     if (isGlass)
     {
