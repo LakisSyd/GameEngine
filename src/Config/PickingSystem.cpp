@@ -1,6 +1,7 @@
 ﻿#include "PickingSystem.h"
 #include "GameSettings.h"
 #include <DirectXCollision.h>
+#include <cmath>
 using namespace DirectX;
 
 bool PickingSystem::RayIntersectsSphere(
@@ -94,11 +95,29 @@ PickingSystem::PickResult PickingSystem::PickAt(
         auto* transform = scene.GetObjectTransform(entity);
         if (!transform) continue;
 
-        if (RayIntersectsSphere(ray, transform->position, Settings::OBJECT_PICK_RADIUS))
+        XMFLOAT3 localCenter = { 0.0f, 0.0f, 0.0f };
+        float localRadius = Settings::OBJECT_PICK_RADIUS;
+
+        if (mesh.model)
+        {
+            mesh.model->GetBoundingSphere(&localCenter, &localRadius);
+        }
+
+        const XMMATRIX world = transform->GetWorldMatrix();
+        XMVECTOR worldCenterVec = XMVector3TransformCoord(XMLoadFloat3(&localCenter), world);
+        XMFLOAT3 worldCenter;
+        XMStoreFloat3(&worldCenter, worldCenterVec);
+
+        const float maxScale = fmaxf(
+            fmaxf(fabsf(transform->scale.x), fabsf(transform->scale.y)),
+            fabsf(transform->scale.z));
+        const float worldRadius = fmaxf(localRadius * maxScale, Settings::OBJECT_PICK_RADIUS);
+
+        if (RayIntersectsSphere(ray, worldCenter, worldRadius))
         {
             result.type = PickedType::Object;
             result.index = static_cast<int>(entity); // Entity → int для legacy
-            result.worldPosition = transform->position;
+            result.worldPosition = worldCenter;
             return result;
         }
     }

@@ -237,7 +237,10 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                         }
 
                         TextureClass* t = new TextureClass();
-                        if (!t || !t->Initialize(device, deviceContext, filename.c_str()))
+                        const bool forceSRGB =
+                            type1 == aiTextureType_BASE_COLOR ||
+                            type1 == aiTextureType_DIFFUSE;
+                        if (!t || !t->Initialize(device, deviceContext, filename.c_str(), forceSRGB))
                         {
                             if (t) { t->Shutdown(); delete t; }
                             DeleteFileA(filename.c_str());
@@ -790,12 +793,12 @@ bool AssimpModelClass::Initialize(
                 v.boneWeights[2] /= sum; v.boneWeights[3] /= sum;
             }
             else {
-                v.boneIDs[0] = 0; v.boneWeights[0] = 1.0f;
-            }
-            if (mesh->mNumBones == 0) {
-                // 🔥 Устанавливаем корневую кость для нодовой анимации
-                v.boneIDs[0] = 0;      // вместо -1
-                v.boneWeights[0] = 1.0f;
+                // Static meshes must keep boneIDs at -1 so the PBR vertex shader
+                // uses the original vertex position instead of a stale bone buffer.
+                for (int b = 0; b < 4; ++b) {
+                    v.boneIDs[b] = -1;
+                    v.boneWeights[b] = 0.0f;
+                }
             }
             vertices.push_back(v);
         }
@@ -834,8 +837,9 @@ bool AssimpModelClass::Initialize(
                 part.metalness = Create1x1SRVFromColor(device, aiColor4D(metallic, metallic, metallic, 1.0f));
             }
             if (!part.roughness) {
-                float roughness = 1.0f;
-                aiGetMaterialFloat(mat, AI_MATKEY_ROUGHNESS_FACTOR, &roughness);
+                float roughness = 50.0f / 255.0f;
+                if (aiGetMaterialFloat(mat, AI_MATKEY_ROUGHNESS_FACTOR, &roughness) != AI_SUCCESS)
+                    roughness = 50.0f / 255.0f;
                 part.roughness = Create1x1SRVFromColor(device, aiColor4D(roughness, roughness, roughness, 1.0f));
             }
 

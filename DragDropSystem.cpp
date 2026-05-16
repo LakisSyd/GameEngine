@@ -43,9 +43,8 @@ void DragDropSystem::Update(
             switch (m_pendingPickResult.type)
             {
             case PickingSystem::PickedType::Object:
-                if (auto* t = m_sceneManager->GetObjectTransform(
-                    static_cast<Entity>(m_pendingPickResult.index)))
-                    StartDraggingObject(m_pendingPickResult.index, ray, t->position);
+                if (m_sceneManager->GetObjectTransform(static_cast<Entity>(m_pendingPickResult.index)))
+                    StartDraggingObject(m_pendingPickResult.index, ray, m_pendingPickResult.worldPosition);
                 break;
             case PickingSystem::PickedType::Sprite:
                 if (auto* spr = m_sceneManager->GetSprite(m_pendingPickResult.index))
@@ -104,15 +103,23 @@ void DragDropSystem::Update(
 }
 
 // ── Drag helpers ──────────────────────────────────────────────────────────────
-void DragDropSystem::StartDraggingObject(int index, const CameraClass::Ray& ray, const XMFLOAT3& pos)
+void DragDropSystem::StartDraggingObject(int index, const CameraClass::Ray& ray, const XMFLOAT3& dragAnchor)
 {
     m_isDragging = true;
     m_draggedObjectIndex = index;
     m_draggedLightIndex = -1;
     m_draggedSpriteIndex = -1;
-    XMVECTOR toObj = XMVectorSubtract(XMLoadFloat3(&pos), XMLoadFloat3(&ray.origin));
+
+    XMVECTOR anchor = XMLoadFloat3(&dragAnchor);
+    XMVECTOR toObj = XMVectorSubtract(anchor, XMLoadFloat3(&ray.origin));
     m_dragDistance = max(1.f, XMVectorGetX(XMVector3Length(toObj)));
+
     m_dragOffset = {};
+    if (auto* t = m_sceneManager->GetObjectTransform(static_cast<Entity>(index)))
+    {
+        XMVECTOR objectPos = XMLoadFloat3(&t->position);
+        XMStoreFloat3(&m_dragOffset, XMVectorSubtract(objectPos, anchor));
+    }
 }
 
 void DragDropSystem::StartDraggingSprite(int index, const CameraClass::Ray& ray, const XMFLOAT3& pos)

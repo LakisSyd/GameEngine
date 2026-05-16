@@ -29,24 +29,4 @@ public:
                 movement->wantJump = false;
             });
     }
-
-    static void UpdateCharacterStep(ECSRegistry& registry)
-    {
-        registry.ForEach<CharacterController>(
-            [&](Entity entity, CharacterController& controller)
-            {
-                auto* transform = registry.GetComponent<TransformComponent>(entity);
-                if (!transform || !controller.ghostObj)
-                    return;
-
-                btTransform btTrans = controller.ghostObj->getWorldTransform();
-                btVector3 pos = btTrans.getOrigin();
-
-                transform->position = {
-                    pos.getX(),
-                    pos.getY(),
-                    pos.getZ()
-                };
-            });
-    }
 };

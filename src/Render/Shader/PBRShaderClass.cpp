@@ -90,7 +90,7 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
     // ── Fallback текстуры ─────────────────────────────────────────────────────
     m_defaultNormalSRV = Create1x1SRV(device, 128, 128, 255, 255); // нейтральный нормал
     m_defaultMetalnessSRV = Create1x1SRV(device, 0, 0, 0, 255); // диэлектрик
-    m_defaultRoughnessSRV = Create1x1SRV(device, 255, 255, 255, 255); // матовый
+    m_defaultRoughnessSRV = Create1x1SRV(device, 50, 50, 50, 255); // умеренный блеск для PBR без roughness map
     m_defaultCrackSRV = Create1x1SRV(device, 0, 0, 0, 255); // нет трещин (чёрный)
 
     return true;
@@ -115,7 +115,8 @@ void PBRShaderClass::Shutdown()
     release(m_defaultRoughnessSRV);
     release(m_defaultCrackSRV);      // ← fallback трещин
 
-    // m_crackTextureSRV НЕ освобождаем — владеет ApplicationClass
+    // m_crackTextureSRV и m_environmentMapSRV НЕ освобождаем — владеет ApplicationClass
+    m_environmentMapSRV = nullptr;
     ShaderBaseClass::Shutdown();
 }
 
@@ -199,12 +200,18 @@ bool PBRShaderClass::Render(
     ID3D11ShaderResourceView* crackSRV = m_crackTextureSRV ? m_crackTextureSRV : m_defaultCrackSRV;
     context->PSSetShaderResources(6, 1, &crackSRV);
 
+    // ── SRV слот t8 (environment cubemap) ──────────────────────────────────────
+    // Это не полноценный IBL/prefiltered BRDF, а лёгкий skybox reflection,
+    // чтобы PBR-материалы не выглядели плоско при отсутствии HDRI.
+    ID3D11ShaderResourceView* environmentSRV = m_environmentMapSRV;
+    context->PSSetShaderResources(8, 1, &environmentSRV);
+
     // ── Draw ──────────────────────────────────────────────────────────────────
     context->DrawIndexed(indexCount, 0, 0);
 
     // ── Очистка слотов ────────────────────────────────────────────────────────
-    ID3D11ShaderResourceView* nullSRVs[8] = {};
-    context->PSSetShaderResources(0, 8, nullSRVs);
+    ID3D11ShaderResourceView* nullSRVs[9] = {};
+    context->PSSetShaderResources(0, 9, nullSRVs);
 
     if (!albedo)
     {
