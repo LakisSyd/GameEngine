@@ -13,7 +13,7 @@ class EditorUI
 {
 public:
     EditorUI() = default;
-    void RenderDebug(ECSRegistry& registry);
+   
     ~EditorUI();
 
     bool Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* context, FileSystem* fs);
@@ -21,6 +21,7 @@ public:
     void NewFrame();
     void RenderMainMenu(SceneManager& sceneManager);
     void Update(SceneManager& sceneManager);
+    void UpdateDebugOverlay(SceneManager& sceneManager);
     void BeginMainMenuBar(SceneManager& sceneManager);
     void Render();
 
@@ -101,6 +102,8 @@ public:
 
 
     bool WantCaptureMouse() const;
+    void ToggleObjectDebugWindow() { m_showObjectDebugWindow = !m_showObjectDebugWindow; }
+    bool IsObjectDebugWindowVisible() const { return m_showObjectDebugWindow; }
     void RefreshShaderList() { m_shaderNames = ShaderManager::Get().GetNames(); }
 
 private:
@@ -108,6 +111,7 @@ private:
     SelectedType m_selectedType = SelectedType::None;
     Entity       m_selectedEntity = INVALID_ENTITY;
     int          m_selectedLegacyIndex = -1;
+    bool         m_showObjectDebugWindow = false;
 
     void RenderPhysicsDebugPanel();
     void CreateNewCompartment(ECSRegistry& registry, Entity submarineRoot);
@@ -158,6 +162,8 @@ private:
     void RenderSidebar(SceneManager& sceneManager);
     void RenderSceneOutliner(SceneManager& sceneManager);
     void RenderDetailsPanel(SceneManager& sceneManager);
+    void RenderObjectDebugWindow(SceneManager& sceneManager);
+    void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity entity);
     void RenderSpawnPanel(SceneManager& sceneManager);
     void RenderFogPanel(SceneManager& sceneManager);
     void RenderScenePreview();
