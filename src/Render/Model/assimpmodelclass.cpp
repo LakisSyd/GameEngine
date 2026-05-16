@@ -237,7 +237,10 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                         }
 
                         TextureClass* t = new TextureClass();
-                        if (!t || !t->Initialize(device, deviceContext, filename.c_str()))
+                        const bool forceSRGB =
+                            type1 == aiTextureType_BASE_COLOR ||
+                            type1 == aiTextureType_DIFFUSE;
+                        if (!t || !t->Initialize(device, deviceContext, filename.c_str(), forceSRGB))
                         {
                             if (t) { t->Shutdown(); delete t; }
                             DeleteFileA(filename.c_str());

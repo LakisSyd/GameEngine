@@ -665,11 +665,11 @@ bool ApplicationClass::Frame(float dt)
 {
     if (m_engineMode == EngineMode::Editor)
     {
-        m_engineMode = EngineMode::Play;
-        m_gameplayController.EnterPlayerMode(
-            m_sceneManager.GetECSRegistry()
-        );
-        m_cameraController.EnterPlayMode();
+        if (m_gameplayController.EnterPlayMode(m_sceneManager.GetECSRegistry()))
+        {
+            m_engineMode = EngineMode::Play;
+            m_cameraController.EnterPlayMode();
+        }
     }
     else
     {
@@ -712,14 +712,7 @@ bool ApplicationClass::Frame(float dt)
     
 
     // =====================================================
-    // 3. World systems
-    // =====================================================
-    SyncCompartmentPositions();
-    UpdatePhysics(dt);
-    UpdateWaterAnimation(dt);
-
-    // =====================================================
-    // 4. Gameplay
+    // 3. Gameplay input -> controller intent
     // =====================================================
     if (isPlayMode)
     {
@@ -727,12 +720,24 @@ bool ApplicationClass::Frame(float dt)
             m_sceneManager.GetECSRegistry(),
             dt,
             m_input,
-            false, m_cameraController.GetFollowYaw()
+            false,
+            m_cameraController.GetFollowYaw()
         );
         CharacterControllerSystem::Update(m_sceneManager.GetECSRegistry(), dt);
-        
-        CharacterControllerSystem::UpdateCharacterStep(m_sceneManager.GetECSRegistry());
-		
+    }
+
+    // =====================================================
+    // 4. World systems / physics
+    // =====================================================
+    SyncCompartmentPositions();
+    UpdatePhysics(dt);
+    UpdateWaterAnimation(dt);
+
+    // =====================================================
+    // 5. Play camera follows post-physics transform
+    // =====================================================
+    if (isPlayMode)
+    {
         auto& registry = m_sceneManager.GetECSRegistry();
 
         Entity player = INVALID_ENTITY;
@@ -756,7 +761,7 @@ bool ApplicationClass::Frame(float dt)
     }
 
     // =====================================================
-    // 5. Scene update
+    // 6. Scene update
     // =====================================================
     m_sceneManager.UpdateAll(dt);
     m_sceneManager.UpdateLights();
