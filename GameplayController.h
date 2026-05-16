@@ -4,6 +4,8 @@
 #include "../../CharacterMovementSystem.h"
 #include "../../CharacterSpawnSystem.h"
 
+#include <windows.h>
+
 enum class EngineMode
 {
     Editor,
@@ -12,62 +14,104 @@ enum class EngineMode
 
 class GamePlayController
 {
+public:
+    void Update(
+        ECSRegistry& registry,
+        float dt,
+        InputClass* input,
+        bool gameplayBlocked,
+        float cameraYaw)
+    {
+        if (gameplayBlocked)
+            return;
 
+        CharacterMovementSystem::Update(registry, dt, input, cameraYaw);
 
-	public:
-       
-        void Update(
-            ECSRegistry& registry,
-            float dt,
-            InputClass* input,
-            bool gameplayBlocked, float cameraYaw)
+        // Future gameplay systems:
+        // InteractionSystem::Update(...);
+        // MissionDirector::Update(...);
+        // SpellSystem::Update(...);
+    }
+
+    bool EnterPlayMode(ECSRegistry& registry)
+    {
+        Entity player = INVALID_ENTITY;
+        int playerCount = 0;
+
+        registry.ForEach<PlayerGameTag>([&](Entity entity, PlayerGameTag&)
         {
-            if (gameplayBlocked)
-                return;
+            player = entity;
+            ++playerCount;
+        });
 
-            
-
-            CharacterMovementSystem::Update(registry, dt, input,cameraYaw);
-
-            
-
-            // Потом сюда добавишь:
-            // InteractionSystem::Update(...);
-            // MissionDirector::Update(...);
-            // SpellSystem::Update(...);
+        if (player == INVALID_ENTITY)
+        {
+            OutputDebugStringA("[Gameplay] EnterPlayMode failed: no entity with PlayerGameTag found.\n");
+            return false;
         }
 
-		bool EnterPlayerMode(ECSRegistry& registry)
+        if (playerCount > 1)
         {
-           
-			Entity player = INVALID_ENTITY;
+            OutputDebugStringA("[Gameplay] Warning: multiple PlayerGameTag entities found; using the last one.\n");
+        }
 
-            registry.ForEach<PlayerGameTag>([&](Entity entity, PlayerGameTag& tag)
-                {
-                    player = entity;
-                });
+        auto* transform = registry.GetComponent<TransformComponent>(player);
+        if (!transform)
+        {
+            OutputDebugStringA("[Gameplay] EnterPlayMode failed: player has no TransformComponent.\n");
+            return false;
+        }
 
-            auto* controller = registry.GetComponent<CharacterController>(player);
-			auto* movement = registry.GetComponent<CharacterMovement>(player);
-            auto* transform = registry.GetComponent<TransformComponent>(player);
+        auto* movement = registry.GetComponent<CharacterMovement>(player);
+        if (!movement)
+        {
+            registry.AddComponent<CharacterMovement>(player, CharacterMovement{});
+            movement = registry.GetComponent<CharacterMovement>(player);
+            OutputDebugStringA("[Gameplay] Added CharacterMovement to player.\n");
+        }
 
-            if (!controller)
+        if (!movement)
+        {
+            OutputDebugStringA("[Gameplay] EnterPlayMode failed: CharacterMovement was not created.\n");
+            return false;
+        }
+
+        auto* controller = registry.GetComponent<CharacterController>(player);
+        if (!controller)
+        {
+            registry.AddComponent<CharacterController>(player, CharacterController{});
+            controller = registry.GetComponent<CharacterController>(player);
+            OutputDebugStringA("[Gameplay] Added CharacterController to player.\n");
+        }
+
+        if (!controller)
+        {
+            OutputDebugStringA("[Gameplay] EnterPlayMode failed: CharacterController was not created.\n");
+            return false;
+        }
+
+        const bool controllerReady =
+            controller->controller != nullptr &&
+            controller->ghostObj != nullptr &&
+            controller->capsuleShape != nullptr;
+
+        const bool controllerEmpty =
+            controller->controller == nullptr &&
+            controller->ghostObj == nullptr &&
+            controller->capsuleShape == nullptr;
+
+        if (!controllerReady)
+        {
+            if (!controllerEmpty)
             {
-                registry.AddComponent<CharacterController>(player, CharacterController{});
-              
-                controller = registry.GetComponent<CharacterController>(player);
+                OutputDebugStringA("[Gameplay] EnterPlayMode failed: CharacterController is partially initialized.\n");
+                return false;
             }
-            if(!movement)
-            {
-                registry.AddComponent<CharacterMovement>(player, CharacterMovement{});
-			}
-            if (!controller->controller)
-            {
-                CharacterSpawnSystem::Spawn(registry, player, transform->position);
-            }
 
-            return true; 
-		}
+            CharacterSpawnSystem::Spawn(registry, player, transform->position);
+            OutputDebugStringA("[Gameplay] Spawned Bullet character controller for player.\n");
+        }
 
-
+        return true;
+    }
 };
