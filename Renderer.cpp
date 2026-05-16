@@ -110,8 +110,13 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         checkPtr(m_skyShader, "m_skyShader");
 
 
-        // 0. Обновляем направленный свет в шейдерах
+        // 0. Обновляем направленный свет и environment map в шейдерах
         UpdateDirectionalLight(context);
+        if (m_pbrShader)
+        {
+            m_pbrShader->SetEnvironmentMap(
+                m_skyShader ? m_skyShader->GetSkyTexture() : nullptr);
+        }
 
         // ── Pass: Shadow Map ──────────────────────────────────────────────────────
         if (m_shadowMap)

@@ -237,7 +237,10 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                         }
 
                         TextureClass* t = new TextureClass();
-                        if (!t || !t->Initialize(device, deviceContext, filename.c_str()))
+                        const bool forceSRGB =
+                            type1 == aiTextureType_BASE_COLOR ||
+                            type1 == aiTextureType_DIFFUSE;
+                        if (!t || !t->Initialize(device, deviceContext, filename.c_str(), forceSRGB))
                         {
                             if (t) { t->Shutdown(); delete t; }
                             DeleteFileA(filename.c_str());
@@ -834,8 +837,9 @@ bool AssimpModelClass::Initialize(
                 part.metalness = Create1x1SRVFromColor(device, aiColor4D(metallic, metallic, metallic, 1.0f));
             }
             if (!part.roughness) {
-                float roughness = 1.0f;
-                aiGetMaterialFloat(mat, AI_MATKEY_ROUGHNESS_FACTOR, &roughness);
+                float roughness = 50.0f / 255.0f;
+                if (aiGetMaterialFloat(mat, AI_MATKEY_ROUGHNESS_FACTOR, &roughness) != AI_SUCCESS)
+                    roughness = 50.0f / 255.0f;
                 part.roughness = Create1x1SRVFromColor(device, aiColor4D(roughness, roughness, roughness, 1.0f));
             }
 
