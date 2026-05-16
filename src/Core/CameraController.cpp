@@ -8,7 +8,7 @@
 #include "GameSettings.h"
 #include "InputClass.h"
 #include "InputManager.h"
-
+#include "Components.h"
 using namespace DirectX;
 
 void CameraController::SetInput(InputManager* inputManager, InputClass* input, HWND hwnd)
@@ -210,6 +210,8 @@ void CameraController::ApplyFreeMove(float dt)
     const float yawRad = XMConvertToRadians(m_camera->GetRotation().y);
     const float sinYaw = std::sin(yawRad);
     const float cosYaw = std::cos(yawRad);
+
+	
 
     if (m_inputManager->IsKeyDown(m_input, 'W')) { position.x += sinYaw * speed * dt; position.z += cosYaw * speed * dt; }
     if (m_inputManager->IsKeyDown(m_input, 'S')) { position.x -= sinYaw * speed * dt; position.z -= cosYaw * speed * dt; }

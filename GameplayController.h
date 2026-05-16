@@ -62,6 +62,14 @@ public:
             return false;
         }
 
+		auto* anim = registry.GetComponent<AnimationComponent>(player);
+        if(!anim)
+        {
+            registry.AddComponent<AnimationComponent>(player, AnimationComponent{});
+            anim = registry.GetComponent<AnimationComponent>(player);
+            OutputDebugStringA("[Gameplay] Added AnimationComponent to player.\n");
+		}
+
         auto* movement = registry.GetComponent<CharacterMovement>(player);
         if (!movement)
         {

@@ -479,6 +479,9 @@
     <ClInclude Include="CharacterControllerSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
+    <ClInclude Include="AnimationController.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\Render\Shader\Vs\Lightmap.vs">

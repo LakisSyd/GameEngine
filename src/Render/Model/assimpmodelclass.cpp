@@ -1146,6 +1146,7 @@ void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float delta
     if (m_scene && m_scene->mRootNode) {
         ReadNodeHierarchyToComponent(m_scene->mRootNode, XMMatrixIdentity(), anim, animTimeTicks, animComp.finalBoneMatrices);
     }
+    
 }
 
 void AssimpModelClass::SetBoneMatricesFromComponent(ID3D11DeviceContext* context, const AnimationComponent& animComp) {

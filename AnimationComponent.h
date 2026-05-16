@@ -3,7 +3,7 @@
 #include <vector>
 
 struct AnimationComponent {
-    int  animationIndex = 0;
+    int  animationIndex = 1;
     float currentTime = 0.0f;
     bool isPlaying = true;
 

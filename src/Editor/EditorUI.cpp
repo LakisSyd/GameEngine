@@ -1377,6 +1377,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
             }
         }
     }
+
 	
     if (registry.HasComponent<BuoyancyComponent>(entity))
     {

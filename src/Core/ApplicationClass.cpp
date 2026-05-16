@@ -22,6 +22,7 @@
 #include "../../CharacterSpawnSystem.h"
 #include "../../CharacterMovementSystem.h"
 #include "../../CharacterControllerSystem.h"
+#include "../../AnimationController.h"
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
 // ============================================================================
@@ -710,6 +711,8 @@ bool ApplicationClass::Frame(float dt)
     
     }
     
+
+	AnimationController::Update(m_sceneManager.GetECSRegistry(), dt);
 
     // =====================================================
     // 3. Gameplay input -> controller intent

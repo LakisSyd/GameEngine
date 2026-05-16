@@ -21,6 +21,8 @@ public:
 
                 controller.controller->setWalkDirection(walk);
 
+                
+
                 if (movement->wantJump && controller.controller->canJump())
                 {
                     controller.controller->jump();
