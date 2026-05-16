@@ -1,5 +1,4 @@
-﻿
-#include "applicationclass.h"
+﻿#include "applicationclass.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -661,6 +660,13 @@ bool ApplicationClass::Frame(float dt)
     // 1. Engine mode toggle: F5 = Editor / Play
     // =====================================================
     const bool f5Down = m_input && m_input->IsKeyDown(VK_F5);
+    const bool f1Down = m_input && m_input->IsKeyDown(VK_F1);
+
+    if (f1Down && !m_wasF1Down)
+    {
+        m_editorUI.ToggleObjectDebugWindow();
+    }
+    m_wasF1Down = f1Down;
 
    if (f5Down && !m_wasF5Down)
 {
@@ -839,6 +845,11 @@ bool ApplicationClass::Frame(float dt)
 
         ProcessEditorRequests();
 
+        m_editorUI.Render();
+    }
+    else if (m_editorUI.IsObjectDebugWindowVisible())
+    {
+        m_editorUI.UpdateDebugOverlay(m_sceneManager);
         m_editorUI.Render();
     }
 
