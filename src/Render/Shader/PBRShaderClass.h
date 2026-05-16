@@ -40,6 +40,7 @@ public:
 
     // Устанавливается один раз из ApplicationClass после загрузки текстуры
     void SetCrackTexture(ID3D11ShaderResourceView* srv) { m_crackTextureSRV = srv; }
+    void SetEnvironmentMap(ID3D11ShaderResourceView* srv) { m_environmentMapSRV = srv; }
 
     // Метод для установки матриц (используется при анимации)
     void SetMatrixBuffers(ID3D11DeviceContext* context, XMMATRIX world, XMMATRIX view, XMMATRIX projection);
@@ -87,6 +88,7 @@ private:
     ID3D11ShaderResourceView* m_defaultRoughnessSRV = nullptr;
     ID3D11ShaderResourceView* m_defaultCrackSRV = nullptr; // чёрный fallback (нет трещин)
     ID3D11ShaderResourceView* m_crackTextureSRV = nullptr; // внешняя, ApplicationClass владеет
+    ID3D11ShaderResourceView* m_environmentMapSRV = nullptr; // внешняя skybox cubemap, ApplicationClass владеет
 
     ID3D11SamplerState* m_shadowSampler = nullptr;
 };

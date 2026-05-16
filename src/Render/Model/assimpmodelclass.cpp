@@ -837,8 +837,9 @@ bool AssimpModelClass::Initialize(
                 part.metalness = Create1x1SRVFromColor(device, aiColor4D(metallic, metallic, metallic, 1.0f));
             }
             if (!part.roughness) {
-                float roughness = 1.0f;
-                aiGetMaterialFloat(mat, AI_MATKEY_ROUGHNESS_FACTOR, &roughness);
+                float roughness = 50.0f / 255.0f;
+                if (aiGetMaterialFloat(mat, AI_MATKEY_ROUGHNESS_FACTOR, &roughness) != AI_SUCCESS)
+                    roughness = 50.0f / 255.0f;
                 part.roughness = Create1x1SRVFromColor(device, aiColor4D(roughness, roughness, roughness, 1.0f));
             }
 

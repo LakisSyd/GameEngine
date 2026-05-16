@@ -9,6 +9,7 @@ Texture2D normalMap    : register(t1);
 Texture2D metalnessMap : register(t2);
 Texture2D roughnessMap : register(t3);
 Texture2D crackMap : register(t6); // маска трещины: R=mask, G=roughness offset
+TextureCube environmentMap : register(t8); // skybox cubemap для простого specular environment
 
 // ── Буфер повреждений (decal трещин) — слот b7 ───────────────────────────────
 cbuffer DamageBuffer : register(b7)
@@ -261,8 +262,12 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     // Зеркальный ambient: Fresnel-отражение (для стекла — это и есть его главный эффект)
     float3 specularTint     = lerp(float3(1.0f, 1.0f, 1.0f), albedo, metalness);
     float  roughnessBias    = roughness * roughness;
-    float3 ambient_specular = F_ambient * specularTint * ambientLight
-                            * lerp(1.0f, 0.1f, roughnessBias);
+    float3 R = reflect(-V, N);
+    float3 envReflection = environmentMap.Sample(SampleType, R).rgb;
+    float  envSpecStrength = saturate(1.0f - roughnessBias) * 0.65f;
+
+    float3 ambient_specular = F_ambient * specularTint *
+        (ambientLight * lerp(1.0f, 0.1f, roughnessBias) + envReflection * envSpecStrength);
 
     float3 ambient = ambient_diffuse + ambient_specular;
     float3 color   = ambient + Lo;
