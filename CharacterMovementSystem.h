@@ -8,7 +8,7 @@
 class CharacterMovementSystem
 {
 public:
-    static void Update(ECSRegistry& registry, float deltaTime, InputClass* input)
+    static void Update(ECSRegistry& registry, float deltaTime, InputClass* input, float cameraYaw)
     {
         if (!input) return;
 
@@ -22,22 +22,35 @@ public:
         if (player == INVALID_ENTITY)
             return;
 
-        auto* transform = registry.GetComponent<TransformComponent>(player);
+      
         auto* movement = registry.GetComponent<CharacterMovement>(player);
 
-        if (!transform || !movement)
-            return;
+        
 
         using namespace DirectX;
 
-        XMFLOAT3 inputDirection = { 0.0f, 0.0f, 0.0f };
+        float yawRad = XMConvertToRadians(cameraYaw);
 
-        if (input->IsKeyDown('W')) inputDirection.z += 1.0f;
-        if (input->IsKeyDown('S')) inputDirection.z -= 1.0f;
-        if (input->IsKeyDown('A')) inputDirection.x -= 1.0f;
-        if (input->IsKeyDown('D')) inputDirection.x += 1.0f;
+        XMVECTOR forward = XMVectorSet(
+            sinf(yawRad),
+            0.0f,
+            cosf(yawRad),
+            0.0f
+        );
 
-        XMVECTOR direction = XMLoadFloat3(&inputDirection);
+        XMVECTOR right = XMVectorSet(
+            cosf(yawRad),
+            0.0f,
+            -sinf(yawRad),
+            0.0f
+        );
+
+        XMVECTOR direction = XMVectorZero();
+
+        if (input->IsKeyDown('W')) direction = XMVectorAdd(direction, forward);
+        if (input->IsKeyDown('S')) direction = XMVectorSubtract(direction, forward);
+        if (input->IsKeyDown('D')) direction = XMVectorAdd(direction, right);
+        if (input->IsKeyDown('A')) direction = XMVectorSubtract(direction, right);
         const float lengthSq = XMVectorGetX(XMVector3LengthSq(direction));
 
         movement->isMoving = lengthSq > 0.0001f;
@@ -56,8 +69,6 @@ public:
 
         movement->currentSpeed = speed;
 
-        XMVECTOR position = XMLoadFloat3(&transform->position);
-        position = XMVectorAdd(position, XMVectorScale(direction, speed * deltaTime));
-        XMStoreFloat3(&transform->position, position);
+       
     }
 };

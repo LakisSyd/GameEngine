@@ -82,6 +82,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AnimationComponent.h" />
+    <ClInclude Include="CharacterControllerSystem.h" />
     <ClInclude Include="CharacterSpawnSystem.h" />
     <ClInclude Include="CharacterMovementSystem.h" />
     <ClInclude Include="DragDropSystem.h" />

@@ -29,6 +29,7 @@ public:
 
     void UpdateModeToggle(bool inputBlockedByUi);
     void UpdateFree(float dt, bool inputBlockedByUi);
+    float GetFollowYaw() const;
     void UpdateFollow(float dt, const TransformComponent* targetTransform);
     void ReleaseMouseCapture();
     void EnterPlayMode();

@@ -21,7 +21,7 @@
 #include <stb_image.h>
 #include "../../CharacterSpawnSystem.h"
 #include "../../CharacterMovementSystem.h"
-
+#include "../../CharacterControllerSystem.h"
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
 // ============================================================================
@@ -666,6 +666,9 @@ bool ApplicationClass::Frame(float dt)
     if (m_engineMode == EngineMode::Editor)
     {
         m_engineMode = EngineMode::Play;
+        m_gameplayController.EnterPlayerMode(
+            m_sceneManager.GetECSRegistry()
+        );
         m_cameraController.EnterPlayMode();
     }
     else
@@ -724,9 +727,12 @@ bool ApplicationClass::Frame(float dt)
             m_sceneManager.GetECSRegistry(),
             dt,
             m_input,
-            false
+            false, m_cameraController.GetFollowYaw()
         );
-
+        CharacterControllerSystem::Update(m_sceneManager.GetECSRegistry(), dt);
+        
+        CharacterControllerSystem::UpdateCharacterStep(m_sceneManager.GetECSRegistry());
+		
         auto& registry = m_sceneManager.GetECSRegistry();
 
         Entity player = INVALID_ENTITY;
@@ -1184,130 +1190,9 @@ void ApplicationClass::SpawnObjectFromRequest(const EditorUI::SpawnRequest& req)
     OutputDebugStringA(buf);
 }
 
-// (остальной код файла остается без изменений)
-// ============================================================================
-// Render3DObjects
-// ============================================================================
-void ApplicationClass::Render3DObjects(
-    ID3D11DeviceContext* context,
-    const XMMATRIX& view,
-    const XMMATRIX& projection)
-{
-    m_direct3D->TurnZBufferOn();
-    m_direct3D->TurnAlphaBlendingOff();
-
-    ShaderManager::Get().ForEach([&](ShaderBaseClass* shader) {
-        shader->UpdateFog(context, m_sceneManager.GetFogSettings());
-        });
-
-    XMFLOAT4 lightColors[NUM_LIGHTS];
-    XMFLOAT4 lightPositions[NUM_LIGHTS];
-
-    Entity selectedEntity = (m_editorUI.GetSelectedType() == EditorUI::SelectedType::Object)
-        ? m_editorUI.GetSelectedEntity() : INVALID_ENTITY;
-
-    XMFLOAT3 camPos = m_camera->GetPosition();
-
-    // Передаём shadow map в LightShader ДО рендера
-    if (m_lightShader && m_shadowMap)
-    {
-        XMMATRIX lightVP = m_shadowMap->GetLightViewProjection();
-        m_lightShader->SetShadowMap(context, m_shadowMap->GetShaderResourceView(), lightVP);
-    }
-
-    // Также передаём shadow map в PBRShader (если он есть)
-    if (m_pbrShader && m_shadowMap)
-    {
-        XMMATRIX lightVP = m_shadowMap->GetLightViewProjection();
-        m_pbrShader->SetShadowMap(context, m_shadowMap->GetShaderResourceView(), lightVP);
-    }
-    // ── Передаём данные о трещинах в PBR шейдер для каждого объекта ──────────
-    if (m_pbrShader)
-    {
-        auto& registry = m_sceneManager.GetECSRegistry();
-        auto& meshPool = registry.GetComponents<MeshRendererComponent>();
-
-        for (auto& [entity, mesh] : meshPool)
-        {
-            if (!mesh.material || !mesh.material->GetShader()) continue;
-            if (mesh.material->GetShader()->GetType() != ShaderType::PBR) continue;
-
-            auto* transform = m_sceneManager.GetObjectTransform(entity);
-            if (!transform) continue;
-
-            auto* damage = registry.GetComponent<DamageDecalComponent>(entity);
-            // damage == nullptr → SetDamageDecals сбросит crackCount=0 → нет эффекта
-            m_pbrShader->SetDamageDecals(
-                context,
-                damage,
-                transform->GetWorldMatrix());
-        }
-    }
-    m_sceneManager.RenderAllECS(
-        context, view, projection,
-        m_defaultMaterial,
-        lightColors, lightPositions,
-        m_sceneManager.GetFogSettings(),
-        selectedEntity,
-        camPos, TimeManager::UnscaledDeltaTime());
-
-    // После рендера желательно очистить слот 7, чтобы другие проходы не видели shadow map случайно
-    {
-        ID3D11ShaderResourceView* nullSRV = nullptr;
-        context->PSSetShaderResources(7, 1, &nullSRV);
-    }
-}
-// ============================================================================
-// Render3DObjectsExcluding
-// ============================================================================
-void ApplicationClass::Render3DObjectsExcluding(
-    ID3D11DeviceContext* context,
-    const XMMATRIX& view,
-    const XMMATRIX& projection,
-    int excludeIndex)
-{
-    m_direct3D->TurnZBufferOn();
-    m_direct3D->TurnAlphaBlendingOff();
-
-    ShaderManager::Get().ForEach([&](ShaderBaseClass* shader) {
-        shader->UpdateFog(context, m_sceneManager.GetFogSettings());
-        });
-
-    XMFLOAT4 lightColors[NUM_LIGHTS];
-    XMFLOAT4 lightPositions[NUM_LIGHTS];
 
 
-    Entity excludeEntity = (excludeIndex >= 0)
-        ? static_cast<Entity>(excludeIndex) : INVALID_ENTITY;
 
-    m_sceneManager.RenderAllECSExcluding(
-        context, view, projection,
-        m_defaultMaterial,
-        lightColors, lightPositions,
-        m_sceneManager.GetFogSettings(),
-        excludeEntity, TimeManager::UnscaledDeltaTime());
-}
-
-// ============================================================================
-// RenderLightSources
-// ============================================================================
-// ============================================================================
-// RenderLightSources — рендер визуальных индикаторов света (Gizmos)
-// ============================================================================
-
-
-// ============================================================================
-// RenderWorldSprites
-// ============================================================================
-void ApplicationClass::RenderWorldSprites(
-    ID3D11DeviceContext* context,
-    const XMMATRIX& view,
-    const XMMATRIX& projection)
-{
-    m_direct3D->TurnAlphaBlendingOn();
-    m_sceneManager.RenderSprites(context, view, projection, m_textureShader);
-    m_direct3D->TurnAlphaBlendingOff();
-}
 
 
 // ============================================================================
@@ -2257,72 +2142,9 @@ ID3D11ShaderResourceView* LoadSkyboxCubemap(
     return skySRV;
 }
 
-void ApplicationClass::SpawnTestBot(ECSRegistry& registry, const XMFLOAT3& pos)
-{
-    // ── 1. Создаём сущность ─────────────────────────────────────────────────
-    Entity bot = registry.CreateEntity();
-
-    // ── 2. Добавляем обязательные компоненты ────────────────────────────────
-    registry.AddComponent<TransformComponent>(bot,
-        TransformComponent{ pos, {0,0,0}, {1,1,1} });
-
-    // 🔥 КРИТИЧНО: Добавляем ActiveComponent, иначе объект не рендерится!
-    registry.AddComponent<ActiveComponent>(bot, ActiveComponent{});
-
-    // ── 3. Меш для визуализации ────────────────────────────────────────────
-    if (m_mainModel)
-    {
-        auto* mat = new MaterialClass();
-        if (!mat->Initialize(m_direct3D->GetDevice(), L"TestBotMat"))
-        {
-            delete mat;
-            OutputDebugStringA("[SpawnTestBot] Failed to init material\n");
-            return;
-        }
-
-        // Выбираем шейдер
-        mat->SetShader(m_lightShader);
-
-        // Текстура
-        if (m_defaultTexture) mat->SetMainTexture(m_defaultTexture);
-
-        registry.AddComponent<MeshRendererComponent>(bot,
-            MeshRendererComponent{ m_mainModel, mat });
-    }
-
-    // ── 4. Компоненты персонажа ────────────────────────────────────────────
-    registry.AddComponent<CharacterController>(bot, CharacterController{});
-    registry.AddComponent<CharacterMovement>(bot, CharacterMovement{});
-    registry.AddComponent<SubmarineComponent>(bot, SubmarineComponent{});
-    // ── 5. 🔥 РЕГИСТРАЦИЯ В SCENEMANAGER (критично!) ───────────────────────
-    // Это добавляет объект в списки рендера, редактора, обновления
- 
-
-    // ── 6. Вызываем систему спавна (Bullet) ────────────────────────────────
-    CharacterSpawnSystem::Spawn(registry, bot, pos);
-
-    // ── 7. Отладочный вывод ────────────────────────────────────────────────
-    OutputDebugStringA(("[Test] Bot spawned: entity=" + std::to_string(bot) +
-        " at (" + std::to_string(pos.x) + ", " +
-        std::to_string(pos.y) + ", " +
-        std::to_string(pos.z) + ")\n").c_str());
-
-    // 🔥 Проверка: видим ли мы объект в менеджере?
-    if (m_sceneManager.IsObjectActive(bot))
-        OutputDebugStringA("[Test] ✅ Object is ACTIVE in SceneManager\n");
-    else
-        OutputDebugStringA("[Test] ❌ Object is NOT ACTIVE — check RegisterEntity!\n");
-
-    auto* move = registry.GetComponent<CharacterMovement>(bot);
-    if (move) {
-        move->walkDirection = XMFLOAT3(0, 0, 1);  // Вперёд по Z
-        move->moveSpeed = 3.5f;
-      OutputDebugStringA("[Test] Forced walk direction: forward\n");
-    }
 
 
 
-}
 
 void ApplicationClass::UpdateCameraControlMode()
 {

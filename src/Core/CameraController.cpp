@@ -49,6 +49,11 @@ void CameraController::UpdateFree(float dt, bool inputBlockedByUi)
     ApplyFreeMove(dt);
 }
 
+float CameraController::GetFollowYaw() const
+{
+    return m_followYaw;
+}
+
 void CameraController::UpdateFollow(float dt, const TransformComponent* targetTransform)
 {
     if (!m_camera || !targetTransform || !m_inputManager || !m_input)
@@ -138,6 +143,8 @@ void CameraController::UpdateFollow(float dt, const TransformComponent* targetTr
 
     m_camera->SetRotation(pitch, yaw, 0.0f);
 }
+
+
 
 void CameraController::ReleaseMouseCapture()
 {
