@@ -3,11 +3,11 @@
 #include <vector>
 
 struct AnimationComponent {
-    int  animationIndex = 1;
+    int  animationIndex = 0;
     float currentTime = 0.0f;
     bool isPlaying = true;
 
-    // Матрицы костей, вычисленные для ТЕКУЩЕГО КАДРА.
-    // Размер будет совпадать с количеством костей в модели.
+    // ГЊГ ГІГ°ГЁГ¶Г» ГЄГ®Г±ГІГҐГ©, ГўГ»Г·ГЁГ±Г«ГҐГ­Г­Г»ГҐ Г¤Г«Гї Г’Г…ГЉГ“Г™Г…ГѓГЋ ГЉГЂГ„ГђГЂ.
+    // ГђГ Г§Г¬ГҐГ° ГЎГіГ¤ГҐГІ Г±Г®ГўГЇГ Г¤Г ГІГј Г± ГЄГ®Г«ГЁГ·ГҐГ±ГІГўГ®Г¬ ГЄГ®Г±ГІГҐГ© Гў Г¬Г®Г¤ГҐГ«ГЁ.
     std::vector<DirectX::XMFLOAT4X4> finalBoneMatrices;
 };

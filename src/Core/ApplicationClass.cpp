@@ -712,8 +712,6 @@ bool ApplicationClass::Frame(float dt)
     }
     
 
-	AnimationController::Update(m_sceneManager.GetECSRegistry(), dt);
-
     // =====================================================
     // 3. Gameplay input -> controller intent
     // =====================================================
@@ -727,6 +725,7 @@ bool ApplicationClass::Frame(float dt)
             m_cameraController.GetFollowYaw()
         );
         CharacterControllerSystem::Update(m_sceneManager.GetECSRegistry(), dt);
+        AnimationController::Update(m_sceneManager.GetECSRegistry(), dt);
     }
 
     // =====================================================
