@@ -32,6 +32,7 @@ public:
                 const float targetYaw = atan2f(dir.x, dir.z) + DirectX::XM_PI;
 
                 transform->rotation.y = targetYaw;
+
             });
     }
 };
