@@ -727,8 +727,8 @@ bool ApplicationClass::Frame(float dt)
             false,
             m_cameraController.GetFollowYaw()
         );
+        CharacterFacingSystem::Update(m_sceneManager.GetECSRegistry(), dt);
         CharacterControllerSystem::Update(m_sceneManager.GetECSRegistry(), dt);
-		CharacterFacingSystem::Update(m_sceneManager.GetECSRegistry(), dt);
         AnimationController::Update(m_sceneManager.GetECSRegistry(), dt);
         
        

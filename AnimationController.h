@@ -37,11 +37,16 @@ public:
 
         auto* movement = registry.GetComponent<CharacterMovement>(player);
         auto* anim = registry.GetComponent<AnimationComponent>(player);
-		auto* mesh = registry.GetComponent<MeshRendererComponent>(player);
+        auto* mesh = registry.GetComponent<MeshRendererComponent>(player);
+
+        if (!movement || !anim || !mesh || !mesh->model)
+            return;
 
         AnimationState desiredState = SelectMovementAnimation(*movement);
-        AnimationBinding* binding = FindBinding(*anim, desiredState);
+        anim->currentState = desiredState;
+        anim->isPlaying = true;
 
+        AnimationBinding* binding = FindBinding(*anim, desiredState);
         if (!binding)
             return;
 

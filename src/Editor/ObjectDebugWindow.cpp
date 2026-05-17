@@ -193,7 +193,12 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
                 DebugVec3Line("Bounds max", bbMax);
                 DebugVec3Line("Sphere center", sphereCenter);
                 ImGui::Text("Sphere radius: %.3f", sphereRadius);
-				int x = mesh->model->FindAnimationIndexByName("IDLE"); // Проверка, что метод работает (можем вызвать его в отладке)
+                for (size_t i = 0; i < mesh->model->GetAnimationCount(); ++i)
+                {
+                    const auto* clip = mesh->model->GetAnimation(static_cast<int>(i));
+                    if (clip)
+                        ImGui::Text("Anim[%d]: %s", static_cast<int>(i), clip->name.c_str());
+                }
                 
             }
             else
