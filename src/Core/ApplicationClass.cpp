@@ -22,6 +22,7 @@
 #include "../../CharacterMovementSystem.h"
 #include "../../CharacterControllerSystem.h"
 #include "../../AnimationController.h"
+#include "../../CharacterFacingSystem.h"
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
 // ============================================================================
@@ -727,6 +728,7 @@ bool ApplicationClass::Frame(float dt)
             m_cameraController.GetFollowYaw()
         );
         CharacterControllerSystem::Update(m_sceneManager.GetECSRegistry(), dt);
+		CharacterFacingSystem::Update(m_sceneManager.GetECSRegistry(), dt);
         AnimationController::Update(m_sceneManager.GetECSRegistry(), dt);
         
        

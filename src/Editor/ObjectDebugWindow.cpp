@@ -193,6 +193,8 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
                 DebugVec3Line("Bounds max", bbMax);
                 DebugVec3Line("Sphere center", sphereCenter);
                 ImGui::Text("Sphere radius: %.3f", sphereRadius);
+				int x = mesh->model->FindAnimationIndexByName("IDLE"); // Проверка, что метод работает (можем вызвать его в отладке)
+                
             }
             else
             {
@@ -235,6 +237,9 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
             ImGui::Text("Current time: %.3f", anim->currentTime);
             DebugBoolLine("Playing", anim->isPlaying);
             ImGui::Text("Final bone matrices: %d", static_cast<int>(anim->finalBoneMatrices.size()));
+           auto animation =  anim->currentState;
+		   ImGui::Text("Current state: %d", static_cast<int>(animation));
+            
         }
     }
 

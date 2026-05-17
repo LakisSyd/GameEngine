@@ -17,6 +17,8 @@ bld/
 # Visual Studio Code
 .vscode/
 
+assets/
+
 # ReSharper
 _ReSharper*/
 *.suo

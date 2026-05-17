@@ -8,6 +8,20 @@
 class CharacterAnimationControllerSystem
 {
 public:
+
+
+
+    static AnimationBinding* FindBinding(AnimationComponent& anim, AnimationState state)
+    {
+        for (auto& binding : anim.animations)
+        {
+            if (binding.state == state)
+                return &binding;
+        }
+
+        return nullptr;
+    }
+
     static void Update(ECSRegistry& registry, float deltaTime)
     {
         (void)deltaTime;
@@ -23,35 +37,34 @@ public:
 
         auto* movement = registry.GetComponent<CharacterMovement>(player);
         auto* anim = registry.GetComponent<AnimationComponent>(player);
+		auto* mesh = registry.GetComponent<MeshRendererComponent>(player);
 
-        if (!movement || !anim)
+        AnimationState desiredState = SelectMovementAnimation(*movement);
+        AnimationBinding* binding = FindBinding(*anim, desiredState);
+
+        if (!binding)
             return;
 
-        const int desiredAnimationIndex = SelectMovementAnimation(*movement);
+        if (binding->index < 0)
+            binding->index = mesh->model->FindAnimationIndexByName(binding->name);
 
-        anim->isPlaying = true;
-
-        if (anim->animationIndex != desiredAnimationIndex)
+        if (binding->index >= 0 && anim->animationIndex != binding->index)
         {
-            anim->animationIndex = desiredAnimationIndex;
+            anim->animationIndex = binding->index;
             anim->currentTime = 0.0f;
         }
     }
 
 private:
-    static int SelectMovementAnimation(const CharacterMovement& movement)
+    static AnimationState  SelectMovementAnimation(const CharacterMovement& movement)
     {
-        constexpr int IdleAnimation = 0;
-        constexpr int WalkAnimation = 1;
-        constexpr int RunAnimation = 2;
-
         if (!movement.isMoving)
-            return IdleAnimation;
+            return AnimationState::Idle;
 
         if (movement.currentSpeed > movement.moveSpeed)
-            return RunAnimation;
+            return AnimationState::Run;
 
-        return WalkAnimation;
+        return AnimationState::Walk;
     }
 };
 

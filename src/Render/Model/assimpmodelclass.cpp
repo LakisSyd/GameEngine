@@ -1040,6 +1040,17 @@ void AssimpModelClass::GetBoundingBox(XMFLOAT3* min, XMFLOAT3* max) const {
     *min = bbMin; *max = bbMax;
 }
 
+int AssimpModelClass::FindAnimationIndexByName(const std::string& name) const
+{
+    for (size_t i = 0; i < m_animations.size(); ++i)
+    {
+        if (m_animations[i].name == name)
+            return static_cast<int>(i);
+    }
+
+    return -1;
+}
+
 void AssimpModelClass::GetBoundingSphere(XMFLOAT3* center, float* radius) const {
     if (!center || !radius) return;
     if (m_boundsCached && m_cachedSphereRadius > 0.0f) {

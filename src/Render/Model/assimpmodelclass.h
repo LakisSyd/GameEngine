@@ -87,6 +87,7 @@ public:
     void LoadAnimations(const aiScene* scene);
     void GetBoundingBox(XMFLOAT3* min, XMFLOAT3* max) const;
     bool IsEmbeddedFormat() const { return m_isEmbeddedFormat; }
+    int FindAnimationIndexByName(const std::string& name) const;
 
 
     //ANIMATION

@@ -246,6 +246,9 @@
     <ClCompile Include="GameplayController.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="src\Editor\ObjectDebugWindow.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\HelpFunc\helper.h">
@@ -480,6 +483,12 @@
       <Filter>ECS</Filter>
     </ClInclude>
     <ClInclude Include="AnimationController.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Editor\ObjectDebugWindow.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="CharacterFacingSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
   </ItemGroup>
