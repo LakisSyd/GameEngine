@@ -11,8 +11,6 @@ class CharacterFacingSystem
 public:
     static void Update(ECSRegistry& registry, float deltaTime)
     {
-        (void)deltaTime;
-
         registry.ForEach<CharacterMovement>(
             [&](Entity entity, CharacterMovement& movement)
             {
@@ -29,10 +27,35 @@ public:
                 if (lenSq < 0.0001f)
                     return;
 
-                const float targetYaw = atan2f(dir.x, dir.z) + ModelForwardOffset;
+                const float targetYaw =
+                    atan2f(dir.x, dir.z) + DirectX::XM_PI;
 
-                transform->rotation.y = targetYaw;
+                const float currentYaw = transform->rotation.y;
 
+                float deltaYaw = targetYaw - currentYaw;
+                deltaYaw = NormalizeAngle(deltaYaw);
+
+                const float maxStep =
+                    movement.rotationSpeed * deltaTime;
+
+                deltaYaw = std::clamp(
+                    deltaYaw,
+                    -maxStep,
+                    maxStep
+                );
+
+                transform->rotation.y += deltaYaw;
             });
+    }
+private:
+    static float NormalizeAngle(float angle)
+    {
+        while (angle > DirectX::XM_PI)
+            angle -= DirectX::XM_2PI;
+
+        while (angle < -DirectX::XM_PI)
+            angle += DirectX::XM_2PI;
+
+        return angle;
     }
 };

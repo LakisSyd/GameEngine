@@ -383,7 +383,7 @@ struct CharacterMovement
 
     float moveSpeed = 3.5f;
     float runSpeed = 6.0f;
-    float rotationSpeed = 3.0f;
+    float rotationSpeed = 5.0f;
 
     bool isMoving = false;                // ✅ По умолчанию — стоит
     bool isGrounded = false;              // ✅ По умолчанию — в воздухе (безопаснее) 
