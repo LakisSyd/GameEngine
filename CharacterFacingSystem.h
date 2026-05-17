@@ -4,7 +4,7 @@
 #include "ECSRegistry.h"
 #include <DirectXMath.h>
 #include <cmath>
-const float ModelForwardOffset = DirectX::XM_PI; // 180 градусов
+constexpr float ModelForwardOffset = DirectX::XM_PI; // 180 degrees, model faces backward.
 
 class CharacterFacingSystem
 {
@@ -29,7 +29,7 @@ public:
                 if (lenSq < 0.0001f)
                     return;
 
-                const float targetYaw = atan2f(dir.x, dir.z) + DirectX::XM_PI;
+                const float targetYaw = atan2f(dir.x, dir.z) + ModelForwardOffset;
 
                 transform->rotation.y = targetYaw;
 
