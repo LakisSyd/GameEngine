@@ -1168,12 +1168,14 @@ void AssimpModelClass::SetBoneMatricesFromComponent(ID3D11DeviceContext* context
     if (FAILED(hr)) return;
 
     auto* dst = reinterpret_cast<XMFLOAT4X4*>(mapped.pData);
-    DirectX::XMMATRIX identity = DirectX::XMMatrixIdentity();
+    XMFLOAT4X4 identity;
+    DirectX::XMStoreFloat4x4(&identity, DirectX::XMMatrixIdentity());
 
-    // Заполняем ВСЕ 128 слотов
+    // Заполняем ВСЕ 128 слотов безопасными матрицами, чтобы шейдер не читал мусор
+    // при пропущенных/неиспользуемых костях.
     for (int i = 0; i < 128; ++i) {
         dst[i] = (i < (int)animComp.finalBoneMatrices.size()) ? animComp.finalBoneMatrices[i]
-            : *reinterpret_cast<XMFLOAT4X4*>(&identity);
+            : identity;
     }
 
     context->Unmap(m_boneMatrixBuffer, 0);
