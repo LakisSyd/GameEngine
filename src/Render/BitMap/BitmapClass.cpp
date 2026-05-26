@@ -1,4 +1,4 @@
-п»ї#include "BitmapClass.h"
+#include "BitmapClass.h"
 
 BitmapClass::BitmapClass()
 {
@@ -55,7 +55,7 @@ bool BitmapClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceCo
     m_bitmapHeight = bitmapHeight;
     m_renderX = 0;
     m_renderY = 0;
-    m_Texture = nullptr; // С‚РµРєСЃС‚СѓСЂР° РЅРµ РЅСѓР¶РЅР° вЂ” Р±СѓРґРµРј РїРµСЂРµРґР°РІР°С‚СЊ SRV СЃРЅР°СЂСѓР¶Рё
+    m_Texture = nullptr; // текстура не нужна — будем передавать SRV снаружи
 
     return InitializeBuffers(device);
 }
@@ -83,7 +83,7 @@ bool BitmapClass::Render(ID3D11DeviceContext* deviceContext)
 
 int BitmapClass::GetIndexCount()
 {
-	// Р’СЃРµРіРґР° РІРѕР·РІСЂР°С‰Р°РµС‚ 6 (РґРІР° С‚СЂРµСѓРіРѕР»СЊРЅРёРєР°)
+	// Всегда возвращает 6 (два треугольника)
 	return m_indexCount;
 }
 
@@ -105,22 +105,22 @@ bool BitmapClass::InitializeBuffers(ID3D11Device* device)
 	HRESULT result;
 	int i;
 
-    // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј РїСЂРµРґС‹РґСѓС‰СѓСЋ РїРѕР·РёС†РёСЋ РѕС‚СЂРёСЃРѕРІРєРё Р·РЅР°С‡РµРЅРёРµРј -1
+    // Инициализируем предыдущую позицию отрисовки значением -1
     m_prevPosX = -1;
     m_prevPosY = -1;
 
-    // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РєРѕР»РёС‡РµСЃС‚РІРѕ РІРµСЂС€РёРЅ (РєРІР°Рґ РёР· РґРІСѓС… С‚СЂРµСѓРіРѕР»СЊРЅРёРєРѕРІ = 6 С‚РѕС‡РµРє)
+    // Устанавливаем количество вершин (квад из двух треугольников = 6 точек)
     m_vertexCount = 6;
     m_indexCount = m_vertexCount;
 
-    // РЎРѕР·РґР°РµРј РјР°СЃСЃРёРІ РІРµСЂС€РёРЅ
+    // Создаем массив вершин
     vertices = new VertexType[m_vertexCount];
     if (!vertices)
     {
         return false;
     }
 
-    // РЎРѕР·РґР°РµРј РјР°СЃСЃРёРІ РёРЅРґРµРєСЃРѕРІ
+    // Создаем массив индексов
     indices = new unsigned long[m_indexCount];
     if (!indices)
     {
@@ -128,17 +128,17 @@ bool BitmapClass::InitializeBuffers(ID3D11Device* device)
         return false;
     }
 
-    // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј РјР°СЃСЃРёРІ РІРµСЂС€РёРЅ РЅСѓР»СЏРјРё
+    // Инициализируем массив вершин нулями
     memset(vertices, 0, (sizeof(VertexType) * m_vertexCount));
 
-    // Р—Р°РіСЂСѓР¶Р°РµРј РјР°СЃСЃРёРІ РёРЅРґРµРєСЃРѕРІ РґР°РЅРЅС‹РјРё
+    // Загружаем массив индексов данными
     for (i = 0; i < m_indexCount; i++)
     {
         indices[i] = i;
     }
 
-    // РќР°СЃС‚СЂР°РёРІР°РµРј РѕРїРёСЃР°РЅРёРµ РґРёРЅР°РјРёС‡РµСЃРєРѕРіРѕ Р±СѓС„РµСЂР° РІРµСЂС€РёРЅ
-    // D3D11_USAGE_DYNAMIC РїРѕР·РІРѕР»СЏРµС‚ РёР·РјРµРЅСЏС‚СЊ РґР°РЅРЅС‹Рµ РєР°Р¶РґС‹Р№ РєР°РґСЂ
+    // Настраиваем описание динамического буфера вершин
+    // D3D11_USAGE_DYNAMIC позволяет изменять данные каждый кадр
     vertexBufferDesc.Usage = D3D11_USAGE_DYNAMIC;
     vertexBufferDesc.ByteWidth = sizeof(VertexType) * m_vertexCount;
     vertexBufferDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
@@ -146,12 +146,12 @@ bool BitmapClass::InitializeBuffers(ID3D11Device* device)
     vertexBufferDesc.MiscFlags = 0;
     vertexBufferDesc.StructureByteStride = 0;
 
-    // РЈРєР°Р·С‹РІР°РµРј pointer РЅР° РґР°РЅРЅС‹Рµ РІРµСЂС€РёРЅ
+    // Указываем pointer на данные вершин
     vertexData.pSysMem = vertices;
     vertexData.SysMemPitch = 0;
     vertexData.SysMemSlicePitch = 0;
 
-    // РЎРѕР·РґР°РµРј Р±СѓС„РµСЂ РІРµСЂС€РёРЅ
+    // Создаем буфер вершин
     result = device->CreateBuffer(&vertexBufferDesc, &vertexData, &m_vertexBuffer);
     if (FAILED(result))
     {
@@ -160,7 +160,7 @@ bool BitmapClass::InitializeBuffers(ID3D11Device* device)
         return false;
     }
 
-    // Р‘СѓС„РµСЂ РёРЅРґРµРєСЃРѕРІ РЅРµ РЅСѓР¶РЅРѕ РґРµР»Р°С‚СЊ РґРёРЅР°РјРёС‡РµСЃРєРёРј, РёРЅРґРµРєСЃС‹ РІСЃРµРіРґР° РѕРґРёРЅР°РєРѕРІС‹
+    // Буфер индексов не нужно делать динамическим, индексы всегда одинаковы
     indexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
     indexBufferDesc.ByteWidth = sizeof(unsigned long) * m_indexCount;
     indexBufferDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
@@ -172,7 +172,7 @@ bool BitmapClass::InitializeBuffers(ID3D11Device* device)
     indexData.SysMemPitch = 0;
     indexData.SysMemSlicePitch = 0;
 
-    // РЎРѕР·РґР°РµРј Р±СѓС„РµСЂ РёРЅРґРµРєСЃРѕРІ
+    // Создаем буфер индексов
     result = device->CreateBuffer(&indexBufferDesc, &indexData, &m_indexBuffer);
     if (FAILED(result))
     {
@@ -181,7 +181,7 @@ bool BitmapClass::InitializeBuffers(ID3D11Device* device)
         return false;
     }
 
-    // РћСЃРІРѕР±РѕР¶РґР°РµРј РІСЂРµРјРµРЅРЅС‹Рµ РјР°СЃСЃРёРІС‹
+    // Освобождаем временные массивы
     delete[] vertices;
     vertices = 0;
     delete[] indices;
@@ -213,29 +213,22 @@ bool BitmapClass::UpdateBuffers(ID3D11DeviceContext* deviceContext)
     m_prevPosX = m_renderX;
     m_prevPosY = m_renderY;
 
-    // РСЃРїРѕР»СЊР·СѓРµРј СЌРєСЂР°РЅРЅС‹Рµ РєРѕРѕСЂРґРёРЅР°С‚С‹: Р»РµРІС‹Р№ РІРµСЂС…РЅРёР№ СѓРіРѕР» = (m_renderX, m_renderY)
+    // Используем экранные координаты: левый верхний угол = (m_renderX, m_renderY)
     float left = (float)m_renderX;
     float right = left + (float)m_bitmapWidth;
     float top = (float)m_renderY;
-    float bottom = top + (float)m_bitmapHeight;  // Y СѓРІРµР»РёС‡РёРІР°РµС‚СЃСЏ РІРЅРёР· (РєР°Рє РІ РѕСЂС‚РѕРіСЂР°С„РёС‡РµСЃРєРѕР№ РјР°С‚СЂРёС†Рµ)
+    float bottom = top + (float)m_bitmapHeight;  // Y увеличивается вниз (как в ортографической матрице)
 
-    char dbg[256];
-    sprintf_s(dbg, "UpdateBuffers: renderX=%d renderY=%d\n", m_renderX, m_renderY);
-
-    OutputDebugStringA(dbg);
-    sprintf_s(dbg, "Coords: left=%f right=%f top=%f bottom=%f\n", left, right, top, bottom);
-    OutputDebugStringA(dbg);
-
-    // Z РґРѕР»Р¶РЅРѕ Р±С‹С‚СЊ Р±РѕР»СЊС€Рµ screenNear (РЅР°РїСЂРёРјРµСЂ, 0.1f), С‡С‚РѕР±С‹ РѕР±СЉРµРєС‚ РЅРµ РѕС‚СЃРµРєР°Р»СЃСЏ
+    // Z должно быть больше screenNear (например, 0.1f), чтобы объект не отсекался
     const float z = 0.5f;
 
     VertexType vertices[6] =
     {
-        // РџРµСЂРІС‹Р№ С‚СЂРµСѓРіРѕР»СЊРЅРёРє
+        // Первый треугольник
         { { left,  top,    z }, { 0.0f, 0.0f } },
         { { right, top,    z }, { 1.0f, 0.0f } },
         { { left,  bottom, z }, { 0.0f, 1.0f } },
-        // Р’С‚РѕСЂРѕР№ С‚СЂРµСѓРіРѕР»СЊРЅРёРє
+        // Второй треугольник
         { { right, top,    z }, { 1.0f, 0.0f } },
         { { right, bottom, z }, { 1.0f, 1.0f } },
         { { left,  bottom, z }, { 0.0f, 1.0f } }
@@ -254,7 +247,7 @@ bool BitmapClass::LoadTexture(ID3D11Device* device, ID3D11DeviceContext* deviceC
 {
     bool result;
 
-    // РЎРѕР·РґР°РµРј РѕР±СЉРµРєС‚ С‚РµРєСЃС‚СѓСЂС‹
+    // Создаем объект текстуры
     m_Texture = new TextureClass;
     result = m_Texture->Initialize(device, deviceContext, filename);
     if (!result)
@@ -262,7 +255,7 @@ bool BitmapClass::LoadTexture(ID3D11Device* device, ID3D11DeviceContext* deviceC
         return false;
     }
 
-    // РЎРѕС…СЂР°РЅСЏРµРј СЂР°Р·РјРµСЂС‹ С‚РµРєСЃС‚СѓСЂС‹ РІ РїРёРєСЃРµР»СЏС…
+    // Сохраняем размеры текстуры в пикселях
     m_bitmapWidth = m_Texture->GetWidth();
     m_bitmapHeight = m_Texture->GetHeight();
 
@@ -292,17 +285,17 @@ void BitmapClass::RenderBuffers(ID3D11DeviceContext* deviceContext)
     unsigned int stride;
     unsigned int offset;
 
-    // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј С€Р°Рі Рё СЃРјРµС‰РµРЅРёРµ Р±СѓС„РµСЂР° РІРµСЂС€РёРЅ
+    // Устанавливаем шаг и смещение буфера вершин
     stride = sizeof(VertexType);
     offset = 0;
 
-    // РђРєС‚РёРІРёСЂСѓРµРј Р±СѓС„РµСЂ РІРµСЂС€РёРЅ
+    // Активируем буфер вершин
     deviceContext->IASetVertexBuffers(0, 1, &m_vertexBuffer, &stride, &offset);
 
-    // РђРєС‚РёРІРёСЂСѓРµРј Р±СѓС„РµСЂ РёРЅРґРµРєСЃРѕРІ
+    // Активируем буфер индексов
     deviceContext->IASetIndexBuffer(m_indexBuffer, DXGI_FORMAT_R32_UINT, 0);
 
-    // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј С‚РѕРїРѕР»РѕРіРёСЋ РїСЂРёРјРёС‚РёРІРѕРІ (СЃРїРёСЃРѕРє С‚СЂРµСѓРіРѕР»СЊРЅРёРєРѕРІ)
+    // Устанавливаем топологию примитивов (список треугольников)
     deviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
     return;

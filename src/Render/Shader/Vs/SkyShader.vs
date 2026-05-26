@@ -1,28 +1,31 @@
 // SkyShader.vs
-struct VertexInput {
-    float3 position : POSITION;
-};
-
-struct PixelInput {  // 🔥 Переименовал, чтобы не путать с .ps
+struct PixelInput
+{
     float4 positionClip : SV_POSITION;
     float3 worldPos : TEXCOORD0;
 };
 
 cbuffer SkyBuffer : register(b0)
 {
-    matrix modelViewProjection;
+    matrix invViewProjection;
 };
 
-// 🔥 Функция должна называться SkyVS (как в CompileShader)
-PixelInput SkyVS(VertexInput input)
+PixelInput SkyVS(uint vertexId : SV_VertexID)
 {
+    float2 positions[3] =
+    {
+        float2(-1.0f, -1.0f),
+        float2(-1.0f,  3.0f),
+        float2( 3.0f, -1.0f)
+    };
+
+    float2 clip = positions[vertexId];
+
     PixelInput output;
-    
-    // 1. Позиция (как было)
-    output.positionClip = mul(float4(input.position, 1.0f), modelViewProjection).xyww;
-    
-    // 2. 🔥 ИСПРАВЛЕНИЕ: Нормализуем вектор!
-    output.worldPos = normalize(input.position); 
-    
+    output.positionClip = float4(clip, 1.0f, 1.0f);
+
+    float4 worldFar = mul(float4(clip, 1.0f, 1.0f), invViewProjection);
+    output.worldPos = worldFar.xyz / max(abs(worldFar.w), 0.000001f);
+
     return output;
 }

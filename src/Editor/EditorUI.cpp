@@ -1,6 +1,7 @@
-п»ї#include "EditorUI.h"
+#include "EditorUI.h"
 #include <string>
 #include <cstdint>
+#include <algorithm>
 #include "SceneManager.h"
 #include "ObjectDebugWindow.h"
 #include <backends/imgui_impl_win32.h>
@@ -11,7 +12,6 @@
 
 #include "JointConnectionSystem.h"
 #include "../../SubmarineSystem.h"
-#include <imgui_demo.cpp>
 
 inline btQuaternion XMFloat4ToBtQuaternion(const DirectX::XMFLOAT4& q)
 {
@@ -21,7 +21,7 @@ inline btQuaternion XMFloat4ToBtQuaternion(const DirectX::XMFLOAT4& q)
 
 
 
-// в”Ђв”Ђ Р¦РІРµС‚Р° С‚РµРјС‹ (UE5-СЃС‚РёР»СЊ) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// -- Цвета темы (UE5-стиль) ---------------------------------------------------
 static constexpr ImVec4 COL_HEADER = ImVec4(0.13f, 0.13f, 0.13f, 1.0f);
 static constexpr ImVec4 COL_SECTION = ImVec4(0.18f, 0.18f, 0.18f, 1.0f);
 static constexpr ImVec4 COL_ACCENT = ImVec4(0.06f, 0.53f, 0.98f, 1.0f);
@@ -255,9 +255,9 @@ void EditorUI::RenderMainMenu(SceneManager& sceneManager)
     RenderLoadDialog();
 }
 
-// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-// Р”РёР°Р»РѕРі В«Save AsВ»
-// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// -----------------------------------------------------------------------------
+// Диалог «Save As»
+// -----------------------------------------------------------------------------
 void EditorUI::RenderSaveDialog()
 {
     const ImVec2 dialogSz = ImVec2(std::floor(420.0f * ScaleX()),
@@ -319,9 +319,9 @@ void EditorUI::RenderSaveDialog()
     ImGui::PopStyleColor(2);
 }
 
-// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-// Р”РёР°Р»РѕРі В«Load SceneВ»
-// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// -----------------------------------------------------------------------------
+// Диалог «Load Scene»
+// -----------------------------------------------------------------------------
 void EditorUI::RenderLoadDialog()
 {
     const ImVec2 dialogSz = ImVec2(std::floor(420.0f * ScaleX()),
@@ -384,7 +384,7 @@ void EditorUI::RenderLoadDialog()
 }
 
 //=============================================================================
-// Update вЂ” РіР»Р°РІРЅС‹Р№ РјРµС‚РѕРґ
+// Update — главный метод
 //=============================================================================
 void EditorUI::Update(SceneManager& sceneManager)
 {
@@ -408,7 +408,7 @@ void EditorUI::BeginMainMenuBar(SceneManager& sceneManager)
 }
 
 //=============================================================================
-// RenderSceneOutliner вЂ” СЃРїРёСЃРѕРє РІСЃРµС… РѕР±СЉРµРєС‚РѕРІ, РёСЃС‚РѕС‡РЅРёРєРѕРІ СЃРІРµС‚Р° Рё СЃРїСЂР°Р№С‚РѕРІ
+// RenderSceneOutliner — список всех объектов, источников света и спрайтов
 //=============================================================================
 void EditorUI::RenderSceneOutliner(SceneManager& sceneManager)
 {
@@ -419,31 +419,31 @@ void EditorUI::RenderSceneOutliner(SceneManager& sceneManager)
     const float avail = ImGui::GetContentRegionAvail().y - std::floor(4.0f * ScaleY());
     ImGui::BeginChild("##OutlinerList", ImVec2(-1, avail), false);
 
-    // вњ… РќРћР’РћР•: РС‚РµСЂРёСЂСѓРµРј Р’РЎР• СЃСѓС‰РЅРѕСЃС‚Рё СЃ MeshRendererComponent
+    // ? НОВОЕ: Итерируем ВСЕ сущности с MeshRendererComponent
     auto& meshPool = sceneManager.GetECSRegistry().GetComponents<MeshRendererComponent>();
     auto& registry = sceneManager.GetECSRegistry();
 
     for (auto& [entity, mesh] : meshPool)
     {
-        // РџСЂРѕРїСѓСЃРєР°РµРј РЅРµР°РєС‚РёРІРЅС‹Рµ
+        // Пропускаем неактивные
         if (!sceneManager.IsObjectActive(entity)) continue;
 
-        // рџ”Ґ РџСЂРѕРІРµСЂСЏРµРј, СЌС‚Рѕ СЃРІРµС‚ РёР»Рё РѕР±С‹С‡РЅС‹Р№ РѕР±СЉРµРєС‚
+        // ?? Проверяем, это свет или обычный объект
         auto* light = registry.GetComponent<LightComponent>(entity);
 
         char label[64];
         if (light)
         {
-            // Р­С‚Рѕ РёСЃС‚РѕС‡РЅРёРє СЃРІРµС‚Р°
-            snprintf(label, sizeof(label), "  рџ’Ў Light [%u]", entity);
+            // Это источник света
+            snprintf(label, sizeof(label), "  ?? Light [%u]", entity);
         }
         else
         {
-            // РћР±С‹С‡РЅС‹Р№ РѕР±СЉРµРєС‚
-            snprintf(label, sizeof(label), "  рџ“¦ Object [%u]", entity);
+            // Обычный объект
+            snprintf(label, sizeof(label), "  ?? Object [%u]", entity);
         }
 
-        // РћРїСЂРµРґРµР»СЏРµРј С‚РёРї РІС‹РґРµР»РµРЅРёСЏ
+        // Определяем тип выделения
         SelectedType typeForThis = light ? SelectedType::Light : SelectedType::Object;
         bool selected = (m_selectedType == typeForThis && m_selectedEntity == entity);
 
@@ -461,11 +461,11 @@ void EditorUI::RenderSceneOutliner(SceneManager& sceneManager)
     ImGui::Separator();
     ImGui::Spacing();
 
-    // в”Ђв”Ђ РЎРїСЂР°Р№С‚С‹ (РѕСЃС‚Р°СЋС‚СЃСЏ РєР°Рє СЂР°РЅСЊС€Рµ) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Спрайты (остаются как раньше) ---------------------------------------
     for (int i = 0; i < sceneManager.GetSpriteCount(); ++i)
     {
         char label[64];
-        snprintf(label, sizeof(label), "  рџ–ј Sprite #%d", i);
+        snprintf(label, sizeof(label), "  ?? Sprite #%d", i);
 
         bool selected = (m_selectedType == SelectedType::Sprite && m_selectedLegacyIndex == i);
         if (selected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
@@ -480,7 +480,7 @@ void EditorUI::RenderSceneOutliner(SceneManager& sceneManager)
 }
 
 //=============================================================================
-// RenderDetailsPanel вЂ” СЃРІРѕР№СЃС‚РІР° РІС‹РґРµР»РµРЅРЅРѕРіРѕ РѕР±СЉРµРєС‚Р°
+// RenderDetailsPanel — свойства выделенного объекта
 //=============================================================================
 void EditorUI::RenderDetailsPanel(SceneManager& sceneManager)
 {
@@ -510,7 +510,7 @@ void EditorUI::RenderDetailsPanel(SceneManager& sceneManager)
 
 
 //=============================================================================
-// RenderObjectProperties вЂ” Transform + РјРµРЅРµРґР¶РµСЂ РєРѕРјРїРѕРЅРµРЅС‚РѕРІ
+// RenderObjectProperties — Transform + менеджер компонентов
 //=============================================================================
 void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
 {
@@ -527,7 +527,7 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
     {
         auto* cfg = registry.GetComponent<SubmarineHullConfig>(entity);
 
-        if (ImGui::CollapsingHeader("вљ“ Submarine Hull", ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::CollapsingHeader("? Submarine Hull", ImGuiTreeNodeFlags_DefaultOpen))
         {
             ImGui::DragFloat3("Extents (m)", &cfg->hullExtents.x, 0.1f, 0.1f, 200.0f);
             ImGui::DragFloat("Wall Thickness (m)", &cfg->wallThickness, 0.05f, 0.1f, 5.0f);
@@ -535,18 +535,18 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
             ImGui::Checkbox("Show Debug Hull", &cfg->showDebugHull);
 
             ImGui::Spacing();
-            if (ImGui::Button("рџ”Ё Build Hull Physics", { -1, 0 }))
+            if (ImGui::Button("?? Build Hull Physics", { -1, 0 }))
            
 
             ImGui::Spacing();
-            if (ImGui::Button("вћ• Add SubmarineHullConfig", { -1, 0 }))
-            { /* СѓР¶Рµ РµСЃС‚СЊ */
+            if (ImGui::Button("? Add SubmarineHullConfig", { -1, 0 }))
+            { /* уже есть */
             }
         }
     }
     else
     {
-        if (ImGui::Button("вћ• Add Submarine Hull Config"))
+        if (ImGui::Button("? Add Submarine Hull Config"))
         {
             registry.AddComponent<SubmarineHullConfig>(entity, SubmarineHullConfig{});
             if (!registry.HasComponent<SubmarineComponent>(entity))
@@ -557,7 +557,7 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
     }
     if (auto* hullCfg = sceneManager.GetECSRegistry().GetComponent<SubmarineHullConfig>(entity))
     {
-        if (ImGui::CollapsingHeader("вљ“ Hull Physics Config", ImGuiTreeNodeFlags_DefaultOpen))
+        if (ImGui::CollapsingHeader("? Hull Physics Config", ImGuiTreeNodeFlags_DefaultOpen))
         {
             bool changed = false;
             changed |= ImGui::DragFloat3("Hull Extents (m)",
@@ -569,15 +569,15 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
 
             if (changed)
             {
-                // РџРµСЂРµСЃРѕР±РёСЂР°РµРј С„РёР·РёРєСѓ РїСЂРё РёР·РјРµРЅРµРЅРёРё РїР°СЂР°РјРµС‚СЂРѕРІ
-                ImGui::TextColored(ImVec4(1, 1, 0, 1), "вљ  Press 'Rebuild' to apply");
+                // Пересобираем физику при изменении параметров
+                ImGui::TextColored(ImVec4(1, 1, 0, 1), "? Press 'Rebuild' to apply");
             }
 
           
         }
     }
 
-    // в”Ђв”Ђ Transform в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Transform -------------------------------------------------------------
     SectionHeader("Transform");
     ImGui::Spacing();
 
@@ -604,7 +604,7 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
     ImGui::Separator();
     ImGui::Spacing();
 
-    // в”Ђв”Ђ РњРµРЅРµРґР¶РµСЂ РєРѕРјРїРѕРЅРµРЅС‚РѕРІ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Менеджер компонентов --------------------------------------------------
     RenderComponentManager(sceneManager, entity);
 
 
@@ -613,7 +613,7 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
     ImGui::Separator();
     ImGui::Spacing();
 
-    // в”Ђв”Ђ РЈРґР°Р»РёС‚СЊ РѕР±СЉРµРєС‚ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Удалить объект --------------------------------------------------------
     ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
     if (ImGui::Button("Remove Object", ImVec2(-1, 0)))
@@ -627,17 +627,17 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
 }
 
 //=============================================================================
-// RenderComponentManager вЂ” РїРѕРєР°Р·С‹РІР°РµС‚ РєРѕРјРїРѕРЅРµРЅС‚С‹ СЃСѓС‰РЅРѕСЃС‚Рё, РїРѕР·РІРѕР»СЏРµС‚
-//                          РґРѕР±Р°РІР»СЏС‚СЊ Рё СѓРґР°Р»СЏС‚СЊ РёС… С‡РµСЂРµР· UI
+// RenderComponentManager — показывает компоненты сущности, позволяет
+//                          добавлять и удалять их через UI
 //=============================================================================
 void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 {
     auto& registry = sceneManager.GetECSRegistry();
 
-    // в”Ђв”Ђ DoorComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- DoorComponent ---------------------------------------------------------
     if (registry.HasComponent<DoorComponent>(entity))
     {
-        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.25f, 0.15f, 0.05f, 1.0f)); // рџџ¤ РєРѕСЂРёС‡РЅРµРІС‹Р№
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.25f, 0.15f, 0.05f, 1.0f)); // ?? коричневый
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.35f, 0.22f, 0.08f, 1.0f));
         bool open = ImGui::CollapsingHeader("  Door Component##door", ImGuiTreeNodeFlags_DefaultOpen);
         ImGui::PopStyleColor(2);
@@ -648,7 +648,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
             ImGui::Spacing();
 
-            // в”Ђв”Ђ РћС‚СЃРµРє A в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Отсек A --------------------------------------------------------
             ImGui::TextColored(COL_TEXT_DIM, " Compartment A:");
             ImGui::SameLine();
 
@@ -665,7 +665,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 auto& compPool = registry.GetComponents<CompartmentComponent>();
                 for (auto& [compEnt, comp] : compPool)
                 {
-                    if (compEnt == door->compartmentB) continue; // РЅРµ РґР°С‘Рј РІС‹Р±СЂР°С‚СЊ С‚Рѕ Р¶Рµ С‡С‚Рѕ B
+                    if (compEnt == door->compartmentB) continue; // не даём выбрать то же что B
                     std::string label = "Compartment Entity " + std::to_string(compEnt);
                     if (ImGui::Selectable(label.c_str()))
                         door->compartmentA = compEnt;
@@ -673,7 +673,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 ImGui::EndPopup();
             }
 
-            // в”Ђв”Ђ РћС‚СЃРµРє B в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Отсек B --------------------------------------------------------
             ImGui::TextColored(COL_TEXT_DIM, " Compartment B:");
             ImGui::SameLine();
 
@@ -690,7 +690,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 auto& compPool = registry.GetComponents<CompartmentComponent>();
                 for (auto& [compEnt, comp] : compPool)
                 {
-                    if (compEnt == door->compartmentA) continue; // РЅРµ РґР°С‘Рј РІС‹Р±СЂР°С‚СЊ С‚Рѕ Р¶Рµ С‡С‚Рѕ A
+                    if (compEnt == door->compartmentA) continue; // не даём выбрать то же что A
                     std::string label = "Compartment Entity " + std::to_string(compEnt);
                     if (ImGui::Selectable(label.c_str()))
                         door->compartmentB = compEnt;
@@ -702,37 +702,37 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
             ImGui::Separator();
             ImGui::Spacing();
 
-            // в”Ђв”Ђ РЎРѕСЃС‚РѕСЏРЅРёРµ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Состояние ------------------------------------------------------
             ImGui::Checkbox("Is Open", &door->isOpen);
             ImGui::Checkbox("Is Broken", &door->isBroken);
             ImGui::Checkbox("Requires Power", &door->requiresPower);
 
             ImGui::Spacing();
 
-            ImGui::DragFloat("Flow Rate (mВі/s)", &door->flowRate, 0.1f, 0.0f, 20.0f);
+            ImGui::DragFloat("Flow Rate (m?/s)", &door->flowRate, 0.1f, 0.0f, 20.0f);
             ImGui::DragFloat("Open Speed", &door->openSpeed, 0.1f, 0.1f, 10.0f);
 
-            // РџСЂРѕРіСЂРµСЃСЃ Р°РЅРёРјР°С†РёРё (С‚РѕР»СЊРєРѕ С‡С‚РµРЅРёРµ)
+            // Прогресс анимации (только чтение)
             ImGui::ProgressBar(door->openProgress, ImVec2(-1, 0), "Open Progress");
 
             ImGui::Spacing();
 
-            // в”Ђв”Ђ Р‘С‹СЃС‚СЂС‹Рµ РґРµР№СЃС‚РІРёСЏ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Быстрые действия -----------------------------------------------
             if (ImGui::Button("Open Door", ImVec2(-1, 0))) door->isOpen = true;
             if (ImGui::Button("Close Door", ImVec2(-1, 0))) door->isOpen = false;
 
             ImGui::Spacing();
 
-            // РЎС‚Р°С‚СѓСЃ СЃРѕРµРґРёРЅРµРЅРёСЏ
+            // Статус соединения
             bool valid = (door->compartmentA != INVALID_ENTITY && door->compartmentB != INVALID_ENTITY);
             if (valid)
-                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "вњ… Both compartments linked");
+                ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "? Both compartments linked");
             else
-                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.2f, 1.0f), "вљ  Assign both compartments!");
+                ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.2f, 1.0f), "? Assign both compartments!");
 
             ImGui::Spacing();
 
-            // в”Ђв”Ђ РЈРґР°Р»РµРЅРёРµ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Удаление -------------------------------------------------------
             ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
             if (ImGui::Button("Remove Door Component", ImVec2(-1, 0)))
@@ -746,7 +746,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
     if(registry.HasComponent<PlayerGameTag>(entity))
     {
-        ImGui::TextColored(COL_ACCENT, "рџљ№ Player Object");
+        ImGui::TextColored(COL_ACCENT, "?? Player Object");
         ImGui::Spacing();
         ImGui::TextColored(COL_TEXT_DIM, "This object is tagged as the player.");
         ImGui::Spacing();
@@ -755,7 +755,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 	}
            
 
-    // в”Ђв”Ђ LightComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- LightComponent --------------------------------------------------------
     if (registry.HasComponent<LightComponent>(entity))
     {
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.30f, 0.10f, 1.0f));
@@ -793,10 +793,10 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
     }
 
 
-    // в”Ђв”Ђ SubmarineComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- SubmarineComponent --------------------------------------------------------
     if (registry.HasComponent<SubmarineComponent>(entity))
     {
-        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.20f, 0.40f, 1.0f)); // рџ”µ РЎРёРЅРёР№ РґР»СЏ РїРѕРґР»РѕРґРєРё
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.20f, 0.40f, 1.0f)); // ?? Синий для подлодки
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.28f, 0.55f, 1.0f));
         bool open = ImGui::CollapsingHeader("  Submarine Component##sub", ImGuiTreeNodeFlags_DefaultOpen);
         ImGui::PopStyleColor(2);
@@ -808,16 +808,16 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
             ImGui::Spacing();
 
-            // рџ”№ Р•СЃР»Рё СЌС‚Рѕ РєРѕСЂРµРЅСЊ РїРѕРґР»РѕРґРєРё
+            // ?? Если это корень подлодки
             if (subComp->submarineRoot == entity)
             {
-                ImGui::TextColored(COL_ACCENT, "рџљў Submarine Root");
+                ImGui::TextColored(COL_ACCENT, "?? Submarine Root");
                 ImGui::Spacing();
 
                 ImGui::TextColored(COL_TEXT_DIM, "Entity ID: %u", entity);
                 ImGui::TextColored(COL_GREEN, "This is the submarine root (self-reference)");
 
-                // РЎРїРёСЃРѕРє РІСЃРµС… РѕС‚СЃРµРєРѕРІ
+                // Список всех отсеков
                 ImGui::TextColored(COL_TEXT_DIM, " Compartments (%zu):", subComp->allCompartments.size());
                 for (size_t i = 0; i < subComp->allCompartments.size(); ++i)
                 {
@@ -837,7 +837,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                         snprintf(label, sizeof(label), "  [%zu] Compartment #%u (no data)", i, compEnt);
                     }
 
-                    // РџРѕРґСЃРІРµС‚РєР°, РµСЃР»Рё СЌС‚РѕС‚ РѕС‚СЃРµРє РІС‹Р±СЂР°РЅ
+                    // Подсветка, если этот отсек выбран
                     bool isSelected = (m_selectedType == SelectedType::Object && m_selectedEntity == compEnt);
                     if (isSelected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
 
@@ -848,31 +848,31 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
                     if (isSelected) ImGui::PopStyleColor();
 
-                    // РљРЅРѕРїРєР° Р±С‹СЃС‚СЂРѕРіРѕ РїРµСЂРµС…РѕРґР°
+                    // Кнопка быстрого перехода
                     ImGui::SameLine(ImGui::GetContentRegionAvail().x - 60);
                     if (ImGui::SmallButton("Focus##Comp"))
                     {
                         if (compTransform)
                         {
-                            // РњРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РєР°РјРµСЂСѓ, РєРѕС‚РѕСЂР°СЏ Р»РµС‚РёС‚ Рє РѕС‚СЃРµРєСѓ
+                            // Можно добавить камеру, которая летит к отсеку
                             // m_camera->SetTarget(compTransform->position);
                         }
                     }
                 }
 
-                // РљРЅРѕРїРєР° РґРѕР±Р°РІРёС‚СЊ РѕС‚СЃРµРє
+                // Кнопка добавить отсек
                 ImGui::Spacing();
                 ImGui::Separator();
                 ImGui::Spacing();
 
-                if (ImGui::Button("вћ• Add New Compartment", ImVec2(-1, 0)))
+                if (ImGui::Button("? Add New Compartment", ImVec2(-1, 0)))
                 {
                     CreateNewCompartment(registry, entity);
                 }
 
-                // РљРЅРѕРїРєР° РїСЂРѕРІРµСЂРёС‚СЊ С†РµР»РѕСЃС‚РЅРѕСЃС‚СЊ
+                // Кнопка проверить целостность
                 ImGui::SameLine();
-                if (ImGui::Button("рџ”Ќ Check Integrity"))
+                if (ImGui::Button("?? Check Integrity"))
                 {
 
 
@@ -880,8 +880,8 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
             }
             else
             {
-                // рџ”№ Р•СЃР»Рё СЌС‚Рѕ РѕС‚СЃРµРє, РїСЂРёРІСЏР·Р°РЅРЅС‹Р№ Рє РїРѕРґР»РѕРґРєРµ
-                ImGui::TextColored(COL_ACCENT, "рџ“¦ Compartment (linked)");
+                // ?? Если это отсек, привязанный к подлодке
+                ImGui::TextColored(COL_ACCENT, "?? Compartment (linked)");
                 ImGui::Spacing();
 
 
@@ -892,25 +892,23 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 if (ImGui::DragInt("##ParentSubID", (int*)&parentID, 1.0f, 0, 10000))
                 {
                     subComp->submarineRoot = parentID;
-                    OutputDebugStringA(("рџ”§ Updated submarineRoot to: " + std::to_string(parentID) + "\n").c_str());
                 }
 
                 ImGui::SameLine();
                 if (ImGui::SmallButton("Set to Self"))
                 {
                     subComp->submarineRoot = entity;
-                    OutputDebugStringA(("вњ… Set submarineRoot to self (entity " + std::to_string(entity) + ")\n").c_str());
                 }
 
                 ImGui::Text("Current: %u", subComp->submarineRoot);
-                // РљРЅРѕРїРєР° РѕС‚РєСЂРµРїРёС‚СЊ
+                // Кнопка открепить
                 if (ImGui::Button("Unlink from Submarine", ImVec2(-1, 0)))
                 {
                     subComp->submarineRoot = INVALID_ENTITY;
-                    // РњРѕР¶РЅРѕ С‚Р°РєР¶Рµ СѓРґР°Р»РёС‚СЊ РёР· СЃРїРёСЃРєР° allCompartments Сѓ СЂРѕРґРёС‚РµР»СЏ
+                    // Можно также удалить из списка allCompartments у родителя
                 }
 
-                // рџ”№ Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ Р»РѕРєР°Р»СЊРЅС‹С… РіСЂР°РЅРёС† (РµСЃР»Рё РµСЃС‚СЊ CompartmentComponent)
+                // ?? Редактирование локальных границ (если есть CompartmentComponent)
                 auto* compData = registry.GetComponent<CompartmentComponent>(entity);
                 if (compData)
                 {
@@ -933,17 +931,17 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                         compData->RecalculateVolume();
                     }
 
-                    ImGui::Text("Volume: %.2f mВі", compData->volume);
+                    ImGui::Text("Volume: %.2f m?", compData->volume);
                 }
             }
 
-            // РљРЅРѕРїРєР° СѓРґР°Р»РµРЅРёСЏ РєРѕРјРїРѕРЅРµРЅС‚Р°
+            // Кнопка удаления компонента
             ImGui::Spacing();
             ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
             if (ImGui::Button(" Remove Submarine Component", ImVec2(-1, 0)))
             {
-                // Р•СЃР»Рё СЌС‚Рѕ РєРѕСЂРµРЅСЊ вЂ” СѓРґР°Р»СЏРµРј СЃРІСЏР·СЊ Сѓ РІСЃРµС… РѕС‚СЃРµРєРѕРІ
+                // Если это корень — удаляем связь у всех отсеков
                 if (subComp->submarineRoot == entity)
                 {
                     for (Entity compEnt : subComp->allCompartments)
@@ -959,9 +957,9 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
     }
 
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-  // рџ”Ґ RIGIDBODY COMPONENT вЂ” РџРћР›РќРћРЎРўР¬Р® РРЎРџР РђР’Р›Р•РќРќРђРЇ Р’Р•Р РЎРРЇ
-  // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ===========================================================================
+  // ?? RIGIDBODY COMPONENT — ПОЛНОСТЬЮ ИСПРАВЛЕННАЯ ВЕРСИЯ
+  // ===========================================================================
     if (registry.HasComponent<RigidBodyComponent>(entity))
     {
         ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.20f, 0.30f, 1.0f));
@@ -976,20 +974,20 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
             ImGui::Spacing();
 
-            // рџ”Ґ 1. РџР•Р Р•РљР›Р®Р§РђРўР•Р›Р¬ COMPOUND MODE
+            // ?? 1. ПЕРЕКЛЮЧАТЕЛЬ COMPOUND MODE
             ImGui::Checkbox(" Compound Collision", &rb->isCompound);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Enable to build collision from multiple primitive shapes");
 
             if (rb->isCompound)
             {
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-                // рџ”Ґ Р Р•Р–РРњ РЎРћРЎРўРђР’РќРћР™ РљРћР›Р›РР—РР
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+                // ===============================================================
+                // ?? РЕЖИМ СОСТАВНОЙ КОЛЛИЗИИ
+                // ===============================================================
                 ImGui::Separator();
                 ImGui::TextColored(COL_TEXT_DIM, " Compound Elements");
 
-                // РљРЅРѕРїРєРё СѓРїСЂР°РІР»РµРЅРёСЏ СЃРїРёСЃРєРѕРј
+                // Кнопки управления списком
                 if (ImGui::Button("+ Add Element", ImVec2(-1, 0)))
                 {
                     RigidBodyComponent::CompoundElement newElem;
@@ -1012,7 +1010,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
                 ImGui::Spacing();
 
-                // РћС‚СЂРёСЃРѕРІРєР° СЃРїРёСЃРєР° СЌР»РµРјРµРЅС‚РѕРІ
+                // Отрисовка списка элементов
                 for (size_t i = 0; i < rb->compoundElements.size(); ++i)
                 {
                     auto& elem = rb->compoundElements[i];
@@ -1026,7 +1024,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                     {
                         ImGui::Indent();
 
-                        // рџ”Ґ FIX #1: РџСЂР°РІРёР»СЊРЅС‹Р№ РјР°СЃСЃРёРІ С‚РёРїРѕРІ + IM_ARRAYSIZE
+                        // ?? FIX #1: Правильный массив типов + IM_ARRAYSIZE
                         const char* types[] = { "Box", "Sphere", "Cylinder", "Capsule", "ConvexHull", "VHACD" };
                         int typeIdx = static_cast<int>(elem.type);
                         if (ImGui::Combo("Type", &typeIdx, types, IM_ARRAYSIZE(types)))
@@ -1035,11 +1033,11 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                             needsRecreate = true;
                         }
 
-                        // РџРѕР·РёС†РёСЏ
+                        // Позиция
                         if (ImGui::DragFloat3("Position", &elem.localPosition.x, 0.1f))
                             needsRecreate = true;
 
-                        // Р’СЂР°С‰РµРЅРёРµ (Euler РІ РіСЂР°РґСѓСЃР°С…)
+                        // Вращение (Euler в градусах)
                         if (elem.editorEulerDirty)
                         {
                             btQuaternion q(elem.localRotation.x, elem.localRotation.y, elem.localRotation.z, elem.localRotation.w);
@@ -1053,7 +1051,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                             elem.editorEulerDirty = false;
                         }
 
-                        if (ImGui::DragFloat3("Rotation (deg)", &elem.editorEulerDegrees.x, 0.5f, -360.0f, 360.0f, "%.1fВ°"))
+                        if (ImGui::DragFloat3("Rotation (deg)", &elem.editorEulerDegrees.x, 0.5f, -360.0f, 360.0f, "%.1f°"))
                         {
                             float rx = elem.editorEulerDegrees.x * (XM_PI / 180.0f);
                             float ry = elem.editorEulerDegrees.y * (XM_PI / 180.0f);
@@ -1063,12 +1061,12 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                             needsRecreate = true;
                         }
 
-                        // рџ”Ґ FIX #2: meshRenderer РѕР±СЉСЏРІР»РµРЅР° Р’РќРЈРўР Р С†РёРєР»Р°
+                        // ?? FIX #2: meshRenderer объявлена ВНУТРИ цикла
                         auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
 
-                        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-                        // рџ”Ґ VHACD-Р±Р»РѕРє (РїРѕРєР°Р·С‹РІР°РµС‚СЃСЏ РўРћР›Р¬РљРћ РґР»СЏ С‚РёРїР° VHACD)
-                        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+                        // ===========================================================
+                        // ?? VHACD-блок (показывается ТОЛЬКО для типа VHACD)
+                        // ===========================================================
                         if (elem.type == RigidBodyComponent::CompoundElement::VHACD)
                         {
                             ImGui::Spacing(); ImGui::Separator();
@@ -1076,7 +1074,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                             ImGui::Indent();
                             bool vhacdChanged = false;
 
-                            // Р’С‹Р±РѕСЂ РјРѕРґРµР»Рё
+                            // Выбор модели
                             ImGui::Text("Source Model:"); ImGui::SameLine();
                        //    const char* modelName = (elem.vhacdModel && elem.vhacdModel->GetName) ? elem.vhacdModel->GetName() : "None";
                             ImGui::TextDisabled(" %s", "modelName");
@@ -1087,12 +1085,11 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                                 {
                                     elem.vhacdModel = meshRenderer->model;
                                     vhacdChanged = true;
-                                    OutputDebugStringA("[Editor] VHACD model assigned from renderer\n");
                                 }
                             }
                             ImGui::SameLine(); HelpMarker("Assign the mesh to decompose.");
 
-                            // РњР°СЃС€С‚Р°Р± РєРѕР»Р»РёР·РёРё
+                            // Масштаб коллизии
                             ImGui::Spacing(); ImGui::Text("Collision Scale:");
                             if (ImGui::DragFloat3("##VHACDScale", &elem.vhacdScale.x, 0.1f, 0.1f, 10.0f, "%.2f"))
                             {
@@ -1103,7 +1100,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                             }
                             ImGui::SameLine(); if (ImGui::SmallButton("Reset")) { elem.vhacdScale = { 1,1,1 }; vhacdChanged = true; }
 
-                            // РџР°СЂР°РјРµС‚СЂС‹ РєР°С‡РµСЃС‚РІР°
+                            // Параметры качества
                             if (ImGui::CollapsingHeader("Quality Parameters", ImGuiTreeNodeFlags_DefaultOpen))
                             {
                                 ImGui::Indent();
@@ -1125,28 +1122,28 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                                 ImGui::Unindent();
                             }
 
-                            // РљРЅРѕРїРєР° РїРµСЂРµРіРµРЅРµСЂР°С†РёРё
+                            // Кнопка перегенерации
                             ImGui::Spacing();
                             ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.2f, 0.4f, 0.7f, 1.0f));
                             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.3f, 0.5f, 0.9f, 1.0f));
                             if (ImGui::Button(" Regenerate Collision", ImVec2(-1, 0)))
                             {
-                                if (elem.vhacdModel) { needsRecreate = true; OutputDebugStringA("[Editor] VHACD regeneration requested\n"); }
-                                else { ImGui::SetTooltip("вљ пёЏ Assign a model first!"); }
+                                if (elem.vhacdModel) { needsRecreate = true; }
+                                else { ImGui::SetTooltip("?? Assign a model first!"); }
                             }
                             ImGui::PopStyleColor(2);
 
                             if (elem.vhacdLastHullCount > 0)
-                                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "вњ“ Generated: %d convex hulls", elem.vhacdLastHullCount);
+                                ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), "? Generated: %d convex hulls", elem.vhacdLastHullCount);
 
                             ImGui::Unindent();
                             if (vhacdChanged) needsRecreate = true;
                         }
-                        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-                        // рџ”Ґ РљРћРќР•Р¦ VHACD-Р±Р»РѕРєР°
-                        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+                        // ===========================================================
+                        // ?? КОНЕЦ VHACD-блока
+                        // ===========================================================
 
-                        // рџ”Ґ FIX #3: РЇРІРЅС‹Рµ РїСЂРѕРІРµСЂРєРё С‚РёРїРѕРІ вЂ” VHACD РќР• РїРѕРїР°РґС‘С‚ РІ else
+                        // ?? FIX #3: Явные проверки типов — VHACD НЕ попадёт в else
                         bool sizeChanged = false;
                         if (elem.type == RigidBodyComponent::CompoundElement::Box)
                         {
@@ -1162,11 +1159,11 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                             if (ImGui::DragFloat("Radius", &elem.radius, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
                             if (ImGui::DragFloat("Height", &elem.height, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
                         }
-                        // VHACD, ConvexHull Рё РґСЂСѓРіРёРµ С‚РёРїС‹ РїСЂРѕСЃС‚Рѕ РїСЂРѕРїСѓСЃРєР°СЋС‚ СЌС‚РѕС‚ Р±Р»РѕРє вЂ” РєР°Рє Рё РЅСѓР¶РЅРѕ!
+                        // VHACD, ConvexHull и другие типы просто пропускают этот блок — как и нужно!
 
                         if (sizeChanged) needsRecreate = true;
 
-                        // РљРЅРѕРїРєР° СѓРґР°Р»РµРЅРёСЏ
+                        // Кнопка удаления
                         ImGui::Spacing();
                         if (ImGui::Button("Delete", ImVec2(-1, 0)))
                         {
@@ -1176,7 +1173,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                             break;
                         }
 
-                        // Advanced Offsets (С‚РѕР»СЊРєРѕ РґР»СЏ Box / Cylinder / Capsule)
+                        // Advanced Offsets (только для Box / Cylinder / Capsule)
                         ImGui::Spacing(); ImGui::Separator();
                         ImGui::TextColored(COL_TEXT_DIM, " Advanced Size & Offsets");
                         ImGui::Indent();
@@ -1186,11 +1183,11 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                         {
                             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), " Half-Extents Adjustment");
                             if (ImGui::DragFloat3(" Min Offset (Neg)", &elem.boxOffsetMin.x, 0.05f, -100.0f, 100.0f)) shapeChanged = true;
-                            ImGui::SameLine(); HelpMarker("РЎРґРІРёРіР°РµС‚ РѕС‚СЂРёС†Р°С‚РµР»СЊРЅС‹Рµ РіСЂР°РЅРё");
+                            ImGui::SameLine(); HelpMarker("Сдвигает отрицательные грани");
                             if (ImGui::DragFloat3(" Max Offset (Pos)", &elem.boxOffsetMax.x, 0.05f, -100.0f, 100.0f)) shapeChanged = true;
-                            ImGui::SameLine(); HelpMarker("РЎРґРІРёРіР°РµС‚ РїРѕР»РѕР¶РёС‚РµР»СЊРЅС‹Рµ РіСЂР°РЅРё");
+                            ImGui::SameLine(); HelpMarker("Сдвигает положительные грани");
 
-                            // РљРЅРѕРїРєР° Corner Edit (РѕСЃС‚Р°РІР»СЏРµРј РєР°Рє Р±С‹Р»Рѕ)
+                            // Кнопка Corner Edit (оставляем как было)
                             ImGui::Spacing();
                             bool isThisElemActive = (m_cornerEditActive && m_cornerEditEntity == entity && m_cornerEditElemIndex == (int)i);
                             ImGui::PushStyleColor(ImGuiCol_Button, isThisElemActive ? ImVec4(0.8f, 0.4f, 0.0f, 1) : ImVec4(0.22f, 0.22f, 0.22f, 1));
@@ -1224,13 +1221,13 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
                 if (needsRecreate && rb->body)
                     PhysicsSystem::RefreshRigidBody(registry, entity, rb);
-                needsRecreate = false;  // рџ”Ґ РљР РРўРР§РќРћ: СЃР±СЂРѕСЃ С„Р»Р°РіР°!
+                needsRecreate = false;  // ?? КРИТИЧНО: сброс флага!
             }
             else
             {
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-                // рџ”Ґ Р Р•Р–РРњ РћР”РРќРћР§РќРћР™ РљРћР›Р›РР—РР
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+                // ===============================================================
+                // ?? РЕЖИМ ОДИНОЧНОЙ КОЛЛИЗИИ
+                // ===============================================================
                 ImGui::Separator();
                 ImGui::TextColored(COL_TEXT_DIM, " Mass");
                 ImGui::SetNextItemWidth(-1);
@@ -1240,7 +1237,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 ImGui::Spacing();
                 ImGui::TextColored(COL_TEXT_DIM, " Shape Type");
 
-                // рџ”Ґ FIX #4: РџСЂР°РІРёР»СЊРЅС‹Р№ РјР°СЃСЃРёРІ + IM_ARRAYSIZE РґР»СЏ РѕРґРёРЅРѕС‡РЅС‹С… С„РѕСЂРј
+                // ?? FIX #4: Правильный массив + IM_ARRAYSIZE для одиночных форм
                 const char* shapeNames[] = {
                     "Box", "Sphere", "Cylinder", "Capsule",
                     "Plane", "ConvexHull", "TriangleMesh", "GImpactMesh", "VHACD"
@@ -1254,7 +1251,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
                 ImGui::Spacing();
 
-                // РџРђР РђРњР•РўР Р« Р—РђР’РРЎРЇРў РћРў РўРРџРђ
+                // ПАРАМЕТРЫ ЗАВИСЯТ ОТ ТИПА
                 switch (rb->shapeType)
                 {
                 case RigidBodyComponent::Sphere:
@@ -1328,7 +1325,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 {
                     ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), " Auto-calculated from mesh geometry");
                     auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
-                    if (!meshRenderer || !meshRenderer->model) ImGui::TextColored(COL_RED, "вљ пёЏ No mesh assigned");
+                    if (!meshRenderer || !meshRenderer->model) ImGui::TextColored(COL_RED, "?? No mesh assigned");
                     break;
                 }
                 case RigidBodyComponent::TriangleMesh:
@@ -1346,12 +1343,12 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                     {
                         std::vector<XMFLOAT3> tris; meshRenderer->model->GetRawTriangles(tris);
                         ImGui::TextColored(COL_TEXT_DIM, " Triangles: %zu", tris.size() / 3);
-                        if (tris.size() / 3 > 5000) ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), " вљ  High triangle count!");
+                        if (tris.size() / 3 > 5000) ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.2f, 1.0f), " ? High triangle count!");
                     }
-                    else ImGui::TextColored(COL_RED, "вљ пёЏ No mesh assigned!");
+                    else ImGui::TextColored(COL_RED, "?? No mesh assigned!");
                     break;
                 }
-                // рџ”Ґ FIX #5: Р”РѕР±Р°РІР»РµРЅ РєРµР№СЃ РґР»СЏ VHACD РІ РѕРґРёРЅРѕС‡РЅРѕРј СЂРµР¶РёРјРµ
+                // ?? FIX #5: Добавлен кейс для VHACD в одиночном режиме
                 case RigidBodyComponent::VHACD:
                 {
                     ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), " VHACD: Dynamic concave collision");
@@ -1360,9 +1357,9 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                     if (meshRenderer && meshRenderer->model)
                     {
                         std::vector<XMFLOAT3> tris; meshRenderer->model->GetRawTriangles(tris);
-                        ImGui::TextColored(COL_TEXT_DIM, " Triangles: %zu вЂ” will be decomposed", tris.size() / 3);
+                        ImGui::TextColored(COL_TEXT_DIM, " Triangles: %zu — will be decomposed", tris.size() / 3);
                     }
-                    else ImGui::TextColored(COL_RED, "вљ пёЏ Assign a mesh first!");
+                    else ImGui::TextColored(COL_RED, "?? Assign a mesh first!");
                     break;
                 }
                 case RigidBodyComponent::Plane:
@@ -1379,8 +1376,8 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
                 ImGui::Spacing();
                 ImGui::Checkbox(" Enable CCD##RB", &rb->enableCCD);
-                // рџ”Ґ COLLISION FILTERING
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+                // ?? COLLISION FILTERING
+// ===============================================================
                
             }
         }
@@ -1389,7 +1386,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 	
     if (registry.HasComponent<BuoyancyComponent>(entity))
     {
-        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.30f, 0.20f, 1.0f)); // рџ’љ Р—РµР»РµРЅРѕРІР°С‚С‹Р№ РѕС‚С‚РµРЅРѕРє РґР»СЏ РІРѕРґС‹
+        ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.30f, 0.20f, 1.0f)); // ?? Зеленоватый оттенок для воды
         ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.14f, 0.40f, 0.28f, 1.0f));
         bool open = ImGui::CollapsingHeader("  Buoyancy Component##buoy", ImGuiTreeNodeFlags_DefaultOpen);
         ImGui::PopStyleColor(2);
@@ -1401,12 +1398,12 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
             ImGui::Spacing();
 
-            // в”Ђв”Ђ РџР»РѕС‚РЅРѕСЃС‚СЊ Р¶РёРґРєРѕСЃС‚Рё в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-            ImGui::TextColored(COL_TEXT_DIM, " Fluid Density (kg/mВі)");
+            // -- Плотность жидкости -------------------------------------
+            ImGui::TextColored(COL_TEXT_DIM, " Fluid Density (kg/m?)");
             ImGui::SetNextItemWidth(-1);
             if (ImGui::DragFloat("##FluidDensity", &buoy->fluidDensity, 10.0f, 0.0f, 5000.0f, "%.1f"))
             {
-                // РџР»РѕС‚РЅРѕСЃС‚СЊ РјРѕР¶РЅРѕ РјРµРЅСЏС‚СЊ РЅР° Р»РµС‚Сѓ, РїРµСЂРµСЃРѕР·РґР°РІР°С‚СЊ С‚РµР»Рѕ РЅРµ РЅСѓР¶РЅРѕ
+                // Плотность можно менять на лету, пересоздавать тело не нужно
             }
             ImGui::SameLine();
             if (ImGui::SmallButton("Reset##Density")) buoy->fluidDensity = 1000.0f;
@@ -1414,78 +1411,78 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 
             ImGui::Spacing();
 
-            // в”Ђв”Ђ РћР±СЉС‘Рј РѕР±СЉРµРєС‚Р° в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-            ImGui::TextColored(COL_TEXT_DIM, " Volume (mВі)");
+            // -- Объём объекта ------------------------------------------
+            ImGui::TextColored(COL_TEXT_DIM, " Volume (m?)");
             ImGui::SetNextItemWidth(-1);
             float oldVolume = buoy->volume;
             if (ImGui::DragFloat("##Volume", &buoy->volume, 0.05f, 0.01f, 1000.0f, "%.2f"))
             {
-                // РћР±СЉС‘Рј РІР»РёСЏРµС‚ РЅР° СЃРёР»Сѓ РђСЂС…РёРјРµРґР° вЂ” РјРѕР¶РЅРѕ РјРµРЅСЏС‚СЊ РґРёРЅР°РјРёС‡РµСЃРєРё
+                // Объём влияет на силу Архимеда — можно менять динамически
             }
             ImGui::SameLine();
             if (ImGui::SmallButton("Auto##Volume"))
             {
-                // рџ”№ РџРѕРїС‹С‚РєР° Р°РІС‚Рѕ-СЂР°СЃС‡С‘С‚Р° РёР· РјРµС€Р° (РµСЃР»Рё РµСЃС‚СЊ)
+                // ?? Попытка авто-расчёта из меша (если есть)
                 auto* mesh = registry.GetComponent<MeshRendererComponent>(entity);
                 if (mesh && mesh->model)
                 {
                     XMFLOAT3 min, max;
                     mesh->model->GetBoundingBox(&min, &max);
                     buoy->volume = (max.x - min.x) * (max.y - min.y) * (max.z - min.z);
-                    buoy->height = max.y - min.y; // РћР±РЅРѕРІР»СЏРµРј Рё РІС‹СЃРѕС‚Сѓ
+                    buoy->height = max.y - min.y; // Обновляем и высоту
                 }
             }
 
             ImGui::Spacing();
 
-            // в”Ђв”Ђ Р’С‹СЃРѕС‚Р° РѕР±СЉРµРєС‚Р° (РґР»СЏ СЂР°СЃС‡С‘С‚Р° % РїРѕРіСЂСѓР¶РµРЅРёСЏ) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-            ImGui::TextColored(COL_TEXT_DIM, " Height (m) вЂ” РґР»СЏ СЂР°СЃС‡С‘С‚Р° РїРѕРіСЂСѓР¶РµРЅРёСЏ");
+            // -- Высота объекта (для расчёта % погружения) ---------------
+            ImGui::TextColored(COL_TEXT_DIM, " Height (m) — для расчёта погружения");
             ImGui::SetNextItemWidth(-1);
             if (ImGui::DragFloat("##Height", &buoy->height, 0.05f, 0.01f, 100.0f, "%.2f"))
             {
-                // Р’С‹СЃРѕС‚Р° РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С‚РѕР»СЊРєРѕ РґР»СЏ СЂР°СЃС‡С‘С‚Р° submersionRatio
+                // Высота используется только для расчёта submersionRatio
             }
 
             ImGui::Spacing();
 
-            // в”Ђв”Ђ РњРЅРѕР¶РёС‚РµР»СЊ РїР»Р°РІСѓС‡РµСЃС‚Рё (С‚РѕРЅРєР°СЏ РЅР°СЃС‚СЂРѕР№РєР°) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-            ImGui::TextColored(COL_TEXT_DIM, " Buoyancy Multiplier (С‚РѕРЅРєР°СЏ РЅР°СЃС‚СЂРѕР№РєР°)");
+            // -- Множитель плавучести (тонкая настройка) -----------------
+            ImGui::TextColored(COL_TEXT_DIM, " Buoyancy Multiplier (тонкая настройка)");
             ImGui::SetNextItemWidth(-1);
             if (ImGui::SliderFloat("##BuoyMult", &buoy->buoyancyMultiplier, 0.1f, 2.0f, "%.2f"))
             {
-                // <1.0 = С‚РѕРЅРµС‚ Р±С‹СЃС‚СЂРµРµ, >1.0 = РІСЃРїР»С‹РІР°РµС‚ Р°РєС‚РёРІРЅРµРµ
+                // <1.0 = тонет быстрее, >1.0 = всплывает активнее
             }
             ImGui::SameLine();
             if (ImGui::SmallButton("Reset##Mult")) buoy->buoyancyMultiplier = 1.0f;
-            ImGui::TextColored(COL_TEXT_DIM, "  0.5 = С‚СЏР¶РµР»РµРµ, 1.0 = РЅРѕСЂРјР°Р»СЊРЅРѕ, 1.5 = Р»РµРіС‡Рµ");
+            ImGui::TextColored(COL_TEXT_DIM, "  0.5 = тяжелее, 1.0 = нормально, 1.5 = легче");
 
             ImGui::Spacing();
             ImGui::Separator();
             ImGui::Spacing();
 
-            // в”Ђв”Ђ РћРўР›РђР”РћР§РќРђРЇ РРќР¤РћР РњРђР¦РРЇ (С‚РѕР»СЊРєРѕ С‡С‚РµРЅРёРµ) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- ОТЛАДОЧНАЯ ИНФОРМАЦИЯ (только чтение) ------------------
             ImGui::TextColored(COL_TEXT_DIM, " Debug Info (read-only)");
             ImGui::Indent();
             ImGui::Text("Smoothed Submersion: %.3f", buoy->smoothedSubmersion);
-            // РњРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РІС‹РІРѕРґ С‚РµРєСѓС‰РµР№ СЃРёР»С‹, РµСЃР»Рё РїРµСЂРµРґР°С‘С€СЊ РµС‘ РёР· PhysicsSystem
+            // Можно добавить вывод текущей силы, если передаёшь её из PhysicsSystem
             ImGui::Unindent();
 
             ImGui::Spacing();
 
-            // в”Ђв”Ђ РљРЅРѕРїРєР° СѓРґР°Р»РµРЅРёСЏ РєРѕРјРїРѕРЅРµРЅС‚Р° в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Кнопка удаления компонента -----------------------------
             ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
             ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
             if (ImGui::Button(" Remove Buoyancy Component", ImVec2(-1, 0)))
             {
                 registry.RemoveComponent<BuoyancyComponent>(entity);
-                // РќРµ РЅСѓР¶РЅРѕ РїРµСЂРµСЃРѕР·РґР°РІР°С‚СЊ С„РёР·РёС‡РµСЃРєРѕРµ С‚РµР»Рѕ вЂ” РїР»Р°РІСѓС‡РµСЃС‚СЊ РЅРµ РІ Bullet
+                // Не нужно пересоздавать физическое тело — плавучесть не в Bullet
             }
             ImGui::PopStyleColor(2);
         }
     }
 
 
-    // в”Ђв”Ђ РљРЅРѕРїРєР° "+ Add Component" в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Кнопка "+ Add Component" ----------------------------------------------
     ImGui::Spacing();
     ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.16f, 0.16f, 0.16f, 1.0f));
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.25f, 0.25f, 0.25f, 1.0f));
@@ -1501,7 +1498,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
         ImGui::Separator();
         ImGui::Spacing();
 
-        // в”Ђв”Ђ Submarine Component в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // -- Submarine Component --------------------------------------------------
         {
             const bool hasSub = registry.HasComponent<SubmarineComponent>(entity);
             ImGui::BeginDisabled(hasSub);
@@ -1565,7 +1562,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
             }
         }
 
-        // в”Ђв”Ђ Light Component в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // -- Light Component -----------------------------------------------------
         {
             const bool hasLight = registry.HasComponent<LightComponent>(entity);
             ImGui::BeginDisabled(hasLight);
@@ -1582,7 +1579,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
             }
         }
 
-        // в”Ђв”Ђ RigidBody Component в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // -- RigidBody Component -------------------------------------------------
         {
             const bool hasRb = registry.HasComponent<RigidBodyComponent>(entity);
             ImGui::BeginDisabled(hasRb);
@@ -1602,7 +1599,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
             }
         }
 
-        // в”Ђв”Ђ Buoyancy Component в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // -- Buoyancy Component --------------------------------------------------
         {
             const bool hasBuoy = registry.HasComponent<BuoyancyComponent>(entity);
             ImGui::BeginDisabled(hasBuoy);
@@ -1619,7 +1616,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
             }
         }
 
-        // в”Ђв”Ђ Compartment Component в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // -- Compartment Component -----------------------------------------------
         {
             const bool hasComp = registry.HasComponent<CompartmentComponent>(entity);
             ImGui::BeginDisabled(hasComp);
@@ -1644,7 +1641,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 }
 
 //=============================================================================
-// RenderSidebar вЂ” С„РёРєСЃРёСЂРѕРІР°РЅРЅР°СЏ РїСЂР°РІР°СЏ Р±РѕРєРѕРІР°СЏ РїР°РЅРµР»СЊ РІ СЃС‚РёР»Рµ UE5
+// RenderSidebar — фиксированная правая боковая панель в стиле UE5
 //=============================================================================
 void EditorUI::RenderSidebar(SceneManager& sceneManager)
 {
@@ -1675,7 +1672,7 @@ void EditorUI::RenderSidebar(SceneManager& sceneManager)
     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.07f, 0.07f, 0.07f, 1.0f));
     ImGui::BeginChild("##SidebarHeader", ImVec2(-1, headerH), false);
     ImGui::SetCursorPos(ImVec2(10, std::floor(9.0f * ScaleY())));
-    ImGui::TextColored(COL_ACCENT, "в—€");
+    ImGui::TextColored(COL_ACCENT, "?");
     ImGui::SameLine();
     ImGui::Text("Scene Editor");
     ImGui::SameLine(sidebarW - std::floor(70.0f * ScaleX()));
@@ -1702,12 +1699,12 @@ void EditorUI::RenderSidebar(SceneManager& sceneManager)
             ImGui::EndTabItem();
         }
 
-        if (ImGui::BeginTabItem("рџ”¬ Debug"))
+        if (ImGui::BeginTabItem("?? Debug"))
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
 
-            // РџРѕР»СѓС‡Р°РµРј РЅР°СЃС‚СЂРѕР№РєРё РёР· ApplicationClass (СЃРј. РЅРёР¶Рµ)
-            extern PhysicsDebugSettings g_physicsDebugSettings;  // Р’СЂРµРјРµРЅРЅС‹Р№ С…Р°Рє
+            // Получаем настройки из ApplicationClass (см. ниже)
+            extern PhysicsDebugSettings g_physicsDebugSettings;  // Временный хак
             RenderPhysicsDebugPanel();
 
             ImGui::PopStyleVar();
@@ -1732,6 +1729,7 @@ void EditorUI::RenderSidebar(SceneManager& sceneManager)
         {
             ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 6));
             RenderFogPanel(sceneManager);
+
             ImGui::PopStyleVar();
             ImGui::EndTabItem();
         }
@@ -1774,15 +1772,15 @@ void EditorUI::RenderSidebar(SceneManager& sceneManager)
         switch (m_selectedType)
         {
         case SelectedType::Object:
-            ImGui::TextColored(COL_ACCENT, "в—€"); ImGui::SameLine();
+            ImGui::TextColored(COL_ACCENT, "?"); ImGui::SameLine();
             ImGui::Text("Object  entity=%u", m_selectedEntity);
             break;
         case SelectedType::Light:
-            ImGui::TextColored(ImVec4(1, 0.9f, 0.3f, 1), "в—‰"); ImGui::SameLine();
+            ImGui::TextColored(ImVec4(1, 0.9f, 0.3f, 1), "?"); ImGui::SameLine();
             ImGui::Text("Light #%d", m_selectedLegacyIndex);
             break;
         case SelectedType::Sprite:
-            ImGui::TextColored(ImVec4(0.3f, 0.8f, 1, 1), "в—§"); ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.3f, 0.8f, 1, 1), "?"); ImGui::SameLine();
             ImGui::Text("Sprite #%d", m_selectedLegacyIndex);
             break;
         default:
@@ -1802,7 +1800,7 @@ void EditorUI::SetScenePreviewTexture(ID3D11ShaderResourceView* srv)
 }
 
 //=============================================================================
-// RenderScenePreview вЂ” РїРѕРєР°Р·С‹РІР°РµС‚ render-to-texture РІ РѕРєРѕС€РєРµ РїРѕРІРµСЂС… СЃС†РµРЅС‹
+// RenderScenePreview — показывает render-to-texture в окошке поверх сцены
 //=============================================================================
 void EditorUI::RenderScenePreview()
 {
@@ -1837,7 +1835,7 @@ void EditorUI::RenderScenePreview()
 }
 
 //=============================================================================
-// RenderSpawnPanel вЂ” РїР°РЅРµР»СЊ РґР»СЏ СЃРїР°РІРЅР° РѕР±СЉРµРєС‚РѕРІ
+// RenderSpawnPanel — панель для спавна объектов
 //=============================================================================
 void EditorUI::RenderSpawnPanel(SceneManager& sceneManager)
 {
@@ -1849,13 +1847,13 @@ void EditorUI::RenderSpawnPanel(SceneManager& sceneManager)
     ImGui::SetNextItemWidth(-1);
     ImGui::InputText("##SpawnModel", m_spawnModelPath, sizeof(m_spawnModelPath));
 
-    // РџСЂРѕРІРµСЂСЏРµРј СЂР°СЃС€РёСЂРµРЅРёРµ вЂ” РґР»СЏ GLB С‚РµРєСЃС‚СѓСЂР° РЅРµ РЅСѓР¶РЅР°
+    // Проверяем расширение — для GLB текстура не нужна
     const std::string modelExt = fs::path(m_spawnModelPath).extension().string();
     const bool isGLB = (modelExt == ".glb" || modelExt == ".gltf");
 
     ImGui::Spacing();
 
-    // Р”Р»СЏ GLB РїРѕРєР°Р·С‹РІР°РµРј РїРѕРґСЃРєР°Р·РєСѓ РІРјРµСЃС‚Рѕ РїРѕР»СЏ С‚РµРєСЃС‚СѓСЂС‹
+    // Для GLB показываем подсказку вместо поля текстуры
     if (isGLB)
     {
         ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f),
@@ -1887,7 +1885,7 @@ void EditorUI::RenderSpawnPanel(SceneManager& sceneManager)
 
     ImGui::Spacing();
 
-    // РџСЂРµСЃРµС‚С‹ С‚РµРєСЃС‚СѓСЂ С‚РѕР»СЊРєРѕ РґР»СЏ РЅРµ-GLB РјРѕРґРµР»РµР№
+    // Пресеты текстур только для не-GLB моделей
     if (!isGLB)
     {
         ImGui::TextColored(COL_TEXT_DIM, " Texture presets");
@@ -1909,7 +1907,7 @@ void EditorUI::RenderSpawnPanel(SceneManager& sceneManager)
     {
         m_spawnRequest.pending = true;
         m_spawnRequest.modelPath = m_spawnModelPath;
-        // Р”Р»СЏ GLB РїРµСЂРµРґР°С‘Рј РїСѓСЃС‚РѕР№ РїСѓС‚СЊ вЂ” РјРѕРґРµР»СЊ РІРѕР·СЊРјС‘С‚ РІС€РёС‚С‹Рµ С‚РµРєСЃС‚СѓСЂС‹
+        // Для GLB передаём пустой путь — модель возьмёт вшитые текстуры
         m_spawnRequest.texturePath = isGLB ? "" : m_spawnTexturePath;
         m_spawnRequest.posX = m_spawnPos[0];
         m_spawnRequest.posY = m_spawnPos[1];
@@ -1920,45 +1918,54 @@ void EditorUI::RenderSpawnPanel(SceneManager& sceneManager)
 
 void EditorUI::RenderFogPanel(SceneManager& sceneManager)
 {
-    ImGui::Spacing();
-    SectionHeader("Fog Settings");
-    ImGui::Spacing();
+    auto& world = sceneManager.GetWorldSettings();
 
-    // в”Ђв”Ђ РџРµСЂРµРєР»СЋС‡Р°С‚РµР»СЊ С‚СѓРјР°РЅР° в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-    bool fogEnabled = sceneManager.GetFogSettings().enabled;
-    if (ImGui::Checkbox("Enable Fog", &fogEnabled))
-        sceneManager.GetFogSettings().enabled = fogEnabled;
+    ImGui::Text("Skybox HDR");
+    ImGui::SetNextItemWidth(-1.0f);
 
-    ImGui::Spacing();
+    ImGui::InputText("##SkyboxPath", m_skyboxPathBuf, sizeof(m_skyboxPathBuf));
 
-    // Р‘Р»РѕРєРёСЂСѓРµРј РѕСЃС‚Р°Р»СЊРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё, РµСЃР»Рё С‚СѓРјР°РЅ РІС‹РєР»СЋС‡РµРЅ
-    ImGui::BeginDisabled(!fogEnabled);
+    if (ImGui::Button("Apply Skybox"))
+    {
+        world.skyboxPath = m_skyboxPathBuf;
+        world.skyboxReloadPending = true;
+    }
 
-    auto fogColor = sceneManager.GetFogColor();
-    auto fogStart = sceneManager.GetFogStart();
-    auto fogEnd = sceneManager.GetFogEnd();
+    ImGui::SliderFloat("Sky Exposure", &world.skyExposure, 0.1f, 10.0f);
 
-    float col[3] = { fogColor.x, fogColor.y, fogColor.z };
-    ImGui::TextColored(COL_TEXT_DIM, " Fog Color");
-    ImGui::SetNextItemWidth(-1);
-    if (ImGui::ColorEdit3("##FogColor", col))
-        sceneManager.SetFogColor({ col[0], col[1], col[2] });
+    bool sunChanged = false;
+    sunChanged |= ImGui::SliderFloat("Sun Dir X", &world.sunDirection.x, -1.0f, 1.0f);
+    sunChanged |= ImGui::SliderFloat("Sun Dir Y", &world.sunDirection.y, -1.0f, 1.0f);
+    sunChanged |= ImGui::SliderFloat("Sun Dir Z", &world.sunDirection.z, -1.0f, 1.0f);
 
-    ImGui::Spacing();
-    ImGui::TextColored(COL_TEXT_DIM, " Fog Start");
-    ImGui::SetNextItemWidth(-1);
-    if (ImGui::DragFloat("##FogStart", &fogStart, 0.5f, 0.0f, 1000.0f))
-        sceneManager.SetFogStart(fogStart);
+    (void)sunChanged;
 
-    ImGui::Spacing();
-    ImGui::TextColored(COL_TEXT_DIM, " Fog End");
-    ImGui::SetNextItemWidth(-1);
-    if (ImGui::DragFloat("##FogEnd", &fogEnd, 0.5f, 0.0f, 1000.0f))
-        sceneManager.SetFogEnd(fogEnd);
+    ImGui::SliderFloat("Sun Intensity", &world.sunIntensity, 0.0f, 20.0f);
+
+    ImGui::SliderFloat("Ambient Strength", &world.ambientStrength, 0.0f, 2.0f);
+
+    ImGui::Checkbox("Enabled Fog", &world.fogEnabled);
+
+    ImGui::BeginDisabled(!world.fogEnabled);
+
+    float col[3] = { world.fogColor.x, world.fogColor.y, world.fogColor.z };
+    if (ImGui::ColorEdit3("Fog Color", col))
+    {
+        world.fogColor = { col[0], col[1], col[2] };
+    }
+
+    if (ImGui::DragFloat("Fog Start", &world.fogStart, 0.5f, 0.0f, 1000.0f))
+    {
+        world.fogEnd = (std::max)(world.fogEnd, world.fogStart + 0.1f);
+    }
+
+    if (ImGui::DragFloat("Fog End", &world.fogEnd, 0.5f, 0.0f, 1000.0f))
+    {
+        world.fogEnd = (std::max)(world.fogEnd, world.fogStart + 0.1f);
+    }
 
     ImGui::EndDisabled();
 }
-
 //=============================================================================
 // RenderSpriteProperties
 //=============================================================================
@@ -2006,31 +2013,31 @@ void EditorUI::RenderLightPropertiesByEntity(SceneManager& sceneManager, Entity 
 
     ImGui::Text("Light Properties");
 
-    // Р¦РІРµС‚
+    // Цвет
     float color[4] = { light->color.x, light->color.y, light->color.z, light->color.w };
     if (ImGui::ColorEdit4("Color", color))
     {
         light->color = { color[0], color[1], color[2], color[3] };
     }
 
-    // РџРѕР·РёС†РёСЏ (РµСЃР»Рё РЅРµ РїСЂРёРІСЏР·Р°РЅ)
+    // Позиция (если не привязан)
     if (light->attachedTo == INVALID_ENTITY)
     {
         float pos[3] = { transform->position.x, transform->position.y, transform->position.z };
         if (ImGui::DragFloat3("Position", pos, 0.1f))
         {
             transform->position = { pos[0], pos[1], pos[2] };
-            // РћР±РЅРѕРІР»СЏРµРј Рё РІРёР·СѓР°Р»СЊРЅСѓСЋ СЃС„РµСЂСѓ, РµСЃР»Рё РЅСѓР¶РЅРѕ
+            // Обновляем и визуальную сферу, если нужно
         }
     }
 
-    // РђРєС‚РёРІРЅРѕСЃС‚СЊ
+    // Активность
     ImGui::Checkbox("Enabled", &light->enabled);
 
-    // РљРЅРѕРїРєР° СѓРґР°Р»РµРЅРёСЏ
+    // Кнопка удаления
     if (ImGui::Button("Delete Light"))
     {
-        // Р—Р°РїСЂРѕСЃ РЅР° СѓРґР°Р»РµРЅРёРµ (Р»СѓС‡С€Рµ С‡РµСЂРµР· РѕС‡РµСЂРµРґСЊ, С‡С‚РѕР±С‹ РЅРµ СѓРґР°Р»РёС‚СЊ РІРѕ РІСЂРµРјСЏ РёС‚РµСЂР°С†РёРё)
+        // Запрос на удаление (лучше через очередь, чтобы не удалить во время итерации)
         registry.DestroyEntity(lightEntity);
     }
 }
@@ -2050,18 +2057,18 @@ void EditorUI::RenderContentBrowser()
 
     const std::string query = m_searchQuery;
 
-    // вњ… FIX: РќРѕСЂРјР°Р»РёР·Р°С†РёСЏ РїСѓС‚Рё
+    // ? FIX: Нормализация пути
     std::string relativeDir = m_currentDir.string();
     if (relativeDir == ".") {
         relativeDir = "";
     }
 
-    // вњ… DEBUG: Р’С‹РІРѕРґРёРј РїСѓС‚Рё РїРµСЂРµРґ РїРѕРёСЃРєРѕРј
+    // ? DEBUG: Выводим пути перед поиском
 \
 
     auto entries = m_fileSystem->GetFilteredEntries(relativeDir, query, m_filterExtensions[m_activeFilterIndex]);
 
-    // вњ… DEBUG: РЎРєРѕР»СЊРєРѕ С„Р°Р№Р»РѕРІ РЅР°Р№РґРµРЅРѕ
+    // ? DEBUG: Сколько файлов найдено
 
 
     RenderFileBrowserList(entries);
@@ -2071,7 +2078,7 @@ void EditorUI::RenderFileBrowserToolbar()
 {
     const float btnW = std::floor(28.0f * ScaleX());
 
-    // вњ… FIX: РџСЂРѕРІРµСЂСЏРµРј, РјРѕР¶РµРј Р»Рё РёРґС‚Рё РЅР°Р·Р°Рґ
+    // ? FIX: Проверяем, можем ли идти назад
     bool canGoBack = !m_currentDir.empty() && m_currentDir != ".";
 
     ImGui::BeginDisabled(!canGoBack);
@@ -2080,17 +2087,17 @@ void EditorUI::RenderFileBrowserToolbar()
         fs::path currentPath(m_currentDir);
         fs::path parentPath = currentPath.parent_path();
 
-        // вњ… FIX: Р•СЃР»Рё parent РїСѓСЃС‚РѕР№ вЂ” РІРѕР·РІСЂР°С‰Р°РµРјСЃСЏ РІ РєРѕСЂРµРЅСЊ (РїСѓСЃС‚Р°СЏ СЃС‚СЂРѕРєР°)
+        // ? FIX: Если parent пустой — возвращаемся в корень (пустая строка)
         m_currentDir = parentPath.empty() ? "" : parentPath.generic_string();
 
-        // вњ… DEBUG: Р’С‹РІРѕРґРёРј РїСѓС‚СЊ РїРѕСЃР»Рµ РЅР°РІРёРіР°С†РёРё
+        // ? DEBUG: Выводим путь после навигации
         OutputDebugStringA(("[NAV] Back to: '" + m_currentDir.string() + "'\n").c_str());
 
-        // вњ… FIX: Refresh() РќР• РЅСѓР¶РµРЅ! РљСЌС€ СѓР¶Рµ Р·Р°РіСЂСѓР¶РµРЅ
+        // ? FIX: Refresh() НЕ нужен! Кэш уже загружен
         // m_fileSystem->Refresh(); 
     }
     if (ImGui::IsItemHovered() && !canGoBack) {
-        ImGui::SetTooltip("Р’С‹ РІ РєРѕСЂРЅРµРІРѕР№ РґРёСЂРµРєС‚РѕСЂРёРё");
+        ImGui::SetTooltip("Вы в корневой директории");
     }
     ImGui::EndDisabled();
 
@@ -2215,15 +2222,15 @@ void EditorUI::OnFileSelected(const FileEntry* entry)
     if (!entry) return;
     const std::string ext = fs::path(entry->name).extension().string();
 
-    // РњРѕРґРµР»Рё вЂ” Р·Р°РїРѕР»РЅСЏРµРј РїРѕР»Рµ Model path
+    // Модели — заполняем поле Model path
     if (ext == ".obj" || ext == ".fbx" || ext == ".glb" || ext == ".gltf")
         strncpy_s(m_spawnModelPath, sizeof(m_spawnModelPath), entry->path.c_str(), _TRUNCATE);
-    // РўРµРєСЃС‚СѓСЂС‹ вЂ” Р·Р°РїРѕР»РЅСЏРµРј РїРѕР»Рµ Texture path
+    // Текстуры — заполняем поле Texture path
     else if (ext == ".tga" || ext == ".png" || ext == ".jpg" || ext == ".dds")
         strncpy_s(m_spawnTexturePath, sizeof(m_spawnTexturePath), entry->path.c_str(), _TRUNCATE);
 }
 //=============================================================================
-// RenderKnifeTool вЂ” РёРЅСЃС‚СЂСѓРјРµРЅС‚ СЂР°Р·СЂРµР·Р°РЅРёСЏ (clip plane)
+// RenderKnifeTool — инструмент разрезания (clip plane)
 //=============================================================================
 void EditorUI::RenderKnifeTool(SceneManager& sceneManager, ClipPlaneShaderClass* clipShader)
 {
@@ -2262,7 +2269,7 @@ void EditorUI::RenderKnifeTool(SceneManager& sceneManager, ClipPlaneShaderClass*
 }
 
 //=============================================================================
-// RenderShaderSelector вЂ” РІС‹Р±РѕСЂ С€РµР№РґРµСЂР° РґР»СЏ РІС‹РґРµР»РµРЅРЅРѕРіРѕ РѕР±СЉРµРєС‚Р°
+// RenderShaderSelector — выбор шейдера для выделенного объекта
 //=============================================================================
 void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
 {
@@ -2312,7 +2319,7 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
         if (ImGui::Button("Refresh List", ImVec2(-1, 0)))
             RefreshShaderList();
 
-        // в”Ђв”Ђ РЎРµРєС†РёСЏ С‚РµРєСЃС‚СѓСЂ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+        // -- Секция текстур ----------------------------------------------------
         if (hasObject)
         {
             ImGui::Spacing();
@@ -2321,21 +2328,21 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
             SectionHeader("Textures");
             ImGui::Spacing();
 
-            // РџСЂРѕРІРµСЂСЏРµРј вЂ” РµСЃС‚СЊ Р»Рё Сѓ РјРѕРґРµР»Рё РІС€РёС‚С‹Рµ (embedded) С‚РµРєСЃС‚СѓСЂС‹ РёР· GLB
+            // Проверяем — есть ли у модели вшитые (embedded) текстуры из GLB
             auto* mesh = sceneManager.GetECSRegistry().GetComponent<MeshRendererComponent>(m_selectedEntity);
             const bool hasEmbedded = mesh && mesh->model && mesh->model->IsEmbeddedFormat();
 
             if (hasEmbedded)
             {
-                // в”Ђв”Ђ GLB: С‚РµРєСЃС‚СѓСЂС‹ СѓР¶Рµ РІС€РёС‚С‹ вЂ” РїРѕРєР°Р·С‹РІР°РµРј СЃС‚Р°С‚СѓСЃ РїРѕ РєР°Р¶РґРѕРјСѓ РјРµС€Сѓ в”Ђв”Ђ
+                // -- GLB: текстуры уже вшиты — показываем статус по каждому мешу --
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.4f, 0.9f, 0.4f, 1.0f));
                 ImGui::TextWrapped("  GLB embedded textures detected.");
                 ImGui::PopStyleColor();
-                ImGui::TextColored(COL_TEXT_DIM, "  No paths needed вЂ” textures are");
+                ImGui::TextColored(COL_TEXT_DIM, "  No paths needed — textures are");
                 ImGui::TextColored(COL_TEXT_DIM, "  loaded automatically from the file.");
                 ImGui::Spacing();
 
-                // РџРѕРєР°Р·С‹РІР°РµРј СЃРєРѕР»СЊРєРѕ РјРµС€РµР№ Рё РєР°РєРёРµ СЃР»РѕС‚С‹ Р·Р°РїРѕР»РЅРµРЅС‹
+                // Показываем сколько мешей и какие слоты заполнены
                 const auto& parts = mesh->model->GetMeshParts();
                 ImGui::TextColored(COL_TEXT_DIM, "  Meshes: %d", (int)parts.size());
                 for (int pi = 0; pi < (int)parts.size(); ++pi)
@@ -2355,14 +2362,14 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
             }
             else
             {
-                // в”Ђв”Ђ РћР±С‹С‡РЅР°СЏ РјРѕРґРµР»СЊ (OBJ/FBX) вЂ” СЂСѓС‡РЅРѕР№ РІРІРѕРґ РїСѓС‚РµР№ С‚РµРєСЃС‚СѓСЂ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+                // -- Обычная модель (OBJ/FBX) — ручной ввод путей текстур --------
                 const bool isPBR = (m_selectedShaderIndex >= 0 &&
                     m_selectedShaderIndex < (int)m_shaderNames.size() &&
                     m_shaderNames[m_selectedShaderIndex] == "pbr");
 
-                // РЎР»РѕС‚ 0
+                // Слот 0
                 ImGui::TextColored(COL_TEXT_DIM, isPBR ? " Albedo (slot 0)" : " Texture (slot 0)");
-                ImGui::SetNextItemWidth(200.0f); // РўРµСЃС‚РѕРІРѕРµ Р·РЅР°С‡РµРЅРёРµ
+                ImGui::SetNextItemWidth(200.0f); // Тестовое значение
                 ImGui::InputText("##Tex0Path", m_tex0PathBuf, sizeof(m_tex0PathBuf));
                 ImGui::SameLine(0, 4);
                 ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
@@ -2373,7 +2380,7 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
 
                 ImGui::Spacing();
 
-                // РЎР»РѕС‚ 1
+                // Слот 1
                 ImGui::TextColored(COL_TEXT_DIM, " Normal Map (slot 1)");
                 ImGui::SetNextItemWidth(-std::floor(60.0f * ScaleX()) - 4.0f);
                 ImGui::InputText("##Tex1Path", m_tex1PathBuf, sizeof(m_tex1PathBuf));
@@ -2384,7 +2391,7 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
                     sceneManager.SetObjectTexture(m_selectedEntity, 1, m_tex1PathBuf, m_device, m_context);
                 ImGui::PopStyleColor(2);
 
-                // РЎР»РѕС‚С‹ 2 Рё 3 вЂ” С‚РѕР»СЊРєРѕ РґР»СЏ PBR
+                // Слоты 2 и 3 — только для PBR
                 if (isPBR)
                 {
                     ImGui::Spacing();
@@ -2411,9 +2418,9 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
                         sceneManager.SetObjectTexture(m_selectedEntity, 3, m_tex3PathBuf, m_device, m_context);
                     ImGui::PopStyleColor(2);
 
-                    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-                    // РќРђРЎРўР РћР™РљР РЎРўР•РљР›Рђ
-                    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+                    // ======================================================
+                    // НАСТРОЙКИ СТЕКЛА
+                    // ======================================================
                     ImGui::Spacing();
                     ImGui::Separator();
                     ImGui::Spacing();
@@ -2485,7 +2492,7 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
     {
         if (!jointComp)
         {
-            // РљРЅРѕРїРєР° РґРѕР±Р°РІРёС‚СЊ РєРѕРјРїРѕРЅРµРЅС‚
+            // Кнопка добавить компонент
             if (ImGui::Button("Add Joint Connection"))
             {
                 JointConnectionComponent newComp{};
@@ -2495,11 +2502,11 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
         }
         else
         {
-            // в”Ђв”Ђ Р’С‹Р±РѕСЂ С†РµР»РµРІРѕРіРѕ РѕР±СЉРµРєС‚Р° в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Выбор целевого объекта ----------------------------------------
             ImGui::Text("Target Entity:");
             ImGui::SameLine();
 
-            // РџРѕРєР°Р·С‹РІР°РµРј С‚РµРєСѓС‰СѓСЋ С†РµР»СЊ РёР»Рё "None"
+            // Показываем текущую цель или "None"
             std::string targetName = "None";
             if (jointComp->targetEntity != INVALID_ENTITY)
             {
@@ -2508,11 +2515,11 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
 
             if (ImGui::Button(targetName.c_str()))
             {
-                // РћС‚РєСЂС‹РІР°РµРј СЃРїРёСЃРѕРє РІСЃРµС… РѕР±СЉРµРєС‚РѕРІ
+                // Открываем список всех объектов
                 ImGui::OpenPopup("SelectTargetPopup");
             }
 
-            // Popup СЃРѕ СЃРїРёСЃРєРѕРј РѕР±СЉРµРєС‚РѕРІ
+            // Popup со списком объектов
             if (ImGui::BeginPopup("SelectTargetPopup"))
             {
                 auto& allTransforms = registry.GetComponents<TransformComponent>();
@@ -2520,15 +2527,15 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
 
                 for (auto& [entity, transform] : allTransforms)
                 {
-                    if (entity == selectedEntity) continue; // РџСЂРѕРїСѓСЃРєР°РµРј СЃРµР±СЏ
+                    if (entity == selectedEntity) continue; // Пропускаем себя
 
-                    // РџСЂРѕРІРµСЂСЏРµРј РµСЃС‚СЊ Р»Рё RigidBody
+                    // Проверяем есть ли RigidBody
                     if (!allRigidBodies.Has(entity)) continue;
 
                     std::string entityName = "Entity " + std::to_string(entity);
                     if (ImGui::Selectable(entityName.c_str()))
                     {
-                        // Р•СЃР»Рё РґР¶РѕР№РЅС‚ СѓР¶Рµ СЃРѕР·РґР°РЅ вЂ” СѓРґР°Р»СЏРµРј РµРіРѕ
+                        // Если джойнт уже создан — удаляем его
                         if (jointComp->joint)
                         {
                             JointConnectionSystem::RemoveJoint(registry, *jointComp);
@@ -2541,7 +2548,7 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
                 ImGui::EndPopup();
             }
 
-            // РљРЅРѕРїРєР° РѕС‡РёСЃС‚РёС‚СЊ РІС‹Р±РѕСЂ
+            // Кнопка очистить выбор
             ImGui::SameLine();
             if (jointComp->targetEntity != INVALID_ENTITY && ImGui::SmallButton("Clear"))
             {
@@ -2557,17 +2564,17 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
 
             ImGui::Separator();
 
-            // в”Ђв”Ђ Pivot A (Р»РѕРєР°Р»СЊРЅС‹Рµ РєРѕРѕСЂРґРёРЅР°С‚С‹ СЌС‚РѕРіРѕ РѕР±СЉРµРєС‚Р°) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Pivot A (локальные координаты этого объекта) -----------------
             ImGui::Text("Pivot A (This):");
             ImGui::DragFloat3("##PivotA", &jointComp->pivotA[0], 0.1f);
 
-            // в”Ђв”Ђ Pivot B (Р»РѕРєР°Р»СЊРЅС‹Рµ РєРѕРѕСЂРґРёРЅР°С‚С‹ С†РµР»Рё) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Pivot B (локальные координаты цели) --------------------------
             ImGui::Text("Pivot B (Target):");
             ImGui::DragFloat3("##PivotB", &jointComp->pivotB[0], 0.1f);
 
             ImGui::Separator();
 
-            // в”Ђв”Ђ РџР°СЂР°РјРµС‚СЂС‹ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Параметры ----------------------------------------------------
             ImGui::DragFloat("Break Force", &jointComp->breakForce, 1000.0f, 0.0f, 1000000.0f);
             ImGui::Checkbox("Disable Collisions", &jointComp->disableCollisions);
             ImGui::Checkbox("Show Gizmo", &jointComp->showGizmo);
@@ -2576,7 +2583,7 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
 
             ImGui::Separator();
 
-            // в”Ђв”Ђ РЎС‚Р°С‚СѓСЃ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Статус -------------------------------------------------------
             ImGui::Text("Status:");
             ImGui::SameLine();
 
@@ -2588,15 +2595,15 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
             {
                 ImGui::TextColored(ImVec4(0, 1, 0, 1), "Connected");
 
-                // РџРѕРєР°Р·С‹РІР°РµРј С‚РµРєСѓС‰РёР№ РёРјРїСѓР»СЊСЃ
+                // Показываем текущий импульс
                 btScalar impulse = 0.f;
-                if (jointComp->joint->getJointFeedback()) // РёР»Рё РїСЂРѕРІРµСЂРєР° РІРЅСѓС‚СЂРµРЅРЅРµРіРѕ С„Р»Р°РіР°
+                if (jointComp->joint->getJointFeedback()) // или проверка внутреннего флага
                 {
                     impulse = jointComp->joint->getAppliedImpulse();
                 }
                 else
                 {
-                    // РћРїС†РёРѕРЅР°Р»СЊРЅРѕ: РІРєР»СЋС‡РёС‚СЊ "РЅР° Р»РµС‚Сѓ", РЅРѕ РґР°РЅРЅС‹Рµ РїРѕСЏРІСЏС‚СЃСЏ С‚РѕР»СЊРєРѕ РЅР° СЃР»РµРґСѓСЋС‰РµРј РєР°РґСЂРµ
+                    // Опционально: включить "на лету", но данные появятся только на следующем кадре
                     jointComp->joint->enableFeedback(true);
                 }
                 char buf[128];
@@ -2612,7 +2619,7 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
                 ImGui::TextColored(ImVec4(0.5f, 0.5f, 0.5f, 1), "No target");
             }
 
-            // в”Ђв”Ђ РљРЅРѕРїРєРё СѓРїСЂР°РІР»РµРЅРёСЏ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+            // -- Кнопки управления --------------------------------------------
             ImGui::Separator();
 
             if (jointComp->joint && ImGui::Button("Remove Joint"))
@@ -2625,14 +2632,14 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
 
             if (ImGui::Button("Auto-Calculate Pivots"))
             {
-                // РђРІС‚РѕРјР°С‚РёС‡РµСЃРєРёР№ СЂР°СЃС‡С‘С‚ pivot'РѕРІ РЅР° РѕСЃРЅРѕРІРµ РїРѕР·РёС†РёР№
+                // Автоматический расчёт pivot'ов на основе позиций
                 AutoCalculatePivots(registry, selectedEntity, *jointComp);
             }
         }
     }
 }
 
-// Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Р№ РјРµС‚РѕРґ РґР»СЏ Р°РІС‚Рѕ-СЂР°СЃС‡С‘С‚Р°
+// Вспомогательный метод для авто-расчёта
 void EditorUI::AutoCalculatePivots(ECSRegistry& registry, Entity entity, JointConnectionComponent& jointComp)
 {
     auto* transformA = registry.GetComponent<TransformComponent>(entity);
@@ -2642,37 +2649,35 @@ void EditorUI::AutoCalculatePivots(ECSRegistry& registry, Entity entity, JointCo
 
     if (!transformA || !transformB || !rbA || !rbB) return;
 
-    // Р’РµРєС‚РѕСЂ РѕС‚ A Рє B
+    // Вектор от A к B
     btVector3 posA(transformA->position.x, transformA->position.y, transformA->position.z);
     btVector3 posB(transformB->position.x, transformB->position.y, transformB->position.z);
     btVector3 dir = posB - posA;
     dir.normalize();
 
-    // РћРїСЂРµРґРµР»СЏРµРј РіР»Р°РІРЅСѓСЋ РѕСЃСЊ
+    // Определяем главную ось
     float absX = fabs(dir.x());
     float absY = fabs(dir.y());
     float absZ = fabs(dir.z());
 
     if (absX > absY && absX > absZ)
     {
-        // РџРѕ РѕСЃРё X
+        // По оси X
         jointComp.pivotA.setValue(dir.x() > 0 ? -rbA->shapeSize.x() : rbA->shapeSize.x(), 0, 0);
         jointComp.pivotB.setValue(dir.x() > 0 ? rbB->shapeSize.x() : -rbB->shapeSize.x(), 0, 0);
     }
     else if (absZ > absX && absZ > absY)
     {
-        // РџРѕ РѕСЃРё Z
+        // По оси Z
         jointComp.pivotA.setValue(0, 0, dir.z() > 0 ? -rbA->shapeSize.z() : rbA->shapeSize.z());
         jointComp.pivotB.setValue(0, 0, dir.z() > 0 ? rbB->shapeSize.z() : -rbB->shapeSize.z());
     }
     else
     {
-        // РџРѕ РѕСЃРё Y
+        // По оси Y
         jointComp.pivotA.setValue(0, dir.y() > 0 ? -rbA->shapeSize.y() : rbA->shapeSize.y(), 0);
         jointComp.pivotB.setValue(0, dir.y() > 0 ? rbB->shapeSize.y() : -rbB->shapeSize.y(), 0);
     }
-
-    OutputDebugStringA("[AutoCalculatePivots] Done!\n");
 }
 
 
@@ -2690,9 +2695,9 @@ void EditorUI::RenderCompartmentEditor(SceneManager& sceneManager)
 
     ImGui::Begin("Compartment Editor", nullptr);
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџ”§ Р“Р РђРќРР¦Р« РћРўРЎР•РљРђ (AABB)
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ==================================================
+    // ?? ГРАНИЦЫ ОТСЕКА (AABB)
+    // ==================================================
     ImGui::Text("Local Bounds:");
 
     float min[3] = { comp->localMin.x, comp->localMin.y, comp->localMin.z };
@@ -2710,9 +2715,9 @@ void EditorUI::RenderCompartmentEditor(SceneManager& sceneManager)
         comp->RecalculateVolume();
     }
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџЋЁ Р’РР—РЈРђР›РР—РђР¦РРЇ
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ==================================================
+    // ?? ВИЗУАЛИЗАЦИЯ
+    // ==================================================
     ImGui::Separator();
     ImGui::Text("Visual Settings:");
 
@@ -2722,17 +2727,17 @@ void EditorUI::RenderCompartmentEditor(SceneManager& sceneManager)
     static float wireframeAlpha = 0.4f;
     ImGui::SliderFloat("Opacity", &wireframeAlpha, 0.0f, 1.0f);
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџ“Љ РРќР¤РћР РњРђР¦РРЇ
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ==================================================
+    // ?? ИНФОРМАЦИЯ
+    // ==================================================
     ImGui::Separator();
     ImGui::Text("Info:");
-    ImGui::Text("Volume: %.2f mВі", comp->volume);
+    ImGui::Text("Volume: %.2f m?", comp->volume);
     ImGui::Text("Water: %.1f%%", (comp->waterVolume / comp->volume) * 100.0f);
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџ”§ Р‘Р«РЎРўР Р«Р• Р”Р•Р™РЎРўР’РРЇ
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ==================================================
+    // ?? БЫСТРЫЕ ДЕЙСТВИЯ
+    // ==================================================
     ImGui::Separator();
 
     if (ImGui::Button("Center on Submarine"))
@@ -2745,7 +2750,7 @@ void EditorUI::RenderCompartmentEditor(SceneManager& sceneManager)
 
             if (rootTransform && myTransform)
             {
-                // Р’С‹С‡РёСЃР»СЏРµРј С†РµРЅС‚СЂ РѕС‚СЃРµРєР° РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ РїРѕРґР»РѕРґРєРё
+                // Вычисляем центр отсека относительно подлодки
                 XMFLOAT3 center = {
                     (comp->localMin.x + comp->localMax.x) * 0.5f,
                     (comp->localMin.y + comp->localMax.y) * 0.5f,
@@ -2773,9 +2778,9 @@ void EditorUI::RenderPhysicsDebugPanel()
     SectionHeader("Physics Visualization");
     ImGui::Spacing();
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџЋЁ РћРЎРќРћР’РќР«Р• РџР•Р Р•РљР›Р®Р§РђРўР•Р›Р
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ==================================================================
+    // ?? ОСНОВНЫЕ ПЕРЕКЛЮЧАТЕЛИ
+    // ==================================================================
     ImGui::TextColored(COL_TEXT_DIM, " Render Modes:");
     ImGui::Checkbox("Show Colliders", &m_debugSettings.showColliders);
     ImGui::Checkbox("Show Contacts", &m_debugSettings.showContacts);
@@ -2787,9 +2792,9 @@ void EditorUI::RenderPhysicsDebugPanel()
     ImGui::Separator();
     ImGui::Spacing();
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџ”§ Р¤РР›Р¬РўР Р« РџРћ РўРРџРђРњ РљРћР›Р›РђР™Р”Р•Р РћР’
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ==================================================================
+    // ?? ФИЛЬТРЫ ПО ТИПАМ КОЛЛАЙДЕРОВ
+    // ==================================================================
     ImGui::TextColored(COL_TEXT_DIM, " Collider Type Filters:");
 
     ImGui::BeginDisabled(!m_debugSettings.showColliders);
@@ -2813,10 +2818,10 @@ void EditorUI::RenderPhysicsDebugPanel()
     ImGui::Separator();
     ImGui::Spacing();
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџЋЁ Р¦Р’Р•РўРћР’РђРЇ РЎРҐР•РњРђ
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    if (ImGui::CollapsingHeader("рџЋЁ Color Settings", ImGuiTreeNodeFlags_None))
+    // ==================================================================
+    // ?? ЦВЕТОВАЯ СХЕМА
+    // ==================================================================
+    if (ImGui::CollapsingHeader("?? Color Settings", ImGuiTreeNodeFlags_None))
     {
         ImGui::Spacing();
         ImGui::TextColored(COL_TEXT_DIM, " Object States:");
@@ -2849,10 +2854,10 @@ void EditorUI::RenderPhysicsDebugPanel()
     ImGui::Separator();
     ImGui::Spacing();
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // вљ™пёЏ Р РђР—РњР•Р Р« Р РџРђР РђРњР•РўР Р«
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    if (ImGui::CollapsingHeader("вљ™пёЏ Rendering Parameters"))
+    // ==================================================================
+    // ?? РАЗМЕРЫ И ПАРАМЕТРЫ
+    // ==================================================================
+    if (ImGui::CollapsingHeader("?? Rendering Parameters"))
     {
         ImGui::Spacing();
         ImGui::SliderFloat("Line Thickness", &m_debugSettings.lineThickness, 0.5f, 5.0f);
@@ -2864,9 +2869,9 @@ void EditorUI::RenderPhysicsDebugPanel()
     ImGui::Separator();
     ImGui::Spacing();
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџ”„ Р‘Р«РЎРўР Р«Р• Р”Р•Р™РЎРўР’РРЇ
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ==================================================================
+    // ?? БЫСТРЫЕ ДЕЙСТВИЯ
+    // ==================================================================
     ImGui::TextColored(COL_TEXT_DIM, " Quick Actions:");
 
     if (ImGui::Button("Enable All##PD", ImVec2(-1, 0)))
@@ -2894,10 +2899,10 @@ void EditorUI::RenderPhysicsDebugPanel()
     ImGui::Separator();
     ImGui::Spacing();
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџ“Љ РЎРўРђРўРРЎРўРРљРђ (РћРўР›РђР”РљРђ)
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    if (ImGui::CollapsingHeader("рџ“Љ Debug Info"))
+    // ==================================================================
+    // ?? СТАТИСТИКА (ОТЛАДКА)
+    // ==================================================================
+    if (ImGui::CollapsingHeader("?? Debug Info"))
     {
         ImGui::Spacing();
         ImGui::TextColored(COL_TEXT_DIM, " Settings Status:");
@@ -2918,12 +2923,12 @@ void EditorUI::RenderPhysicsDebugPanel()
 
 
 
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+// ============================================================================
 // Helper: Create a new compartment entity linked to a submarine root
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+// ============================================================================
+// ============================================================================
 // Helper: Create a new compartment entity linked to a submarine root
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+// ============================================================================
 void EditorUI::CreateNewCompartment(ECSRegistry& registry, Entity submarineRoot)
 {
     Entity newComp = SubmarineSystem::AddCompartmentToSubmarine(
@@ -2936,7 +2941,7 @@ void EditorUI::CreateNewCompartment(ECSRegistry& registry, Entity submarineRoot)
 
     if (newComp != INVALID_ENTITY)
     {
-        // РџРѕРґСЃРІРµС‡РёРІР°РµРј РЅРѕРІС‹Р№ РѕС‚СЃРµРє
+        // Подсвечиваем новый отсек
         m_selectedType = SelectedType::Object;
         m_selectedEntity = newComp;
     }
@@ -2946,22 +2951,22 @@ void EditorUI::StartCompartmentEdit(Entity compartment)
 {
     m_editingCompartment = compartment;
 
-    // РџРѕР»СѓС‡Р°РµРј РєРѕРјРїРѕРЅРµРЅС‚ (РїСЂРµРґРїРѕР»Р°РіР°РµРј, С‡С‚Рѕ РѕРЅ РµСЃС‚СЊ, СЂР°Р· РјС‹ РІ СЂРµРґР°РєС‚РѕСЂРµ)
-    // Р’ СЂРµР°Р»СЊРЅРѕРј РєРѕРґРµ Р»СѓС‡С€Рµ РґРѕР±Р°РІРёС‚СЊ РїСЂРѕРІРµСЂРєСѓ С‡РµСЂРµР· registry
-    // РќРѕ Р·РґРµСЃСЊ РјС‹ РІС‹Р·С‹РІР°РµРј СЌС‚Рѕ С‚РѕР»СЊРєРѕ РёР· UI, РіРґРµ РєРѕРјРїРѕРЅРµРЅС‚ СѓР¶Рµ РїСЂРѕРІРµСЂРµРЅ
+    // Получаем компонент (предполагаем, что он есть, раз мы в редакторе)
+    // В реальном коде лучше добавить проверку через registry
+    // Но здесь мы вызываем это только из UI, где компонент уже проверен
 
-    // РљСЌС€ Р±СѓРґРµС‚ РѕР±РЅРѕРІР»СЏС‚СЊСЃСЏ РІ UpdateCacheFromCompartment РїСЂРё РєР°Р¶РґРѕРј РєР°РґСЂРµ,
-    // РµСЃР»Рё РѕС‚СЃРµРє РІСЃС‘ РµС‰С‘ РІС‹РґРµР»РµРЅ
+    // Кэш будет обновляться в UpdateCacheFromCompartment при каждом кадре,
+    // если отсек всё ещё выделен
 }
 
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-// UpdateCacheFromCompartment вЂ” СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ: РєРѕРјРїРѕРЅРµРЅС‚ в†’ РєСЌС€
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+// ============================================================================
+// UpdateCacheFromCompartment — синхронизация: компонент > кэш
+// ============================================================================
 void EditorUI::UpdateCacheFromCompartment(const CompartmentComponent* comp)
 {
     if (!comp) return;
 
-    // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј Min/Max в†’ Center/Size
+    // Конвертируем Min/Max > Center/Size
     m_compartmentCenter = {
         (comp->localMin.x + comp->localMax.x) * 0.5f,
         (comp->localMin.y + comp->localMax.y) * 0.5f,
@@ -2975,14 +2980,14 @@ void EditorUI::UpdateCacheFromCompartment(const CompartmentComponent* comp)
     };
 }
 
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-// UpdateCompartmentFromCache вЂ” СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ: РєСЌС€ в†’ РєРѕРјРїРѕРЅРµРЅС‚
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+// ============================================================================
+// UpdateCompartmentFromCache — синхронизация: кэш > компонент
+// ============================================================================
 void EditorUI::UpdateCompartmentFromCache(CompartmentComponent* comp)
 {
     if (!comp) return;
 
-    // РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј Center/Size в†’ Min/Max
+    // Конвертируем Center/Size > Min/Max
     comp->localMin = {
         m_compartmentCenter.x - m_compartmentSize.x * 0.5f,
         m_compartmentCenter.y - m_compartmentSize.y * 0.5f,
@@ -3002,15 +3007,15 @@ void EditorUI::UpdateCompartmentFromCache(CompartmentComponent* comp)
 
 
 
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-// AddCompartmentToSubmarine вЂ” РґРѕР±Р°РІР»СЏРµС‚ РѕС‚СЃРµРє Рє СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµР№ РїРѕРґР»РѕРґРєРµ
-// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-// рџ”§ РџР РћРЎРўРћ СЃРѕР·РґР°С‘С‚ РїСѓСЃС‚СѓСЋ РїРѕРґР»РѕРґРєСѓ (Р±РµР· РѕС‚СЃРµРєРѕРІ)
+// ============================================================================
+// AddCompartmentToSubmarine — добавляет отсек к существующей подлодке
+// ============================================================================
+// ?? ПРОСТО создаёт пустую подлодку (без отсеков)
 Entity EditorUI::CreateEmptySubmarine(SceneManager& sceneManager, const XMFLOAT3& position)
 {
     auto& registry = sceneManager.GetECSRegistry();
 
-    // РЎРѕР·РґР°С‘Рј РєРѕСЂРµРЅСЊ
+    // Создаём корень
     Entity subRoot = registry.CreateEntity();
 
     // Transform
@@ -3020,9 +3025,9 @@ Entity EditorUI::CreateEmptySubmarine(SceneManager& sceneManager, const XMFLOAT3
         .scale = {1, 1, 1}
         });
 
-    // RigidBody (СЃС„РµСЂР° РєР°Рє placeholder)
+    // RigidBody (сфера как placeholder)
     RigidBodyComponent rb{};
-    rb.mass = 3000.0f;  // РўРѕР»СЊРєРѕ РєРѕСЂРїСѓСЃ
+    rb.mass = 3000.0f;  // Только корпус
     rb.shapeType = RigidBodyComponent::Sphere;
     rb.shapeRadius = 2.5f;
     rb.isDynamic = true;
@@ -3032,17 +3037,17 @@ Entity EditorUI::CreateEmptySubmarine(SceneManager& sceneManager, const XMFLOAT3
     // Buoyancy
     registry.AddComponent<BuoyancyComponent>(subRoot, BuoyancyComponent{
         .fluidDensity = 1025.0f,
-        .volume = 15.0f,  // РўРѕР»СЊРєРѕ РєРѕСЂРїСѓСЃ
+        .volume = 15.0f,  // Только корпус
         .height = 5.0f,
         .buoyancyMultiplier = 1.0f
         });
 
-    // SubmarineComponent (РїСѓСЃС‚Рѕ!)
+    // SubmarineComponent (пусто!)
     registry.AddComponent<SubmarineComponent>(subRoot, SubmarineComponent{
         .submarineRoot = subRoot
         });
 
-    // Mesh (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ - РґР»СЏ РІРёР·СѓР°Р»РёР·Р°С†РёРё РєРѕСЂРїСѓСЃР°)
+    // Mesh (опционально - для визуализации корпуса)
     AssimpModelClass* subModel = sceneManager.GetOrCreateModel(
         "assets/model/sphere.obj", m_device, m_context, "assets/texture/stone.tga");
 
@@ -3053,12 +3058,10 @@ Entity EditorUI::CreateEmptySubmarine(SceneManager& sceneManager, const XMFLOAT3
             });
     }
 
-    OutputDebugStringA(("вњ… Created empty submarine #" + std::to_string(subRoot) + "\n").c_str());
-
     return subRoot;
 }
 
-// рџ”§ Р”РѕР±Р°РІРёС‚СЊ РѕС‚СЃРµРє Рє РїРѕРґР»РѕРґРєРµ (РѕР±РЅРѕРІР»РµРЅРЅР°СЏ РІРµСЂСЃРёСЏ)
+// ?? Добавить отсек к подлодке (обновленная версия)
 Entity EditorUI::AddCompartmentToSubmarine(SceneManager& sceneManager,
     Entity submarineRoot,
     const XMFLOAT3& localOffset,
@@ -3077,14 +3080,14 @@ Entity EditorUI::AddCompartmentToSubmarine(SceneManager& sceneManager,
 
     if (newComp != INVALID_ENTITY)
     {
-        // РћС‚РјРµС‡Р°РµРј РїРѕРґР»РѕРґРєСѓ РєР°Рє РЅСѓР¶РґР°СЋС‰СѓСЋСЃСЏ РІ РѕР±РЅРѕРІР»РµРЅРёРё С„РёР·РёРєРё
+        // Отмечаем подлодку как нуждающуюся в обновлении физики
         auto* rootSub = registry.GetComponent<SubmarineComponent>(submarineRoot);
         if (rootSub)
         {
             rootSub->needsPhysicsUpdate = true;
         }
 
-        // Р’С‹Р±РёСЂР°РµРј РЅРѕРІС‹Р№ РѕС‚СЃРµРє РІ СЂРµРґР°РєС‚РѕСЂРµ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)
+        // Выбираем новый отсек в редакторе (опционально)
         m_selectedType = SelectedType::Object;
         m_selectedEntity = newComp;
     }
@@ -3093,7 +3096,7 @@ Entity EditorUI::AddCompartmentToSubmarine(SceneManager& sceneManager,
 }
 
 
-// рџ”§ Р”РѕР±Р°РІР»РµРЅРёРµ РѕС‚СЃРµРєР° СЃ РјРµС€РµРј
+// ?? Добавление отсека с мешем
 Entity EditorUI::AddCompartmentWithMesh(
     SceneManager& sceneManager,
     Entity submarineRoot,
@@ -3104,7 +3107,7 @@ Entity EditorUI::AddCompartmentWithMesh(
 {
     auto& registry = sceneManager.GetECSRegistry();
 
-    // РСЃРїРѕР»СЊР·СѓРµРј SubmarineSystem РґР»СЏ СЃРѕР·РґР°РЅРёСЏ РѕС‚СЃРµРєР°
+    // Используем SubmarineSystem для создания отсека
     Entity compartment = SubmarineSystem::AddCompartmentToSubmarine(
         registry,
         submarineRoot,
@@ -3116,7 +3119,7 @@ Entity EditorUI::AddCompartmentWithMesh(
     if (compartment == INVALID_ENTITY)
         return INVALID_ENTITY;
 
-    // рџ”Ґ Р’РђР–РќРћ: Р”РѕР±Р°РІР»СЏРµРј РњР•РЁ РѕС‚СЃРµРєСѓ!
+    // ?? ВАЖНО: Добавляем МЕШ отсеку!
     AssimpModelClass* compModel = sceneManager.GetOrCreateModel(
         modelPath, m_device, m_context, "assets/texture/stone.tga");
 
@@ -3128,15 +3131,12 @@ Entity EditorUI::AddCompartmentWithMesh(
             });
     }
 
-    // РћС‚РјРµС‡Р°РµРј РїРѕРґР»РѕРґРєСѓ РєР°Рє РЅСѓР¶РґР°СЋС‰СѓСЋСЃСЏ РІ РѕР±РЅРѕРІР»РµРЅРёРё
+    // Отмечаем подлодку как нуждающуюся в обновлении
     auto* rootSub = registry.GetComponent<SubmarineComponent>(submarineRoot);
     if (rootSub)
     {
         rootSub->needsPhysicsUpdate = true;
     }
-
-    OutputDebugStringA(("вњ… Added compartment #" + std::to_string(compartment) +
-        " with model " + std::string(modelPath) + "\n").c_str());
 
     return compartment;
 }
@@ -3151,7 +3151,7 @@ Entity EditorUI::CreateSubmarineWithMesh(
 {
     auto& registry = sceneManager.GetECSRegistry();
 
-    // 1. РЎРѕР·РґР°С‘Рј РєРѕСЂРµРЅСЊ РїРѕРґР»РѕРґРєРё
+    // 1. Создаём корень подлодки
     Entity subRoot = registry.CreateEntity();
 
     // Transform
@@ -3183,7 +3183,7 @@ Entity EditorUI::CreateSubmarineWithMesh(
         .submarineRoot = subRoot
         });
 
-    // рџ”Ґ Р’РђР–РќРћ: Р”РѕР±Р°РІР»СЏРµРј РњР•РЁ!
+    // ?? ВАЖНО: Добавляем МЕШ!
     AssimpModelClass* hullModel = sceneManager.GetOrCreateModel(
         modelPath, m_device, m_context, "assets/texture/stone.tga");
 
@@ -3194,9 +3194,6 @@ Entity EditorUI::CreateSubmarineWithMesh(
             .material = nullptr
             });
     }
-
-    OutputDebugStringA(("вњ… Created submarine #" + std::to_string(subRoot) +
-        " with model " + std::string(modelPath) + "\n").c_str());
 
     return subRoot;
 }
@@ -3211,10 +3208,10 @@ void EditorUI::UpdateBreachesOnResize(CompartmentComponent* comp, const XMFLOAT3
 
     for (auto& breach : comp->breaches)
     {
-        // РџРµСЂРµСЃС‡С‘С‚ Y-РєРѕРѕСЂРґРёРЅР°С‚С‹ РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ РЅРѕРІРѕРіРѕ СЂР°Р·РјРµСЂР° (РѕСЃС‚Р°РІР»СЏРµРј РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕРµ РїРѕР»РѕР¶РµРЅРёРµ)
+        // Пересчёт Y-координаты относительно нового размера (оставляем относительное положение)
         float relY = (breach.localPosition.y - oldMin.y) / oldHeight;
         breach.localPosition.y = comp->localMin.y + relY * newHeight;
-        // РђРЅР°Р»РѕРіРёС‡РЅРѕ РјРѕР¶РЅРѕ СЃРґРµР»Р°С‚СЊ РґР»СЏ X Рё Z, РµСЃР»Рё РЅСѓР¶РЅРѕ
+        // Аналогично можно сделать для X и Z, если нужно
         float oldWidth = oldMax.x - oldMin.x;
         float newWidth = comp->localMax.x - comp->localMin.x;
         float relX = (breach.localPosition.x - oldMin.x) / oldWidth;
@@ -3229,8 +3226,8 @@ void EditorUI::UpdateBreachesOnResize(CompartmentComponent* comp, const XMFLOAT3
 
 
 
-// Р РёСЃСѓРµС‚ РїСЂРѕСЃС‚СѓСЋ РїР°РЅРµР»СЊ СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёСЏ SubmarineCollisionSetup РґР»СЏ РІС‹Р±СЂР°РЅРЅРѕР№ СЃСѓС‰РЅРѕСЃС‚Рё.
-// РўСЂРµР±СѓРµС‚: registry.HasComponent / GetComponent, ImGui РґРѕСЃС‚СѓРїРµРЅ.
+// Рисует простую панель редактирования SubmarineCollisionSetup для выбранной сущности.
+// Требует: registry.HasComponent / GetComponent, ImGui доступен.
 void EditorUI::DrawSubmarineCollisionSetup(ECSRegistry& registry, Entity entity)
 {
     if (!registry.HasComponent<SubmarineCollisionSetup>(entity))
@@ -3241,19 +3238,19 @@ void EditorUI::DrawSubmarineCollisionSetup(ECSRegistry& registry, Entity entity)
     if (!ImGui::CollapsingHeader("Submarine Collision", ImGuiTreeNodeFlags_DefaultOpen))
         return;
 
-    // РџРѕС€Р°РіРѕРІС‹Р№ РїР»Р°РЅ (РїСЃРµРІРґРѕРєРѕРґ):
-    // 1. РћС€РёР±РєР° РІРѕР·РЅРёРєР°РµС‚ РїСЂРё РїРѕРїС‹С‚РєРµ РѕР±СЂР°С‰РµРЅРёСЏ Рє РїРѕР»СЋ useInteriorCollider С‡РµСЂРµР· СѓРєР°Р·Р°С‚РµР»СЊ SubmarineCollisionSetup* РєР°Рє Рє РѕР±СЉРµРєС‚Сѓ (С‡РµСЂРµР· С‚РѕС‡РєСѓ).
-    // 2. РќСѓР¶РЅРѕ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ РѕРїРµСЂР°С‚РѕСЂ -> РІРјРµСЃС‚Рѕ С‚РѕС‡РєРё РґР»СЏ РґРѕСЃС‚СѓРїР° Рє С‡Р»РµРЅСѓ СЃС‚СЂСѓРєС‚СѓСЂС‹ С‡РµСЂРµР· СѓРєР°Р·Р°С‚РµР»СЊ.
-    // 3. РСЃРїСЂР°РІРёС‚СЊ СЃС‚СЂРѕРєСѓ:
+    // Пошаговый план (псевдокод):
+    // 1. Ошибка возникает при попытке обращения к полю useInteriorCollider через указатель SubmarineCollisionSetup* как к объекту (через точку).
+    // 2. Нужно использовать оператор -> вместо точки для доступа к члену структуры через указатель.
+    // 3. Исправить строку:
     //    ImGui::Checkbox("Use interior collider", &scs.useInteriorCollider);
-    //    РЅР°
+    //    на
     //    ImGui::Checkbox("Use interior collider", &scs->useInteriorCollider);
 
     ImGui::Checkbox("Use interior collider", &scs->useInteriorCollider);
-    // Р’РєР»/РІС‹РєР» РІРЅСѓС‚СЂРµРЅРЅРµРіРѕ РєРѕР»Р»Р°Р№РґРµСЂР°
+    // Вкл/выкл внутреннего коллайдера
     
 
-    // Р Р°Р·РјРµСЂ (РјРµС‚СЂС‹) вЂ” DragFloat3 СѓРґРѕР±РµРЅ РґР»СЏ Р±С‹СЃС‚СЂРѕРіРѕ СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёСЏ
+    // Размер (метры) — DragFloat3 удобен для быстрого редактирования
     float size[3] = { scs->interiorSize.x, scs->interiorSize.y, scs->interiorSize.z };
     if (ImGui::DragFloat3("Interior size (m)", size, 0.05f, 0.01f, 1000.0f, "%.3f"))
     {
@@ -3262,7 +3259,7 @@ void EditorUI::DrawSubmarineCollisionSetup(ECSRegistry& registry, Entity entity)
         scs->interiorSize.z = size[2];
     }
 
-    // Р›РѕРєР°Р»СЊРЅС‹Р№ РѕС„С„СЃРµС‚
+    // Локальный оффсет
     float offset[3] = { scs->interiorOffset.x, scs->interiorOffset.y, scs->interiorOffset.z };
     if (ImGui::DragFloat3("Interior offset (m)", offset, 0.01f, -1000.0f, 1000.0f, "%.3f"))
     {
@@ -3271,14 +3268,14 @@ void EditorUI::DrawSubmarineCollisionSetup(ECSRegistry& registry, Entity entity)
         scs->interiorOffset.z = offset[2];
     }
 
-    // РљРѕСЌС„С„РёС†РёРµРЅС‚ СѓСЃР°РґРєРё (0.1..1.0)
+    // Коэффициент усадки (0.1..1.0)
     float shrink = scs->interiorShrinkFactor;
     if (ImGui::DragFloat("Shrink factor", &shrink, 0.005f, 0.5f, 1.0f, "%.3f"))
     {
         scs->interiorShrinkFactor = std::clamp(shrink, 0.1f, 1.0f);
     }
 
-    // Р‘С‹СЃС‚СЂС‹Рµ РїСЂРµСЃРµС‚С‹
+    // Быстрые пресеты
     if (ImGui::Button("Default 0.95")) scs->interiorShrinkFactor = 0.95f;
     ImGui::SameLine();
     if (ImGui::Button("Slight -5%")) scs->interiorShrinkFactor = std::min(0.995f, scs->interiorShrinkFactor * 0.95f);

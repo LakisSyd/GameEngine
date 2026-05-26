@@ -339,6 +339,8 @@ bool D3DClass::Initialize(
 
     fieldOfView = 3.141592654f / 4.0f;
     screenAspect = (float)screenWidth / (float)screenHeight;
+    fieldOfView = XMConvertToRadians(75.0f);
+
 
     m_projectionMatrix = XMMatrixPerspectiveFovLH(fieldOfView, screenAspect,
         screenNear, screenDepth);

@@ -90,6 +90,7 @@
     <ClInclude Include="CharacterMovementSystem.h" />
     <ClInclude Include="DragDropSystem.h" />
     <ClInclude Include="GameplayController.h" />
+    <ClInclude Include="JobSystem.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h" />
     <ClInclude Include="lib\imgui-master\ImGuizmo.h" />

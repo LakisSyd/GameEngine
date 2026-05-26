@@ -40,6 +40,7 @@
 #include "CompartmentDebugRenderer.h"
 #include "../../DragDropSystem.h"
 #include "../../GameplayController.h"
+#include "../../JobSystem.h"
 class Renderer;
 class SkyShaderClass;
 
@@ -55,6 +56,8 @@ const float SPRITE_BASE_RADIUS_FACTOR = 0.5f;
 class ApplicationClass
 {
 public:
+    bool ReloadSkyBox(std::string newSkyboxPath);
+    ID3D11ShaderResourceView* LoadSkyboxFromWorldSettings(ID3D11Device* device, ID3D11DeviceContext* context);
     ApplicationClass();
     ~ApplicationClass() = default;
 
@@ -222,6 +225,8 @@ private:
 
     bool m_wasF5Down = false;
     bool m_wasF1Down = false;
+
+    JobSystem m_jobSystem;
 };
 
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);

@@ -9,7 +9,7 @@ Texture2D normalMap    : register(t1);
 Texture2D metalnessMap : register(t2);
 Texture2D roughnessMap : register(t3);
 Texture2D crackMap : register(t6); // маска трещины: R=mask, G=roughness offset
-TextureCube environmentMap : register(t8); // skybox cubemap для простого specular environment
+Texture2D environmentMap : register(t8); // equirectangular HDR sky для простого specular environment
 
 // ── Буфер повреждений (decal трещин) — слот b7 ───────────────────────────────
 cbuffer DamageBuffer : register(b7)
@@ -76,6 +76,55 @@ struct PixelInputType
     bool   isFrontFace           : SV_IsFrontFace;
 };
 
+float3 SafeNormalize(float3 value, float3 fallback)
+{
+    float lenSq = dot(value, value);
+    return (lenSq > 0.000001f && all(value == value)) ? value * rsqrt(lenSq) : fallback;
+}
+
+float3 SanitizeColor(float3 value)
+{
+    value.x = (value.x == value.x) ? value.x : 0.0f;
+    value.y = (value.y == value.y) ? value.y : 0.0f;
+    value.z = (value.z == value.z) ? value.z : 0.0f;
+    return max(value, float3(0.0f, 0.0f, 0.0f));
+}
+
+float SafePow01(float value, float power)
+{
+    return pow(saturate(value), power);
+}
+
+float Luminance(float3 color)
+{
+    return dot(color, float3(0.2126f, 0.7152f, 0.0722f));
+}
+
+float2 EquirectUV(float3 dir)
+{
+    const float TWO_PI = 6.28318530718f;
+    float2 uv;
+    uv.x = atan2(dir.z, dir.x) / TWO_PI + 0.5f;
+    uv.y = 0.5f - asin(clamp(dir.y, -1.0f, 1.0f)) / PI;
+    return uv;
+}
+
+float3 RepairEnvironmentPinholes(float2 uv, float3 color)
+{
+    if (Luminance(color) > 0.01f)
+        return color;
+
+    const float2 stepSize = float2(1.0f / 4096.0f, 1.0f / 2048.0f) * 2.0f;
+
+    float3 c0 = SanitizeColor(environmentMap.SampleLevel(SampleType, uv + float2(stepSize.x, 0.0f), 0).rgb);
+    float3 c1 = SanitizeColor(environmentMap.SampleLevel(SampleType, uv - float2(stepSize.x, 0.0f), 0).rgb);
+    float3 c2 = SanitizeColor(environmentMap.SampleLevel(SampleType, uv + float2(0.0f, stepSize.y), 0).rgb);
+    float3 c3 = SanitizeColor(environmentMap.SampleLevel(SampleType, uv - float2(0.0f, stepSize.y), 0).rgb);
+    float3 repaired = max(max(c0, c1), max(c2, c3));
+
+    return (Luminance(repaired) > 0.08f) ? repaired : color;
+}
+
 // ════════════════════════════════════════════════════════════
 // РАСЧЁТ ТЕНЕЙ
 // ════════════════════════════════════════════════════════════
@@ -118,23 +167,26 @@ float CalculateShadow(float3 worldPos)
 // ════════════════════════════════════════════════════════════
 float DistributionGGX(float3 N, float3 H, float roughness)
 {
+    roughness = max(roughness, 0.04f);
     float a      = roughness * roughness;
     float a2     = a * a;
     float NdotH  = max(dot(N, H), 0.0f);
     float denom  = (NdotH * NdotH * (a2 - 1.0f) + 1.0f);
-    return a2 / (PI * denom * denom);
+    return a2 / max(PI * denom * denom, 0.000001f);
 }
 
 float3 FresnelSchlick(float cosTheta, float3 F0)
 {
-    return F0 + (1.0f - F0) * pow(saturate(1.0f - cosTheta), 5.0f);
+    F0 = saturate(F0);
+    return F0 + (1.0f - F0) * SafePow01(1.0f - cosTheta, 5.0f);
 }
 
 float GeometrySchlickGGX(float NdotV, float roughness)
 {
+    roughness = max(roughness, 0.04f);
     float r = roughness + 1.0f;
     float k = (r * r) / 8.0f;
-    return NdotV / (NdotV * (1.0f - k) + k);
+    return NdotV / max(NdotV * (1.0f - k) + k, 0.000001f);
 }
 
 float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
@@ -148,13 +200,13 @@ float GeometrySmith(float3 N, float3 V, float3 L, float roughness)
 float4 PBRPixelShader(PixelInputType input) : SV_TARGET
 {
     float4 albedoSample = albedoMap.Sample(SampleType, input.tex);
-    float3 albedo = albedoSample.rgb;
+    float3 albedo = saturate(SanitizeColor(albedoSample.rgb));
     // alpha из текстуры используем только для масок (не для стекла)
     float  texAlpha = albedoSample.a;
 
     float4 mrSample  = metalnessMap.Sample(SampleType, input.tex);
     float4 roughSample = roughnessMap.Sample(SampleType, input.tex);
-    float  metalness = mrSample.b;
+    float  metalness = saturate(mrSample.b);
 
     // ════════════════════════════════════════════════════════
     // ОПРЕДЕЛЯЕМ СТЕКЛО по glassOpacity из константного буфера:
@@ -169,7 +221,7 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     // glTF usually stores roughness in the G channel of the metallic-roughness map.
     // When Assimp exposes roughness as a separate grayscale texture, all channels are equal,
     // so reading G still works and keeps the convention consistent.
-    float rawRoughness = roughSample.g;
+    float rawRoughness = saturate(roughSample.g);
     float roughness;
     if (isGlass)
     {
@@ -182,19 +234,20 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
         roughness = max(rawRoughness, 0.04f);
     }
 
-    float3 N = normalize(input.normal);
+    float3 N = SafeNormalize(input.normal, float3(0.0f, 1.0f, 0.0f));
 
-    float3 ns = normalMap.Sample(SampleType, input.tex).xyz;
+    float3 ns = saturate(normalMap.Sample(SampleType, input.tex).xyz);
     if (length(ns - float3(0.5f, 0.5f, 1.0f)) > 0.05f)
     {
         ns = ns * 2.0f - 1.0f;
-        float3 T = normalize(input.tangent);
-        float3 B = normalize(input.binormal);
+        float3 T = SafeNormalize(input.tangent, float3(1.0f, 0.0f, 0.0f));
+        T = SafeNormalize(T - N * dot(N, T), float3(1.0f, 0.0f, 0.0f));
+        float3 B = SafeNormalize(input.binormal, SafeNormalize(cross(N, T), float3(0.0f, 0.0f, 1.0f)));
         float3x3 TBN = float3x3(T, B, N);
-        N = normalize(mul(ns, TBN));
+        N = SafeNormalize(mul(ns, TBN), N);
     }
 
-    float3 V = normalize(cameraPos - input.worldPos);
+    float3 V = SafeNormalize(cameraPos - input.worldPos, float3(0.0f, 0.0f, 1.0f));
     if (!input.isFrontFace) N = -N;
 
     // F0: стекло = диэлектрик IOR~1.5 → F0 = 0.04
@@ -205,8 +258,8 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
 
     // ── Направленный свет ──────────────────────────────────────────────────
     {
-        float3 L = normalize(-dirLightDirection.xyz);
-        float3 H = normalize(V + L);
+        float3 L = SafeNormalize(-dirLightDirection.xyz, float3(0.0f, -1.0f, 0.0f));
+        float3 H = SafeNormalize(V + L, N);
         float NdotL = saturate(dot(N, L));
         if (NdotL > 0.0f)
         {
@@ -219,7 +272,7 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
             float3 kD = (1.0f - F) * (1.0f - metalness);
             // Стекло: диффуз масштабируем по прозрачности
             if (isGlass) kD *= baseAlpha;
-            float3 radiance = dirLightColor.rgb * dirLightDirection.w;
+            float3 radiance = SanitizeColor(dirLightColor.rgb * max(dirLightDirection.w, 0.0f));
             Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowFactor;
         }
     }
@@ -228,8 +281,8 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     for (int i = 0; i < NUM_LIGHTS; i++)
     {
         if (diffuseColor[i].w < 0.001f) continue;
-        float3 L = normalize(input.lightVec[i]);
-        float3 H = normalize(V + L);
+        float3 L = SafeNormalize(input.lightVec[i], float3(0.0f, -1.0f, 0.0f));
+        float3 H = SafeNormalize(V + L, N);
         float NdotL = saturate(dot(N, L));
         if (NdotL > 0.0f)
         {
@@ -241,13 +294,13 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
             float3 specular    = numerator / max(denominator, 0.001f);
             float3 kD = (1.0f - F) * (1.0f - metalness);
             if (isGlass) kD *= baseAlpha;
-            float3 radiance = diffuseColor[i].rgb * diffuseColor[i].w;
+            float3 radiance = SanitizeColor(diffuseColor[i].rgb * max(diffuseColor[i].w, 0.0f));
             Lo += (kD * albedo / PI + specular) * radiance * NdotL;
         }
     }
 
     // ── Ambient ──────────────────────────────────────────────────────────────
-    float3 ambientLight = dirLightAmbient.rgb * max(dirLightAmbient.w, 0.0f);
+    float3 ambientLight = SanitizeColor(dirLightAmbient.rgb * max(dirLightAmbient.w, 0.0f));
     if (dot(ambientLight, float3(1,1,1)) < 0.001f)
         ambientLight = float3(0.15f, 0.15f, 0.15f);
 
@@ -262,19 +315,22 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     // Зеркальный ambient: Fresnel-отражение (для стекла — это и есть его главный эффект)
     float3 specularTint     = lerp(float3(1.0f, 1.0f, 1.0f), albedo, metalness);
     float  roughnessBias    = roughness * roughness;
-    float3 R = reflect(-V, N);
-    float3 envReflection = environmentMap.Sample(SampleType, R).rgb;
+    float3 R = SafeNormalize(reflect(-V, N), N);
+    float2 envUV = EquirectUV(R);
+    float3 envReflection = SanitizeColor(environmentMap.Sample(SampleType, envUV).rgb);
+    envReflection = RepairEnvironmentPinholes(envUV, envReflection);
     float  envSpecStrength = saturate(1.0f - roughnessBias) * 0.65f;
 
     float3 ambient_specular = F_ambient * specularTint *
         (ambientLight * lerp(1.0f, 0.1f, roughnessBias) + envReflection * envSpecStrength);
 
     float3 ambient = ambient_diffuse + ambient_specular;
-    float3 color   = ambient + Lo;
+    float3 color   = SanitizeColor(ambient + Lo);
 
     // ── Tone mapping + Gamma ─────────────────────────────────────────────────
+    color = min(SanitizeColor(color), float3(64.0f, 64.0f, 64.0f));
     color = (color * (2.51f * color + 0.03f)) / (color * (2.43f * color + 0.59f) + 0.14f);
-    color = pow(saturate(color), 1.0f / 2.2f);
+    color = pow(saturate(SanitizeColor(color)), 1.0f / 2.2f);
 
     // ════════════════════════════════════════════════════════
     // ФИНАЛЬНАЯ ПРОЗРАЧНОСТЬ
@@ -283,7 +339,7 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     if (isGlass)
     {
         // Fresnel-эффект: края стекла более непрозрачны (реалистичный эффект)
-        float fresnelEdge = pow(saturate(1.0f - NdotV), 4.0f);
+        float fresnelEdge = SafePow01(1.0f - NdotV, 4.0f);
         // Основа: baseAlpha (0.1-0.3 для чистого стекла)
         // + усиление на краях через Fresnel
         finalAlpha = saturate(baseAlpha + fresnelEdge * 0.5f);
@@ -295,7 +351,7 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     }
     else
     {
-        finalAlpha = texAlpha;
+        finalAlpha = 1.0f;
     }
 
 
@@ -353,7 +409,7 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     }
 
 
-    float4 finalColor = float4(color, finalAlpha);
+    float4 finalColor = float4(saturate(SanitizeColor(color)), saturate(finalAlpha));
 
     // ── Выделение объекта в редакторе ────────────────────────────────────────
     if (selectedFactor > 1.5f)

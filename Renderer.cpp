@@ -46,7 +46,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
          
         D3D11_RASTERIZER_DESC rsDesc = {};
         rsDesc.FillMode = D3D11_FILL_SOLID;
-        rsDesc.CullMode = D3D11_CULL_FRONT;        // для skybox изнутри
+        rsDesc.CullMode = D3D11_CULL_NONE;
         rsDesc.FrontCounterClockwise = FALSE;
         rsDesc.DepthClipEnable = FALSE;
 
@@ -63,14 +63,6 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         {
             OutputDebugStringA("Failed to create sky depth stencil state\n");
         }
-
-       
-
-        if (FAILED(m_direct3D->GetDevice()->CreateDepthStencilState(&dsDesc, &m_skyDepthState)))
-    
-            // Обработка ошибки
-            OutputDebugStringA("Failed to create sky depth stencil state\n");
-    
     }
 
     // ============================================================================
@@ -173,9 +165,10 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
                 }
 
                 XMMATRIX world = transform->GetWorldMatrix();
+                const auto fog = m_sceneManager->BuildFogSettingsFromWorld();
                 RenderMesh(context, mesh.model, world, view, projection,
                     mat, lightColors, lightPositions,
-                    m_sceneManager->GetFogSettings(), false);
+                    fog, false);
             }
 
             m_direct3D->SetBackBufferRenderTarget();
@@ -186,7 +179,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         // ── Pass: Scene Preview → m_renderTexture (для EditorUI) ─────────────────
         if (m_renderTexture)
         {
-            const auto& fog = m_sceneManager->GetFogSettings();
+            auto fog = m_sceneManager->BuildFogSettingsFromWorld();
             m_renderTexture->SetRenderTarget(context);
             m_renderTexture->ClearRenderTarget(context,
                 fog.color.x, fog.color.y, fog.color.z, 1.f);
@@ -206,7 +199,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         m_direct3D->SetBackBufferRenderTarget();
         m_direct3D->ResetViewport();
 
-        const auto& fog = m_sceneManager->GetFogSettings();
+        auto fog = m_sceneManager->BuildFogSettingsFromWorld();
         if (fog.enabled)
             m_direct3D->BeginScene(fog.color.x, fog.color.y, fog.color.z, 1.f);
         else
@@ -219,7 +212,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             // the player to look around inside the cubemap naturally.
             XMMATRIX skyView = view;
             skyView.r[3] = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-            XMMATRIX skyMVP = skyView * projection;
+            XMMATRIX invSkyViewProjection = XMMatrixInverse(nullptr, skyView * projection);
 
             // 3. Сохраняем старые состояния
             ID3D11DepthStencilState* oldDS = nullptr;
@@ -234,7 +227,8 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             context->RSSetState(m_skyRS);
             context->OMSetDepthStencilState(m_skyDepthState, 0);
 
-            m_skyShader->Render(context, skyMVP);
+            m_skyShader->UpdateFog(context, fog);
+            m_skyShader->Render(context, invSkyViewProjection);
 
             context->RSSetState(oldRS);
             context->OMSetDepthStencilState(oldDS, 0);
@@ -297,8 +291,10 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         m_direct3D->TurnZBufferOn();
         m_direct3D->TurnAlphaBlendingOff();
 
+        const auto fog = m_sceneManager->BuildFogSettingsFromWorld();
+
         ShaderManager::Get().ForEach([&](ShaderBaseClass* s) {
-            s->UpdateFog(context, m_sceneManager->GetFogSettings());
+            s->UpdateFog(context, fog);
             });
 
         XMFLOAT3 camPos = m_camera->GetPosition();
@@ -340,7 +336,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             context, view, projection,
             defaultMaterial ? defaultMaterial : m_defaultMaterial,
             lightColors, lightPositions,
-            m_sceneManager->GetFogSettings(),
+            fog,
             selectedEntity, camPos,
             TimeManager::UnscaledDeltaTime());
 
@@ -361,8 +357,10 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         m_direct3D->TurnZBufferOn();
         m_direct3D->TurnAlphaBlendingOff();
 
+        const auto fog = m_sceneManager->BuildFogSettingsFromWorld();
+
         ShaderManager::Get().ForEach([&](ShaderBaseClass* s) {
-            s->UpdateFog(context, m_sceneManager->GetFogSettings());
+            s->UpdateFog(context, fog);
             });
 
         XMFLOAT4 lightColors[NUM_LIGHTS];
@@ -372,7 +370,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             context, view, projection,
             m_defaultMaterial,
             lightColors, lightPositions,
-            m_sceneManager->GetFogSettings(),
+            fog,
             excludeEntity,
             TimeManager::UnscaledDeltaTime());
     }
@@ -433,20 +431,40 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
     // ============================================================================
     void Renderer::UpdateDirectionalLight(ID3D11DeviceContext* context)
     {
-        const XMFLOAT3 sunDir = { 0.3f, -1.0f, 0.5f };
+        const auto& world = m_sceneManager->GetWorldSettings();
+
+        XMFLOAT3 sunDir = world.sunDirection;
+        const float lenSq =
+            sunDir.x * sunDir.x +
+            sunDir.y * sunDir.y +
+            sunDir.z * sunDir.z;
+        if (lenSq < 0.0001f)
+        {
+            sunDir = { 0.3f, -1.0f, 0.5f };
+        }
+
         const XMFLOAT4 sunColor = { 1.0f, 0.95f, 0.8f, 1.0f };
-        const XMFLOAT4 ambientPBR = { 0.15f, 0.2f, 0.3f, 0.25f };
-        const XMFLOAT4 ambientLight = { 0.4f,  0.4f, 0.45f, 0.6f };
+        const XMFLOAT4 ambientLight = { 0.8f, 0.9f, 1.0f, world.ambientStrength };
 
         // ✅ ПРАВИЛЬНАЯ проверка: просто на nullptr
         if (m_lightShader != nullptr)
         {
-            m_lightShader->SetDirectionalLight(context, sunDir, sunColor, ambientLight, 2.5f);
+            m_lightShader->SetDirectionalLight(
+                context,
+                sunDir,
+                sunColor,
+                ambientLight,
+                world.sunIntensity);
         }
 
         if (m_pbrShader != nullptr)
         {
-            m_pbrShader->SetDirectionalLight(context, sunDir, sunColor, ambientPBR, 1.0f);
+            m_pbrShader->SetDirectionalLight(
+                context,
+                sunDir,
+                sunColor,
+                ambientLight,
+                world.sunIntensity);
         }
     }
     XMMATRIX Renderer::BuildReflectionMatrix(float reflectY) const

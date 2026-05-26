@@ -1,4 +1,4 @@
-п»ї#pragma once
+#pragma once
 #include <btBulletDynamicsCommon.h>
 #include <BulletCollision/Gimpact/btGImpactCollisionAlgorithm.h>
 #include <BulletCollision/Gimpact/btGImpactShape.h>
@@ -30,29 +30,29 @@ public:
         m_ghostCallback = std::make_unique<btGhostPairCallback>();
         m_dynamicsWorld->getPairCache()->setInternalGhostPairCallback(m_ghostCallback.get());
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-        // рџ”Ґ REGISTER GImpact algorithm for dynamic concave mesh collision
+        // ===============================================================
+        // ?? REGISTER GImpact algorithm for dynamic concave mesh collision
         // Without this, btGImpactMeshShape won't detect collisions!
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ===============================================================
         btGImpactCollisionAlgorithm::registerAlgorithm(m_dispatcher.get());
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-        // рџ”Ґ FIX: РЈРІРµР»РёС‡РёРІР°РµРј РёС‚РµСЂР°С†РёРё СЃРѕР»РІРµСЂР° РґР»СЏ СЃС‚Р°Р±РёР»СЊРЅС‹С… РґР¶РѕР№РЅС‚РѕРІ.
-        //    РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ Bullet РёСЃРїРѕР»СЊР·СѓРµС‚ 10 РёС‚РµСЂР°С†РёР№ вЂ” СЌС‚РѕРіРѕ РјР°Р»Рѕ
-        //    РґР»СЏ btFixedConstraint РјРµР¶РґСѓ С‚СЏР¶С‘Р»С‹РјРё С‚РµР»Р°РјРё.
-        //    50 РёС‚РµСЂР°С†РёР№ РґР°СЋС‚ СЃС‚Р°Р±РёР»СЊРЅС‹Рµ СЃРѕРµРґРёРЅРµРЅРёСЏ РѕС‚СЃРµРєРѕРІ РїРѕРґР»РѕРґРєРё.
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ===============================================================
+        // ?? FIX: Увеличиваем итерации солвера для стабильных джойнтов.
+        //    По умолчанию Bullet использует 10 итераций — этого мало
+        //    для btFixedConstraint между тяжёлыми телами.
+        //    50 итераций дают стабильные соединения отсеков подлодки.
+        // ===============================================================
         m_dynamicsWorld->getSolverInfo().m_numIterations = 50;
 
-        // рџ”Ґ FIX: Split impulse РїСЂРµРґРѕС‚РІСЂР°С‰Р°РµС‚ "РѕС‚СЃРєРѕРє" РѕС‚ penetration
-        //    correction. Р‘РµР· СЌС‚РѕРіРѕ С‚РµР»Р°, РїСЂРѕРЅРёРєС€РёРµ РґСЂСѓРі РІ РґСЂСѓРіР°,
-        //    РїРѕР»СѓС‡Р°СЋС‚ РѕРіСЂРѕРјРЅС‹Р№ РёРјРїСѓР»СЊСЃ, РєРѕС‚РѕСЂС‹Р№ СЂРІС‘С‚ РґР¶РѕР№РЅС‚С‹.
+        // ?? FIX: Split impulse предотвращает "отскок" от penetration
+        //    correction. Без этого тела, проникшие друг в друга,
+        //    получают огромный импульс, который рвёт джойнты.
         m_dynamicsWorld->getSolverInfo().m_splitImpulse = true;
         m_dynamicsWorld->getSolverInfo().m_splitImpulsePenetrationThreshold = -0.04f;
 
-        // рџ”Ґ FIX: ERP (Error Reduction Parameter) вЂ” СЃРєРѕСЂРѕСЃС‚СЊ РєРѕСЂСЂРµРєС†РёРё
-        //    РѕС€РёР±РєРё РїРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёСЏ. РЎР»РёС€РєРѕРј РІС‹СЃРѕРєРѕРµ Р·РЅР°С‡РµРЅРёРµ = Р¶С‘СЃС‚РєРёРµ
-        //    СЂС‹РІРєРё. 0.2 вЂ” РјСЏРіРєР°СЏ РєРѕСЂСЂРµРєС†РёСЏ, РЅРµ СЂРІС‘С‚ РґР¶РѕР№РЅС‚С‹.
+        // ?? FIX: ERP (Error Reduction Parameter) — скорость коррекции
+        //    ошибки позиционирования. Слишком высокое значение = жёсткие
+        //    рывки. 0.2 — мягкая коррекция, не рвёт джойнты.
         m_dynamicsWorld->getSolverInfo().m_erp = 0.2f;
         m_dynamicsWorld->getSolverInfo().m_erp2 = 0.2f;
 
@@ -65,8 +65,8 @@ public:
         const float timestep = 1.0f / 60.0f;
         accumulator += deltaTime;
 
-        // рџ”Ґ FIX: РћРіСЂР°РЅРёС‡РёРІР°РµРј РјР°РєСЃРёРјР°Р»СЊРЅС‹Р№ accumulator,
-        //    С‡С‚РѕР±С‹ РЅРµ Р±С‹Р»Рѕ "spiral of death" РїСЂРё Р»Р°РіР°С…
+        // ?? FIX: Ограничиваем максимальный accumulator,
+        //    чтобы не было "spiral of death" при лагах
         if (accumulator > 0.25f)
             accumulator = 0.25f;
 
@@ -83,11 +83,10 @@ public:
 
     void Shutdown()
     {
-        OutputDebugStringA("[PhysicsWorld] Shutdown() called\n");  // в†ђ РџСЂРѕРІРµСЂСЊС‚Рµ, РїРѕСЏРІР»СЏРµС‚СЃСЏ Р»Рё СЌС‚Рѕ
 
-        // РџРѕСЂСЏРґРѕРє РІР°Р¶РµРЅ! РћР±СЂР°С‚РЅС‹Р№ РїРѕСЂСЏРґРєСѓ СЃРѕР·РґР°РЅРёСЏ:
+        // Порядок важен! Обратный порядку создания:
         if (m_dynamicsWorld) {
-            // 1. РЎРЅР°С‡Р°Р»Р° СѓРґР°Р»РёС‚СЊ РІСЃРµ С‚РµР»Р° РёР· РјРёСЂР° (РµСЃР»Рё РµС‰С‘ РЅРµ СѓРґР°Р»РµРЅС‹ С‡РµСЂРµР· ECS)
+            // 1. Сначала удалить все тела из мира (если ещё не удалены через ECS)
             for (int i = m_dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; --i) {
                 btCollisionObject* obj = m_dynamicsWorld->getCollisionObjectArray()[i];
                 btRigidBody* body = btRigidBody::upcast(obj);
@@ -95,7 +94,7 @@ public:
                     delete body->getMotionState();
                 }
                 m_dynamicsWorld->removeCollisionObject(obj);
-                delete obj;  // shape СѓРґР°Р»РёС‚СЃСЏ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё, РµСЃР»Рё РЅРµ compound
+                delete obj;  // shape удалится автоматически, если не compound
             }
         }
 
@@ -103,9 +102,7 @@ public:
         m_solver.reset();         // ~btSequentialImpulseConstraintSolver
         m_broadphase.reset();     // ~btDbvtBroadphase
         m_dispatcher.reset();     // ~btCollisionDispatcher
-        m_collisionConfig.reset(); // ~btDefaultCollisionConfiguration в†ђ РѕСЃРІРѕР±РѕР¶РґР°РµС‚ РїСѓР»С‹!
-
-        OutputDebugStringA("[PhysicsWorld] Shutdown() complete\n");
+        m_collisionConfig.reset(); // ~btDefaultCollisionConfiguration < освобождает пулы!
     }
 
 private:

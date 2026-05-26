@@ -46,13 +46,6 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
                 breach.flowRate = CalculateFlowRate(breach, pressure);
                 totalInflow += breach.flowRate;
 
-                // 📊 DEBUG: Выводим информацию о течи
-#ifdef _DEBUG
-                char buf[256];
-                sprintf_s(buf, "[Flooding] Breach #%p: depth=%.2f, pressure=%.1f, flowRate=%.3f m³/s\n",
-                    &breach, breachDepth, pressure, breach.flowRate);
-                OutputDebugStringA(buf);
-#endif
             }
             else
             {
@@ -73,22 +66,6 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
             compartmentWorldMatrix);
         float worldBottomY = XMVectorGetY(worldBottomV);
         float bottomDepth = globalWaterLevel - worldBottomY;
-
-        // 🔥 ОТЛАДКА: Выводим состояние отсека
-#ifdef _DEBUG
-        {
-            char buf[256];
-            sprintf_s(buf, "[Compartment %u] Bottom Y: world=%.2f, depth=%.2f, water=%.1f%%, breaches=%zu\n",
-                entity,
-                worldBottomY,
-                bottomDepth,
-                (comp.volume > 0) ? (comp.waterVolume / comp.volume) * 100.f : 0.f,
-                comp.breaches.size());
-            OutputDebugStringA(buf);
-        }
-#endif
-
-
 
         // ══════════════════════════════════════════════════════════════════════
         // 2. ОТКАЧКА НАСОСАМИ (если есть питание)
@@ -192,12 +169,6 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
             buoy->volume = fmaxf(0.0f, buoy->lastCalculatedVolume - totalWaterVolume);
         }
 
-#ifdef _DEBUG
-        char buf[256];
-        sprintf_s(buf, "[Buoyancy] Root=%u | Water=%.2f m³ | EffVolume=%.2f m³\n",
-            entity, totalWaterVolume, buoy->volume);
-        OutputDebugStringA(buf);
-#endif
     }
 }
 
@@ -216,7 +187,6 @@ void FloodingSystem::CreateBreach(ECSRegistry& registry, Entity compartment,
         localPosition.y < comp->localMin.y || localPosition.y > comp->localMax.y ||
         localPosition.z < comp->localMin.z || localPosition.z > comp->localMax.z)
     {
-        OutputDebugStringA("❌ WARNING: Breach created OUTSIDE compartment bounds!\n");
     }
 
     BreachData breach;
@@ -227,27 +197,6 @@ void FloodingSystem::CreateBreach(ECSRegistry& registry, Entity compartment,
 
     comp->breaches.push_back(breach);
 
-    // 📊 DEBUG: Вычисляем мировую позицию для вывода
-    XMFLOAT3 worldPos = { 0, 0, 0 };
-    if (transform)
-    {
-        XMVECTOR localPosV = XMLoadFloat3(&localPosition);
-        XMVECTOR worldPosV = XMVector3TransformCoord(localPosV, transform->GetWorldMatrix());
-        XMStoreFloat3(&worldPos, worldPosV);
-    }
-
-    char buf[256];
-    sprintf_s(buf,
-        "[Breach] Entity=%u | Local=(%.2f,%.2f,%.2f) | World=(%.2f,%.2f,%.2f) | Size=%.2f\n"
-        "         Comp bounds: [%.1f..%.1f, %.1f..%.1f, %.1f..%.1f]\n",
-        compartment,
-        localPosition.x, localPosition.y, localPosition.z,
-        worldPos.x, worldPos.y, worldPos.z,
-        size,
-        comp->localMin.x, comp->localMax.x,
-        comp->localMin.y, comp->localMax.y,
-        comp->localMin.z, comp->localMax.z);
-    OutputDebugStringA(buf);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -282,7 +231,6 @@ void FloodingSystem::SealBreach(ECSRegistry& registry, Entity compartment, size_
     if (!comp || breachIndex >= comp->breaches.size()) return;
 
     comp->breaches[breachIndex].isSealed = true;
-    OutputDebugStringA("[Flooding] Breach sealed\n");
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

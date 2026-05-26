@@ -126,7 +126,7 @@ PixelInputType PBRVertexShader(VertexInputType input)
     output.binormal = SafeNormalize(mul(finalBinormal, worldRot), SafeNormalize(cross(output.normal, output.tangent), float3(0.0f, 0.0f, 1.0f)));
 
     for (int i = 0; i < NUM_LIGHTS; i++)
-        output.lightVec[i] = normalize(lightPosition[i].xyz - worldPos.xyz);
+        output.lightVec[i] = SafeNormalize(lightPosition[i].xyz - worldPos.xyz, float3(0.0f, -1.0f, 0.0f));
 
     return output;
 }

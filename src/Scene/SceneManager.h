@@ -24,6 +24,29 @@
 using namespace DirectX;
 using json = nlohmann::json;
 
+
+struct WorldSettings
+{
+    std::string skyboxPath = "assets/texture/cubemap/day.hdr";
+
+    float skyExposure = 1.0f;
+
+    XMFLOAT3 sunDirection = { -0.3f, -1.0f, 0.2f };
+    float sunIntensity = 1.0f;
+
+    float ambientStrength = 0.15f;
+
+    bool fogEnabled = false;
+    XMFLOAT3 fogColor = { 0.6f, 0.7f, 0.8f };
+    float fogStart = 20.0f;
+    float fogEnd = 100.0f;
+
+    float shadowDistance = 100.0f;
+
+    bool skyboxReloadPending = false;
+};
+
+
 #ifndef NUM_LIGHTS
 #define NUM_LIGHTS 4
 #endif
@@ -64,7 +87,10 @@ public:
     }
 
 
-
+    WorldSettings& GetWorldSettings();
+    const WorldSettings& GetWorldSettings() const;
+    void SetWorldSettings(const WorldSettings& settings);
+	std::string GetSkyboxPath() const { return GetWorldSettings().skyboxPath; }
 
 
     bool IsObjectActive(Entity entity)
@@ -168,16 +194,15 @@ public:
     void SetFallbackModel(AssimpModelClass* model) { m_mainModelFallback = model; }
     ECSRegistry& GetECSRegistry() { return m_registry; }
 
-    void SetFog(const Settings::FogSettings& fog) { m_fogSettings = fog; m_fogSettings.enabled = true; }
-    Settings::FogSettings& GetFogSettings() { return m_fogSettings; }
-
-    // Convenience fog accessors (used by EditorUI)
-    XMFLOAT3 GetFogColor() const { return m_fogSettings.color; }
-    float    GetFogStart() const { return m_fogSettings.FOG_START; }
-    float    GetFogEnd()   const { return m_fogSettings.FOG_END; }
-    void SetFogColor(const XMFLOAT3& color) { m_fogSettings.color = color; m_fogSettings.enabled = true; }
-    void SetFogStart(float start) { m_fogSettings.FOG_START = start; m_fogSettings.enabled = true; }
-    void SetFogEnd(float end) { m_fogSettings.FOG_END = end; m_fogSettings.enabled = true; }
+    Settings::FogSettings BuildFogSettingsFromWorld() const
+    {
+        Settings::FogSettings fog;
+        fog.enabled = m_worldSettings.fogEnabled;
+        fog.color = m_worldSettings.fogColor;
+        fog.FOG_START = m_worldSettings.fogStart;
+        fog.FOG_END = m_worldSettings.fogEnd;
+        return fog;
+    }
 
     Entity SpawnLight(const XMFLOAT3& position, const XMFLOAT4& color, bool isGizmo = false);
     bool   RemoveLight(Entity entity);
@@ -208,6 +233,9 @@ public:
 
 
 private:
+
+	WorldSettings m_worldSettings;
+
     ECSRegistry m_registry;
 
 
@@ -216,8 +244,6 @@ private:
 
     AssimpModelClass* m_mainModelFallback = nullptr;
     MaterialClass* m_defaultMaterial = nullptr;
-    Settings::FogSettings m_fogSettings;
-
     json   SerializeObject(Entity entity, int id);
     Entity DeserializeObject(const json& j, ID3D11Device* device,
         ID3D11DeviceContext* deviceContext);

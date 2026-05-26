@@ -28,10 +28,6 @@ void CameraController::UpdateModeToggle(bool inputBlockedByUi)
     {
         m_mode = IsFreeMode() ? Mode::FollowTarget : Mode::Free;
         ReleaseMouseCapture();
-
-        OutputDebugStringA(IsFreeMode()
-            ? "[Camera] Mode: Free (RMB + WASD/R/F)\n"
-            : "[Camera] Mode: FollowTarget (WASD controls player)\n");
     }
 
     m_toggleWasDown = toggleDown;

@@ -257,11 +257,6 @@
         // 5. Store reference to triangle mesh for cleanup
         rb->triangleMesh = triangleMesh;
 
-        char buf[256];
-        sprintf_s(buf, "[Physics] GImpactMesh created: %zu triangles, scale (%.2f, %.2f, %.2f)\n",
-            triangles.size() / 3, scale.x, scale.y, scale.z);
-        OutputDebugStringA(buf);
-
         return gimpactShape;
     }
 
@@ -364,7 +359,6 @@
                 rb->interiorBody->setCollisionFlags(rb->interiorBody->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
                 rb->interiorBody->setActivationState(DISABLE_DEACTIVATION);
 
-                OutputDebugStringA("[Physics] Created submarine interior collider\n");
             }
         }
 
@@ -546,7 +540,6 @@
                 if (meshRenderer && meshRenderer->model)
                 {
                     shape = CreateGImpactMeshShape(meshRenderer->model, transform->scale, rb);
-                    OutputDebugStringA("[Physics] GImpactMesh shape created (dynamic concave)\n");
                 }
                 else
                     return;
@@ -635,7 +628,6 @@
         rb->lastSyncedPosition = transform->position;
         rb->lastSyncedRotation = transform->rotation;
 
-        OutputDebugStringA(rb->isCompound ? "[Physics] Compound RigidBody created\n" : "[Physics] Simple RigidBody created\n");
     }
     // ═══════════════════════════════════════════════════════════════════════════
     // 🔥 HELPER: Проверка, изменился ли трансформ снаружи (редактор, скрипт)
@@ -742,7 +734,6 @@
                     rb.lastSyncedPosition = transform->position;
                     rb.lastSyncedRotation = transform->rotation;
 
-                    OutputDebugStringA("[PhysicsSync] External transform change detected, teleporting body (interpolation cleared)\n");
                 }
 
                 rb.body->activate();
@@ -941,29 +932,6 @@
                 float angularDrag = 0.9f * submersionRatio;
                 rigidBody->body->setDamping(linearDrag, angularDrag);
 
-                // ═══════════════════════════════════════════════════════════
-                // 📊 DEBUG: Состояние плавучести подлодки
-                // ═══════════════════════════════════════════════════════════
-    #ifdef _DEBUG
-                if (isSubmarineRoot)
-                {
-                    static int debugCounter = 0;
-                    if (++debugCounter % 120 == 0)  // Раз в ~2 секунды
-                    {
-                        char dbg[512];
-                        sprintf_s(dbg,
-                            "[Buoyancy] Y=%.1f | flood=%.0f%% (%.1f/%.1f m³) | "
-                            "F_buoy=%.0f N | F_water=%.0f N | net=%.0f N | "
-                            "weight=%.0f N | vel_y=%.2f\n",
-                            objectY,
-                            floodRatio * 100.0f,
-                            totalWaterInCompartments, totalCompartmentVolume,
-                            buoyancyForce, waterWeight, netUpForce,
-                            weight, vel.y());
-                        OutputDebugStringA(dbg);
-                    }
-                }
-    #endif
             }
             else
             {

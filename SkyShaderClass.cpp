@@ -108,22 +108,15 @@ bool SkyShaderClass::InitializeShader(ID3D11Device* device, HWND hwnd, const WCH
     hr = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &m_pixelShader);
     if (FAILED(hr)) { if (vsBlob) vsBlob->Release(); if (psBlob) psBlob->Release(); return false; }
 
-    // ✅ Попытка создать InputLayout для {POSITION}
-    D3D11_INPUT_ELEMENT_DESC layoutDesc[] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,
-          D3D11_INPUT_PER_VERTEX_DATA, 0 }
-    };
-    hr = device->CreateInputLayout(layoutDesc, 1,
-        vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(),
-        &m_layout);
-    if (FAILED(hr)) {
-        // На всякий случай — не фатал, но сохраняем nullptr
-        m_layout = nullptr;
-        OutputDebugStringA("[SkyShader] Warning: failed to create input layout for sky\n");
-    }
+    // Fullscreen sky uses SV_VertexID, so it does not need an input layout.
+    m_layout = nullptr;
 
     // ✅ Правильный размер буфера
     if (!CreateConstantBuffer(device, sizeof(SkyConstantBuffer), &m_matrixBuffer)) {
+        if (vsBlob) vsBlob->Release(); if (psBlob) psBlob->Release();
+        return false;
+    }
+    if (!CreateFogBuffer(device)) {
         if (vsBlob) vsBlob->Release(); if (psBlob) psBlob->Release();
         return false;
     }
@@ -189,31 +182,32 @@ bool SkyShaderClass::SetShaderParameters(ID3D11DeviceContext* ctx,
     ctx->PSSetConstantBuffers(0, 1, &m_matrixBuffer);
     return true;
 }
-bool SkyShaderClass::Render(ID3D11DeviceContext* ctx, const XMMATRIX& mvpMatrix)
+bool SkyShaderClass::Render(ID3D11DeviceContext* ctx, const XMMATRIX& invViewProjection)
 {
-    // Привязываем input layout (если создан)
-    ctx->IASetInputLayout(m_layout);
+    ctx->IASetInputLayout(nullptr);
     ctx->VSSetShader(m_vertexShader, nullptr, 0);
     ctx->PSSetShader(m_pixelShader, nullptr, 0);
 
     // 🔥 1. Создаём массивы для очистки (размер = количеству слотов)
     ID3D11Buffer* nullBuffers[5] = {};           // Инициализация нулями
+    ID3D11Buffer* nullBuffer = nullptr;
     ID3D11ShaderResourceView* nullSRVs[2] = {};  // Для слотов 0 и 7
     ID3D11SamplerState* nullSamplers[2] = {};    // Для слотов 0 и 7
 
     // 🔥 2. Очищаем "грязные" слоты от предыдущего шейдера
     ctx->VSSetConstantBuffers(1, 5, nullBuffers);   // Слоты 1-5 для VS
-    ctx->PSSetConstantBuffers(1, 5, nullBuffers);   // Слоты 1-5 для PS
+    ctx->PSSetConstantBuffers(1, 1, &nullBuffer);
+    ctx->PSSetConstantBuffers(3, 3, nullBuffers);
 
     // Очищаем слот тени (t7/s7)
     ctx->PSSetShaderResources(7, 1, &nullSRVs[1]);  // Или &nullSRVs[0] — неважно, т.к. размер 1
     ctx->PSSetSamplers(7, 1, &nullSamplers[1]);
 
-    // 🔥 3. Обновляем и привязываем МАТРИЦУ (Слот 0)
+    // 🔥 3. Обновляем и привязываем inverse view-projection (Слот 0)
     D3D11_MAPPED_SUBRESOURCE mapped;
     if (SUCCEEDED(ctx->Map(m_matrixBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))
     {
-        *(XMMATRIX*)mapped.pData = XMMatrixTranspose(mvpMatrix);
+        *(XMMATRIX*)mapped.pData = XMMatrixTranspose(invViewProjection);
         ctx->Unmap(m_matrixBuffer, 0);
 
         ctx->VSSetConstantBuffers(0, 1, &m_matrixBuffer);
@@ -227,8 +221,11 @@ bool SkyShaderClass::Render(ID3D11DeviceContext* ctx, const XMMATRIX& mvpMatrix)
         ctx->PSSetSamplers(0, 1, &m_skySampler);
     }
 
-    // 🔥 5. Рендер геометрии
-    RenderGeometry(ctx);
+    // 🔥 5. Fullscreen triangle: no sky cube, no missing/cut faces.
+    ctx->IASetVertexBuffers(0, 0, nullptr, nullptr, nullptr);
+    ctx->IASetIndexBuffer(nullptr, DXGI_FORMAT_UNKNOWN, 0);
+    ctx->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    ctx->Draw(3, 0);
 
     // 🔥 6. Очистка слота 0 после отрисовки
     ctx->PSSetShaderResources(0, 1, &nullSRVs[0]);

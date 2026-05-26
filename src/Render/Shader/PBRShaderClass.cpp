@@ -200,6 +200,9 @@ bool PBRShaderClass::Render(
     ID3D11ShaderResourceView* crackSRV = m_crackTextureSRV ? m_crackTextureSRV : m_defaultCrackSRV;
     context->PSSetShaderResources(6, 1, &crackSRV);
 
+    DamageBufferType emptyDamage{};
+    UpdateConstantBuffer(context, m_damageBuffer, emptyDamage, 7, false);
+
     // ── SRV слот t8 (environment cubemap) ──────────────────────────────────────
     // Это не полноценный IBL/prefiltered BRDF, а лёгкий skybox reflection,
     // чтобы PBR-материалы не выглядели плоско при отсутствии HDRI.

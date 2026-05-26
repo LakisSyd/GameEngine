@@ -9,8 +9,7 @@ class SkyShaderClass : public ShaderBaseClass
 public:
 
     struct SkyConstantBuffer {
-        XMMATRIX modelViewProjection;  // 64 байта
-        // Больше ничего не нужно!
+        XMMATRIX invViewProjection;
     };
     bool InitializeGeometry(ID3D11Device* device);
     void RenderGeometry(ID3D11DeviceContext* context);
@@ -22,7 +21,7 @@ public:
     struct Vertex { XMFLOAT3 pos; };
     bool Initialize(ID3D11Device*, HWND);
     void Shutdown();
-    bool Render(ID3D11DeviceContext* ctx, const XMMATRIX& mvpMatrix);
+    bool Render(ID3D11DeviceContext* ctx, const XMMATRIX& invViewProjection);
     void SetSkyTexture(ID3D11ShaderResourceView* srv) { m_skySRV = srv; }
 
     ID3D11ShaderResourceView* GetSkyTexture() const { return m_skySRV; }

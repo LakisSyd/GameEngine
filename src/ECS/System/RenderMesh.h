@@ -243,7 +243,7 @@ inline void RenderMesh(
                 context->IASetIndexBuffer(part.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
                 context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 
-                const bool needsBlend = matIsGlass || part.isTransparent;
+                const bool needsBlend = matIsGlass || part.isGlass;
                 if (needsBlend) enableGlassBlend();
 
                 const float partOpacity = matIsGlass ? matGlassAlpha

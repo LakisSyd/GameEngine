@@ -1,6 +1,8 @@
 // SkyShader.ps
-TextureCube SkyTexture : register(t0);
+Texture2D SkyTexture : register(t0);
 SamplerState SkySampler : register(s0);
+
+#include "src/Render/Shader/Vs/fog_common.hlsli"
 
 struct PixelInput {
     float4 positionClip : SV_POSITION;
@@ -13,16 +15,70 @@ cbuffer SkyBuffer : register(b0)
     matrix modelViewProjection;
 };
 
+float Luminance(float3 color)
+{
+    return dot(color, float3(0.2126f, 0.7152f, 0.0722f));
+}
+
+float2 EquirectUV(float3 dir)
+{
+    const float PI = 3.14159265359f;
+    const float TWO_PI = 6.28318530718f;
+    float2 uv;
+    uv.x = atan2(dir.z, dir.x) / TWO_PI + 0.5f;
+    uv.x = frac(uv.x + 0.25f);
+    uv.y = 0.5f - asin(clamp(dir.y, -1.0f, 1.0f)) / PI;
+    return uv;
+}
+
+float3 RepairEquirectPinholes(float2 uv, float3 color)
+{
+    float currentLum = Luminance(color);
+    if (currentLum > 0.01f)
+        return color;
+
+    const float2 stepSize = float2(1.0f / 4096.0f, 1.0f / 2048.0f) * 2.0f;
+
+    float3 c0 = SkyTexture.SampleLevel(SkySampler, uv + float2(stepSize.x, 0.0f), 0).rgb;
+    float3 c1 = SkyTexture.SampleLevel(SkySampler, uv - float2(stepSize.x, 0.0f), 0).rgb;
+    float3 c2 = SkyTexture.SampleLevel(SkySampler, uv + float2(0.0f, stepSize.y), 0).rgb;
+    float3 c3 = SkyTexture.SampleLevel(SkySampler, uv - float2(0.0f, stepSize.y), 0).rgb;
+    float3 repaired = max(max(c0, c1), max(c2, c3));
+
+    return (Luminance(repaired) > 0.08f) ? repaired : color;
+}
+
 float3 ACESFilm(float3 x)
 {
+    x.x = (x.x == x.x) ? x.x : 0.0f;
+    x.y = (x.y == x.y) ? x.y : 0.0f;
+    x.z = (x.z == x.z) ? x.z : 0.0f;
+    x = min(max(x, float3(0.0f, 0.0f, 0.0f)), float3(64.0f, 64.0f, 64.0f));
     float a = 2.51f, b = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+    float3 mapped = (x * (a * x + b)) / max(x * (c * x + d) + e, float3(0.000001f, 0.000001f, 0.000001f));
+    mapped.x = (mapped.x == mapped.x) ? mapped.x : 0.0f;
+    mapped.y = (mapped.y == mapped.y) ? mapped.y : 0.0f;
+    mapped.z = (mapped.z == mapped.z) ? mapped.z : 0.0f;
+    return clamp(mapped, 0.0f, 1.0f);
 }
 
 float4 SkyPS(PixelInput input) : SV_TARGET
 {
-    float3 hdrColor = SkyTexture.Sample(SkySampler, normalize(input.worldPos)).rgb;
+    float lenSq = dot(input.worldPos, input.worldPos);
+    float3 dir = (lenSq > 0.000001f) ? input.worldPos * rsqrt(lenSq) : float3(0.0f, 1.0f, 0.0f);
+    float2 uv = EquirectUV(dir);
+    float3 hdrColor = SkyTexture.Sample(SkySampler, uv).rgb;
+    hdrColor.x = (hdrColor.x == hdrColor.x) ? hdrColor.x : 0.0f;
+    hdrColor.y = (hdrColor.y == hdrColor.y) ? hdrColor.y : 0.0f;
+    hdrColor.z = (hdrColor.z == hdrColor.z) ? hdrColor.z : 0.0f;
+    hdrColor = max(hdrColor, float3(0.0f, 0.0f, 0.0f));
+    hdrColor = RepairEquirectPinholes(uv, hdrColor);
     float3 ldrColor = ACESFilm(hdrColor);
-    ldrColor = pow(ldrColor, 1.0/2.2);
+    ldrColor = pow(saturate(ldrColor), 1.0f / 2.2f);
+    if (fogEnabled > 0.5f)
+    {
+        float horizonFog = saturate((0.35f - dir.y) / 0.85f);
+        ldrColor = lerp(ldrColor, fogColor.rgb, horizonFog * 0.85f);
+    }
     return float4(ldrColor, 1.0);
 }

@@ -1,5 +1,5 @@
-п»ї// ============================================================================
-// assimpmodelclass.cpp вЂ” РџРѕР»РЅР°СЏ СЂРµР°Р»РёР·Р°С†РёСЏ СЃ СЂР°СЃС€РёСЂРµРЅРЅРѕР№ РѕС‚Р»Р°РґРєРѕР№
+// ============================================================================
+// assimpmodelclass.cpp — Полная реализация с расширенной отладкой
 // ============================================================================
 
 #include "assimpmodelclass.h"
@@ -15,26 +15,26 @@
 using namespace DirectX;
 
 // ============================================================================
-// Р“Р»РѕР±Р°Р»СЊРЅС‹Рµ РЅР°СЃС‚СЂРѕР№РєРё РѕС‚Р»Р°РґРєРё
+// Глобальные настройки отладки
 // ============================================================================
-#define DEBUG_VERBOSE 1          // РџРѕРґСЂРѕР±РЅС‹Р№ РІС‹РІРѕРґ
-#define DEBUG_BONE_MATCHING 1    // РћС‚Р»Р°РґРєР° СЃРѕРїРѕСЃС‚Р°РІР»РµРЅРёСЏ РєРѕСЃС‚РµР№
-#define DEBUG_TRANSFORMS 1       // РћС‚Р»Р°РґРєР° С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёР№
-#define DEBUG_ANIMATION_KEYS 1   // РћС‚Р»Р°РґРєР° РєР»СЋС‡РµР№ Р°РЅРёРјР°С†РёРё
+#define DEBUG_VERBOSE 0          // Подробный вывод
+#define DEBUG_BONE_MATCHING 0    // Отладка сопоставления костей
+#define DEBUG_TRANSFORMS 0       // Отладка трансформаций
+#define DEBUG_ANIMATION_KEYS 0   // Отладка ключей анимации
 
 static std::string SafeReadAiString(const aiString& aiStr) {
     if (aiStr.length == 0) return "";
-    // Р§РёС‚Р°РµРј СЂРѕРІРЅРѕ aiStr.length Р±Р°Р№С‚, РёРіРЅРѕСЂРёСЂСѓСЏ РѕС‚СЃСѓС‚СЃС‚РІРёРµ \0
+    // Читаем ровно aiStr.length байт, игнорируя отсутствие \0
     return std::string(aiStr.C_Str(), aiStr.length);
 }
 
 
 static std::string NormalizeBoneName(std::string name) {
-    // 1. РЈР±РёСЂР°РµРј СЃСѓС„С„РёРєСЃС‹ РјР°СЃС€С‚Р°Р±РЅРѕР№ РєРѕРјРїРµРЅСЃР°С†РёРё
+    // 1. Убираем суффиксы масштабной компенсации
     size_t pos = name.find("_scaleCompensation");
     if (pos != std::string::npos) name = name.substr(0, pos);
 
-    // 2. РЈР±РёСЂР°РµРј СЃСѓС„С„РёРєСЃС‹ РІРёРґР° _01, _02, _14 Рё С‚.Рґ.
+    // 2. Убираем суффиксы вида _01, _02, _14 и т.д.
     pos = name.find_last_of('_');
     if (pos != std::string::npos) {
         std::string suffix = name.substr(pos + 1);
@@ -46,7 +46,7 @@ static std::string NormalizeBoneName(std::string name) {
 }
 
 // ============================================================================
-// Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ С„СѓРЅРєС†РёРё РѕС‚Р»Р°РґРєРё
+// Вспомогательные функции отладки
 // ============================================================================
 static void PrintMatrix(const XMFLOAT4X4& matrix, const std::string& label) {
 #if DEBUG_VERBOSE
@@ -78,7 +78,7 @@ static void PrintQuaternion(const XMFLOAT4& quat, const std::string& label) {
 }
 
 // ============================================================================
-// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ / Р”РµСЃС‚СЂСѓРєС‚РѕСЂ
+// Конструктор / Деструктор
 // ============================================================================
 AssimpModelClass::AssimpModelClass()
     : m_scene(nullptr),
@@ -108,7 +108,7 @@ AssimpModelClass::~AssimpModelClass()
 }
 
 // ============================================================================
-// Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ С„СѓРЅРєС†РёРё
+// Вспомогательные функции
 // ============================================================================
 static bool WriteTempFile(const std::string& filename, const char* data, size_t size)
 {
@@ -121,7 +121,7 @@ static bool WriteTempFile(const std::string& filename, const char* data, size_t 
 XMFLOAT4X4 AssimpModelClass::ConvertMatrix(const aiMatrix4x4& from) const
 {
     XMFLOAT4X4 to;
-    // РўСЂР°РЅСЃРїРѕРЅРёСЂСѓРµРј РїСЂРё РєРѕРїРёСЂРѕРІР°РЅРёРё:
+    // Транспонируем при копировании:
     to._11 = from.a1; to._12 = from.b1; to._13 = from.c1; to._14 = from.d1;
     to._21 = from.a2; to._22 = from.b2; to._23 = from.c2; to._24 = from.d2;
     to._31 = from.a3; to._32 = from.b3; to._33 = from.c3; to._34 = from.d3;
@@ -194,7 +194,7 @@ ID3D11ShaderResourceView* AssimpModelClass::Create1x1SRVFromColor(ID3D11Device* 
 }
 
 // ============================================================================
-// Р—Р°РіСЂСѓР·РєР° С‚РµРєСЃС‚СѓСЂ (РІСЃС‚СЂРѕРµРЅРЅС‹С… Рё РІРЅРµС€РЅРёС…)
+// Загрузка текстур (встроенных и внешних)
 // ============================================================================
 ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
     ID3D11Device* device,
@@ -207,13 +207,13 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
     if (!mat) return nullptr;
     aiString path;
 
-    // РџСЂРѕР±СѓРµРј РїРµСЂРІС‹Р№ С‚РёРї С‚РµРєСЃС‚СѓСЂС‹
+    // Пробуем первый тип текстуры
     if (mat->GetTextureCount(type1) > 0 && mat->GetTexture(type1, 0, &path) == AI_SUCCESS)
     {
         std::string texPath = path.C_Str();
         if (!texPath.empty())
         {
-            // Р’СЃС‚СЂРѕРµРЅРЅР°СЏ С‚РµРєСЃС‚СѓСЂР° (РёРЅРґРµРєСЃ РІРёРґР° "*0")
+            // Встроенная текстура (индекс вида "*0")
             if (texPath[0] == '*')
             {
                 int index = atoi(texPath.c_str() + 1);
@@ -222,7 +222,7 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                     const aiTexture* tex = scene->mTextures[index];
                     if (!tex) return nullptr;
 
-                    if (tex->mHeight == 0) // РЎР¶Р°С‚С‹Р№ С„РѕСЂРјР°С‚ (PNG/JPG)
+                    if (tex->mHeight == 0) // Сжатый формат (PNG/JPG)
                     {
                         char tmpPath[MAX_PATH] = { 0 };
                         if (GetTempPathA(MAX_PATH, tmpPath) == 0) return nullptr;
@@ -250,7 +250,7 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                         DeleteFileA(filename.c_str());
                         return t->GetTexture();
                     }
-                    else // Raw RGBA РґР°РЅРЅС‹Рµ
+                    else // Raw RGBA данные
                     {
                         D3D11_TEXTURE2D_DESC desc = {};
                         desc.Width = tex->mWidth; desc.Height = tex->mHeight;
@@ -274,7 +274,7 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                     }
                 }
             }
-            else // Р’РЅРµС€РЅРёР№ С„Р°Р№Р»
+            else // Внешний файл
             {
                 TextureClass* t = new TextureClass();
                 if (!t) return nullptr;
@@ -290,7 +290,7 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
         }
     }
 
-    // РџСЂРѕР±СѓРµРј РІС‚РѕСЂРѕР№ С‚РёРї, РµСЃР»Рё РїРµСЂРІС‹Р№ РЅРµ РЅР°Р№РґРµРЅ
+    // Пробуем второй тип, если первый не найден
     if (type2 != aiTextureType_NONE && mat->GetTextureCount(type2) > 0)
     {
         if (mat->GetTexture(type2, 0, &path) == AI_SUCCESS)
@@ -301,7 +301,7 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
 }
 
 // ============================================================================
-// Р—Р°РіСЂСѓР·РєР° РєРѕСЃС‚РµР№ вЂ” РРЎРџР РђР’Р›Р•РќРќРђРЇ Р’Р•Р РЎРРЇ СЃ РѕС‚Р»Р°РґРєРѕР№
+// Загрузка костей — ИСПРАВЛЕННАЯ ВЕРСИЯ с отладкой
 // ============================================================================
 void AssimpModelClass::LoadBones(const aiScene* scene)
 {
@@ -352,7 +352,7 @@ void AssimpModelClass::LoadBones(const aiScene* scene)
         }
     }
 
-    // Р’С‹РґРµР»СЏРµРј РїР°РјСЏС‚СЊ Рё РёРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј
+    // Выделяем память и инициализируем
     m_finalBoneMatrices.resize(m_boneInfoMap.size());
     XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
     for (auto& mat : m_finalBoneMatrices) mat = identity;
@@ -361,7 +361,7 @@ void AssimpModelClass::LoadBones(const aiScene* scene)
 }
 
 // ============================================================================
-// Р—Р°РіСЂСѓР·РєР° Р°РЅРёРјР°С†РёР№ вЂ” РРЎРџР РђР’Р›Р•РќРќРђРЇ Р’Р•Р РЎРРЇ СЃ РѕС‚Р»Р°РґРєРѕР№
+// Загрузка анимаций — ИСПРАВЛЕННАЯ ВЕРСИЯ с отладкой
 // ============================================================================
 void AssimpModelClass::LoadAnimations(const aiScene* scene)
 {
@@ -389,7 +389,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
             aiNodeAnim* channel = anim->mChannels[c];
             BoneAnimationChannel boneChannel;
 
-            // РљР›Р®Р§Р•Р’РћР•: РёСЃРїРѕР»СЊР·СѓРµРј mNodeName вЂ” РёРјСЏ СѓР·Р»Р° РІ РёРµСЂР°СЂС…РёРё
+            // КЛЮЧЕВОЕ: используем mNodeName — имя узла в иерархии
             boneChannel.nodeName = NormalizeBoneName(channel->mNodeName.C_Str());
             std::string originalNodeName = channel->mNodeName.C_Str();
 
@@ -403,7 +403,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
             OutputDebugStringA(("    Scale keys: " + std::to_string(channel->mNumScalingKeys) + "\n").c_str());
 #endif
 
-            // РџРѕР·РёС†РёРё
+            // Позиции
             for (unsigned int k = 0; k < channel->mNumPositionKeys; ++k)
             {
                 KeyPosition kp;
@@ -419,7 +419,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
 #endif
             }
 
-            // Р’СЂР°С‰РµРЅРёСЏ
+            // Вращения
             for (unsigned int k = 0; k < channel->mNumRotationKeys; ++k)
             {
                 KeyRotation kr;
@@ -438,7 +438,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
 #endif
             }
 
-            // РњР°СЃС€С‚Р°Р±
+            // Масштаб
             for (unsigned int k = 0; k < channel->mNumScalingKeys; ++k)
             {
                 KeyScale ks;
@@ -465,7 +465,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
 }
 
 // ============================================================================
-// РРЅС‚РµСЂРїРѕР»СЏС†РёСЏ С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёР№ СЃ РѕС‚Р»Р°РґРєРѕР№
+// Интерполяция трансформаций с отладкой
 // ============================================================================
 XMMATRIX AssimpModelClass::InterpolatePosition(const std::vector<KeyPosition>& keys, float animTime) const
 {
@@ -482,7 +482,7 @@ XMMATRIX AssimpModelClass::InterpolatePosition(const std::vector<KeyPosition>& k
     if (dt < 0.0001f) dt = 1.0f;
     float factor = std::clamp((animTime - k1.timeStamp) / dt, 0.0f, 1.0f);
 
-#if DEBUG_TRANSFORMS && false // Р’РєР»СЋС‡РёС‚Рµ РґР»СЏ РѕС‚Р»Р°РґРєРё РёРЅС‚РµСЂРїРѕР»СЏС†РёРё
+#if DEBUG_TRANSFORMS && false // Включите для отладки интерполяции
     char dbg[256];
     sprintf_s(dbg, "[InterpPos] factor=%.3f, t1=%.3f, t2=%.3f, animTime=%.3f\n",
         factor, k1.timeStamp, k2.timeStamp, animTime);
@@ -548,7 +548,7 @@ XMMATRIX AssimpModelClass::InterpolateScale(const std::vector<KeyScale>& keys, f
 }
 
 // ============================================================================
-// ReadNodeHierarchy вЂ” РћРЎРќРћР’РќРђРЇ Р›РћР“РРљРђ РђРќРРњРђР¦РР СЃ РѕС‚Р»Р°РґРєРѕР№
+// ReadNodeHierarchy — ОСНОВНАЯ ЛОГИКА АНИМАЦИИ с отладкой
 // ============================================================================
 void AssimpModelClass::ReadNodeHierarchy(
     const aiNode* node,
@@ -569,7 +569,7 @@ void AssimpModelClass::ReadNodeHierarchy(
     depth++;
 #endif
 
-    // 1. Р›РѕРєР°Р»СЊРЅР°СЏ С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёСЏ РёР· СЃС†РµРЅС‹
+    // 1. Локальная трансформация из сцены
     XMFLOAT4X4 nodeLocalFloat = ConvertMatrix(node->mTransformation);
     XMMATRIX nodeTransform = XMLoadFloat4x4(&nodeLocalFloat);
 
@@ -577,27 +577,27 @@ void AssimpModelClass::ReadNodeHierarchy(
     PrintMatrix(nodeLocalFloat, indent + "  NodeLocal");
 #endif
 
-    // 2. РС‰РµРј Р°РЅРёРјР°С†РёРѕРЅРЅС‹Р№ РєР°РЅР°Р» РґР»СЏ Р­РўРћР“Рћ РЈР—Р›Рђ
+    // 2. Ищем анимационный канал для ЭТОГО УЗЛА
     const BoneAnimationChannel* channel = nullptr;
     for (const auto& ch : anim.channels)
     {
         if (ch.nodeName == nodeName) {
             channel = &ch;
 #if DEBUG_TRANSFORMS
-            OutputDebugStringA((indent + "  вњ“ Found animation channel\n").c_str());
+            OutputDebugStringA((indent + "  ? Found animation channel\n").c_str());
 #endif
             break;
         }
     }
 
-    // 3. Р•СЃР»Рё РµСЃС‚СЊ Р°РЅРёРјР°С†РёСЏ вЂ” РїРµСЂРµРѕРїСЂРµРґРµР»СЏРµРј Р»РѕРєР°Р»СЊРЅСѓСЋ С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёСЋ
+    // 3. Если есть анимация — переопределяем локальную трансформацию
     if (channel)
     {
         XMMATRIX posMat = InterpolatePosition(channel->positions, animTimeInSeconds);
         XMMATRIX rotMat = InterpolateRotation(channel->rotations, animTimeInSeconds);
         XMMATRIX scaleMat = InterpolateScale(channel->scales, animTimeInSeconds);
 
-        // РџРѕСЂСЏРґРѕРє: Scale в†’ Rotate в†’ Translate (Р»РѕРєР°Р»СЊРЅРѕРµ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ)
+        // Порядок: Scale > Rotate > Translate (локальное пространство)
         nodeTransform = scaleMat * rotMat * posMat;
 
 #if DEBUG_TRANSFORMS && false
@@ -605,21 +605,21 @@ void AssimpModelClass::ReadNodeHierarchy(
 #endif
     }
 
-    // 4. Р“Р»РѕР±Р°Р»СЊРЅР°СЏ С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёСЏ = СЂРѕРґРёС‚РµР»СЊ * Р»РѕРєР°Р»СЊРЅР°СЏ
+    // 4. Глобальная трансформация = родитель * локальная
     XMMATRIX globalTransform = nodeTransform * parentTransform;
 
 #if DEBUG_TRANSFORMS && false
     PrintMatrix(globalTransform, indent + "  Global");
 #endif
 
-    // 5. Р•СЃР»Рё СЌС‚РѕС‚ СѓР·РµР» вЂ” РєРѕСЃС‚СЊ, РІС‹С‡РёСЃР»СЏРµРј С„РёРЅР°Р»СЊРЅСѓСЋ РјР°С‚СЂРёС†Сѓ РґР»СЏ С€РµР№РґРµСЂР°
+    // 5. Если этот узел — кость, вычисляем финальную матрицу для шейдера
     auto boneIt = m_boneInfoMap.find(nodeName);
     if (boneIt != m_boneInfoMap.end())
     {
         int boneIndex = boneIt->second.boneIndex;
         XMMATRIX offsetMat = XMLoadFloat4x4(&boneIt->second.offsetMatrix);
 
-        // вњ… РџР РђР’РР›Р¬РќР«Р™ РџРћР РЇР”РћРљ РґР»СЏ DirectX: offset * global
+        // ? ПРАВИЛЬНЫЙ ПОРЯДОК для DirectX: offset * global
         XMMATRIX finalMat = globalTransform * offsetMat;
         XMStoreFloat4x4(&m_finalBoneMatrices[boneIndex], finalMat);
 
@@ -628,7 +628,7 @@ void AssimpModelClass::ReadNodeHierarchy(
             indent.c_str(), nodeName.c_str(), boneIndex);
         OutputDebugStringA(dbg);
 
-        // Р’С‹РІРѕРґРёРј РїРµСЂРІСѓСЋ РјР°С‚СЂРёС†Сѓ РґР»СЏ РѕС‚Р»Р°РґРєРё
+        // Выводим первую матрицу для отладки
         static bool firstBonePrinted = false;
         if (!firstBonePrinted && boneIndex == 0) {
             XMFLOAT4X4 temp; XMStoreFloat4x4(&temp, nodeTransform);
@@ -638,7 +638,7 @@ void AssimpModelClass::ReadNodeHierarchy(
 #endif
     }
 
-    // 6. Р РµРєСѓСЂСЃРёСЏ РїРѕ РґРµС‚СЏРј
+    // 6. Рекурсия по детям
     for (unsigned int i = 0; i < node->mNumChildren; ++i)
     {
         ReadNodeHierarchy(node->mChildren[i], globalTransform, anim, animTimeInSeconds);
@@ -650,7 +650,7 @@ void AssimpModelClass::ReadNodeHierarchy(
 }
 
 // ============================================================================
-// Initialize вЂ” РіР»Р°РІРЅР°СЏ С„СѓРЅРєС†РёСЏ Р·Р°РіСЂСѓР·РєРё СЃ РѕС‚Р»Р°РґРєРѕР№
+// Initialize — главная функция загрузки с отладкой
 // ============================================================================
 bool AssimpModelClass::Initialize(
     ID3D11Device* device,
@@ -698,13 +698,13 @@ bool AssimpModelClass::Initialize(
     m_animations.clear();
     m_animationTime = 0.0f;
 
-    // Р—Р°РіСЂСѓР¶Р°РµРј РєРѕСЃС‚Рё Рё Р°РЅРёРјР°С†РёРё
+    // Загружаем кости и анимации
     LoadBones(m_scene);
     LoadAnimations(m_scene);
 
 
 
-    // РЎРѕР·РґР°С‘Рј Р±СѓС„РµСЂ РєРѕСЃС‚РµР№
+    // Создаём буфер костей
     if (!m_finalBoneMatrices.empty())
     {
         ID3D11Device* dev = nullptr;
@@ -722,7 +722,7 @@ bool AssimpModelClass::Initialize(
         }
     }
 
-    // Р—Р°РіСЂСѓР¶Р°РµРј РјРµС€Рё
+    // Загружаем меши
     for (unsigned int i = 0; i < m_scene->mNumMeshes; ++i)
     {
         aiMesh* mesh = m_scene->mMeshes[i];
@@ -752,13 +752,13 @@ bool AssimpModelClass::Initialize(
                 v.binormal = XMFLOAT3(mesh->mBitangents[j].x, mesh->mBitangents[j].y, mesh->mBitangents[j].z);
             }
 
-            // Р“Р°СЂР°РЅС‚РёСЂСѓРµРј РІР°Р»РёРґРЅС‹Рµ РІРµСЃР°
+            // Гарантируем валидные веса
             for (int b = 0; b < 4; ++b) {
                 v.boneIDs[b] = -1;
                 v.boneWeights[b] = 0.0f;
             }
 
-            // РќР°Р·РЅР°С‡РµРЅРёРµ РІРµСЃРѕРІ
+            // Назначение весов
             for (unsigned int b = 0; b < mesh->mNumBones; ++b)
             {
                 aiBone* bone = mesh->mBones[b];
@@ -786,7 +786,7 @@ bool AssimpModelClass::Initialize(
                 }
             }
 
-            // РќРѕСЂРјР°Р»РёР·Р°С†РёСЏ РІРµСЃРѕРІ
+            // Нормализация весов
             float sum = v.boneWeights[0] + v.boneWeights[1] + v.boneWeights[2] + v.boneWeights[3];
             if (sum > 0.0001f) {
                 v.boneWeights[0] /= sum; v.boneWeights[1] /= sum;
@@ -803,14 +803,14 @@ bool AssimpModelClass::Initialize(
             vertices.push_back(v);
         }
 
-        // РРЅРґРµРєСЃС‹
+        // Индексы
         std::vector<unsigned long> indices;
         indices.reserve(part.indexCount);
         for (unsigned int f = 0; f < mesh->mNumFaces; f++)
             for (unsigned int k = 0; k < mesh->mFaces[f].mNumIndices; k++)
                 indices.push_back(mesh->mFaces[f].mIndices[k]);
 
-        // РЎРѕР·РґР°РЅРёРµ Р±СѓС„РµСЂРѕРІ
+        // Создание буферов
         D3D11_BUFFER_DESC vbDesc = { sizeof(VertexType) * (UINT)vertices.size(), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER };
         D3D11_SUBRESOURCE_DATA vbData = { vertices.data() };
         if (FAILED(device->CreateBuffer(&vbDesc, &vbData, &part.vertexBuffer))) return false;
@@ -819,7 +819,7 @@ bool AssimpModelClass::Initialize(
         D3D11_SUBRESOURCE_DATA ibData = { indices.data() };
         if (FAILED(device->CreateBuffer(&ibDesc, &ibData, &part.indexBuffer))) return false;
 
-        // РўРµРєСЃС‚СѓСЂС‹ РјР°С‚РµСЂРёР°Р»Р°
+        // Текстуры материала
         if (mesh->mMaterialIndex >= 0 && mesh->mMaterialIndex < (int)m_scene->mNumMaterials)
         {
             const aiMaterial* mat = m_scene->mMaterials[mesh->mMaterialIndex];
@@ -828,7 +828,7 @@ bool AssimpModelClass::Initialize(
             part.metalness = ExtractTexture_Internal(device, deviceContext, m_scene, mat, aiTextureType_METALNESS, aiTextureType_UNKNOWN);
             part.roughness = ExtractTexture_Internal(device, deviceContext, m_scene, mat, aiTextureType_DIFFUSE_ROUGHNESS, aiTextureType_UNKNOWN);
 
-            // Р—Р°РіР»СѓС€РєР° РёР· С†РІРµС‚Р°, РµСЃР»Рё РЅРµС‚ С‚РµРєСЃС‚СѓСЂ
+            // Заглушка из цвета, если нет текстур
             if (!part.texture && !m_Texture)
                 part.texture = Create1x1SRVFromColor(device, GetPBRColorFromMaterial(mat, aiTextureType_BASE_COLOR));
             if (!part.metalness) {
@@ -843,7 +843,7 @@ bool AssimpModelClass::Initialize(
                 part.roughness = Create1x1SRVFromColor(device, aiColor4D(roughness, roughness, roughness, 1.0f));
             }
 
-            // РџСЂРѕР·СЂР°С‡РЅРѕСЃС‚СЊ Рё СЃС‚РµРєР»Рѕ
+            // Прозрачность и стекло
             aiString alphaMode; mat->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode);
             float opacity = 1.0f, transmission = 0.0f;
             aiGetMaterialFloat(mat, AI_MATKEY_OPACITY, &opacity);
@@ -873,7 +873,7 @@ bool AssimpModelClass::Initialize(
         return false;
     }
 
-    // Fallback С‚РµРєСЃС‚СѓСЂР°
+    // Fallback текстура
     if (textureFilename && textureFilename[0]) {
         m_Texture = new TextureClass;
         if (!m_Texture || !m_Texture->Initialize(device, deviceContext, textureFilename)) {
@@ -882,7 +882,7 @@ bool AssimpModelClass::Initialize(
         }
     }
 
-    // РљСЌС€РёСЂРѕРІР°РЅРёРµ РіСЂР°РЅРёС†
+    // Кэширование границ
     GetBoundingBox(&m_cachedBBMin, &m_cachedBBMax);
     GetBoundingSphere(&m_cachedSphereCenter, &m_cachedSphereRadius);
     m_boundsCached = true;
@@ -901,18 +901,18 @@ void AssimpModelClass::DebugCompareNames()
 {
     OutputDebugStringA("=== NAME COMPARISON DEBUG ===\n");
 
-    // 1. РљРѕСЃС‚Рё (РёР· РјРµС€РµР№)
+    // 1. Кости (из мешей)
     OutputDebugStringA("--- Bones (aiBone::mName) ---\n");
     for (const auto& [name, info] : m_boneInfoMap) {
         OutputDebugStringA(("  BONE: [" + name + "] (index: " + std::to_string(info.boneIndex) + ")\n").c_str());
     }
 
-    // 2. РЈР·Р»С‹ РёРµСЂР°СЂС…РёРё (aiNode::mName)
+    // 2. Узлы иерархии (aiNode::mName)
     std::function<void(const aiNode*, int)> dumpNodes = [&](const aiNode* node, int depth) {
         std::string indent(depth * 2, ' ');
         std::string name = node->mName.C_Str();
         bool isBone = m_boneInfoMap.count(NormalizeBoneName(name)) > 0;
-        OutputDebugStringA((indent + "NODE: [" + name + "]" + (isBone ? " вњ“bone" : "") + "\n").c_str());
+        OutputDebugStringA((indent + "NODE: [" + name + "]" + (isBone ? " ?bone" : "") + "\n").c_str());
         for (unsigned i = 0; i < node->mNumChildren; ++i)
             dumpNodes(node->mChildren[i], depth + 1);
         };
@@ -921,7 +921,7 @@ void AssimpModelClass::DebugCompareNames()
         dumpNodes(m_scene->mRootNode, 0);
     }
 
-    // 3. РђРЅРёРјР°С†РёРѕРЅРЅС‹Рµ РєР°РЅР°Р»С‹ (aiNodeAnim::mNodeName)
+    // 3. Анимационные каналы (aiNodeAnim::mNodeName)
     OutputDebugStringA("--- Animation Channels (aiNodeAnim::mNodeName) ---\n");
     for (const auto& anim : m_animations) {
         OutputDebugStringA(("  Anim: " + anim.name + "\n").c_str());
@@ -967,7 +967,7 @@ void AssimpModelClass::Shutdown()
 }
 
 // ============================================================================
-// Render РјРµС‚РѕРґС‹
+// Render методы
 // ============================================================================
 void AssimpModelClass::Render(ID3D11DeviceContext* deviceContext)
 {
@@ -1010,7 +1010,7 @@ void AssimpModelClass::RenderAll(
 }
 
 // ============================================================================
-// Р“РµС‚С‚РµСЂС‹ Рё СѓС‚РёР»РёС‚С‹
+// Геттеры и утилиты
 // ============================================================================
 int AssimpModelClass::GetIndexCount() {
     return m_meshParts.empty() ? m_totalIndexCount : m_meshParts[0].indexCount;
@@ -1111,7 +1111,7 @@ void AssimpModelClass::GetRawTriangles(std::vector<XMFLOAT3>& out) const {
 }
 
 // ============================================================================
-// РћР±РЅРѕРІР»РµРЅРёРµ Р°РЅРёРјР°С†РёРё СЃ РєРѕРјРїРѕРЅРµРЅС‚РѕРј вЂ” СЃ СЂР°СЃС€РёСЂРµРЅРЅРѕР№ РѕС‚Р»Р°РґРєРѕР№
+// Обновление анимации с компонентом — с расширенной отладкой
 // ============================================================================
 void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float deltaTime)
 {
@@ -1123,10 +1123,10 @@ void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float delta
 
     float ticksPerSecond = (anim.ticksPerSecond > 0.0f) ? anim.ticksPerSecond : 24.0f;
 
-    // 1. РќР°РєР°РїР»РёРІР°РµРј РІСЂРµРјСЏ
+    // 1. Накапливаем время
     animComp.currentTime += deltaTime;
 
-    // 2. Р—Р°С†РёРєР»РёРІР°РЅРёРµ РІ СЃРµРєСѓРЅРґР°С…
+    // 2. Зацикливание в секундах
     float animDurationSec = anim.duration / ticksPerSecond;
     if (animDurationSec > 0.0f) {
         animComp.currentTime = fmodf(animComp.currentTime, animDurationSec);
@@ -1136,24 +1136,24 @@ void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float delta
         animComp.currentTime = 0.0f;
     }
 
-    // 3. РљРѕРЅРІРµСЂС‚РёСЂСѓРµРј РІ С‚РёРєРё РґР»СЏ РёРЅС‚РµСЂРїРѕР»СЏС†РёРё (СѓР¶Рµ Р·Р°С†РёРєР»РµРЅРѕ!)
+    // 3. Конвертируем в тики для интерполяции (уже зациклено!)
     float animTimeTicks = animComp.currentTime * ticksPerSecond;
     animTimeTicks = fmodf(animTimeTicks, anim.duration);
     if (animTimeTicks < 0.0f) animTimeTicks += anim.duration;
 
-    // 4. рџ”Ґ РљР РРўРР§Р•РЎРљРћР•: РіР°СЂР°РЅС‚РёСЂСѓРµРј, С‡С‚Рѕ Р±СѓС„РµСЂ РЅСѓР¶РЅРѕРіРѕ СЂР°Р·РјРµСЂР°
+    // 4. ?? КРИТИЧЕСКОЕ: гарантируем, что буфер нужного размера
     size_t boneCount = m_boneInfoMap.size();
     if (animComp.finalBoneMatrices.size() != boneCount) {
         animComp.finalBoneMatrices.resize(boneCount);
     }
 
-    // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј РёРґРµРЅС‚РёС‡РЅС‹РјРё РјР°С‚СЂРёС†Р°РјРё
+    // Инициализируем идентичными матрицами
     XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
     for (size_t i = 0; i < boneCount; ++i) {
         animComp.finalBoneMatrices[i] = identity;
     }
 
-    // 5. Р’С‹Р·С‹РІР°РµРј РІР°С€Сѓ Р РђР‘РћР§РЈР® РІРµСЂСЃРёСЋ С„СѓРЅРєС†РёРё
+    // 5. Вызываем вашу РАБОЧУЮ версию функции
     if (m_scene && m_scene->mRootNode) {
         ReadNodeHierarchyToComponent(m_scene->mRootNode, XMMatrixIdentity(), anim, animTimeTicks, animComp.finalBoneMatrices);
     }
@@ -1171,8 +1171,8 @@ void AssimpModelClass::SetBoneMatricesFromComponent(ID3D11DeviceContext* context
     XMFLOAT4X4 identity;
     DirectX::XMStoreFloat4x4(&identity, DirectX::XMMatrixIdentity());
 
-    // Р—Р°РїРѕР»РЅСЏРµРј Р’РЎР• 128 СЃР»РѕС‚РѕРІ Р±РµР·РѕРїР°СЃРЅС‹РјРё РјР°С‚СЂРёС†Р°РјРё, С‡С‚РѕР±С‹ С€РµР№РґРµСЂ РЅРµ С‡РёС‚Р°Р» РјСѓСЃРѕСЂ
-    // РїСЂРё РїСЂРѕРїСѓС‰РµРЅРЅС‹С…/РЅРµРёСЃРїРѕР»СЊР·СѓРµРјС‹С… РєРѕСЃС‚СЏС….
+    // Заполняем ВСЕ 128 слотов безопасными матрицами, чтобы шейдер не читал мусор
+    // при пропущенных/неиспользуемых костях.
     for (int i = 0; i < 128; ++i) {
         dst[i] = (i < (int)animComp.finalBoneMatrices.size()) ? animComp.finalBoneMatrices[i]
             : identity;
@@ -1182,7 +1182,7 @@ void AssimpModelClass::SetBoneMatricesFromComponent(ID3D11DeviceContext* context
     context->VSSetConstantBuffers(8, 1, &m_boneMatrixBuffer);
 
 #if DEBUG_TRANSFORMS
-    // Р’С‹РІРѕРґРёРј РїРµСЂРІСѓСЋ РјР°С‚СЂРёС†Сѓ РґР»СЏ РїСЂРѕРІРµСЂРєРё
+    // Выводим первую матрицу для проверки
     if (!animComp.finalBoneMatrices.empty()) {
         PrintMatrix(animComp.finalBoneMatrices[0], "[SetBoneMatrices] First bone matrix");
     }
@@ -1197,39 +1197,27 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
     std::vector<DirectX::XMFLOAT4X4>& outMatrices) const
 {
     if (outMatrices.empty()) {
-        OutputDebugStringA("[ReadNodeHierarchy] вљ пёЏ outMatrices is EMPTY!\n");
         return;
     }
 
-    // Р‘РµР·РѕРїР°СЃРЅРѕРµ С‡С‚РµРЅРёРµ РёРјРµРЅРё
+    // Безопасное чтение имени
     std::string rawName = (node->mName.length > 0) ? std::string(node->mName.C_Str(), node->mName.length) : "";
     std::string nodeName = NormalizeBoneName(rawName);
 
-    // рџ”Ґ Р›РћР“РР РЈР•Рњ РџР•Р Р’Р«Р• 20 РЈР—Р›РћР’ РґР»СЏ РѕС‚Р»Р°РґРєРё
-    static int debugCount = 0;
-    if (debugCount < 20) {
-        char dbg[512];
-        sprintf_s(dbg, "[Node %d] Raw='%s' | Norm='%s' | Children=%u\n",
-            debugCount, rawName.c_str(), nodeName.c_str(), node->mNumChildren);
-        OutputDebugStringA(dbg);
-        debugCount++;
-    }
-
-    // Р—Р°РіСЂСѓР·РєР° Р»РѕРєР°Р»СЊРЅРѕР№ С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёРё
+    // Загрузка локальной трансформации
     XMFLOAT4X4 nodeLocalFloat = ConvertMatrix(node->mTransformation);
     DirectX::XMMATRIX nodeTransform = DirectX::XMLoadFloat4x4(&nodeLocalFloat);
 
-    // РџРѕРёСЃРє РєР°РЅР°Р»Р° Р°РЅРёРјР°С†РёРё
+    // Поиск канала анимации
     const BoneAnimationChannel* channel = nullptr;
     for (const auto& ch : anim.channels) {
         if (ch.nodeName == nodeName) {
             channel = &ch;
-            if (debugCount <= 20) OutputDebugStringA(("  вњ“ Channel found: '" + ch.nodeName + "'\n").c_str());
             break;
         }
     }
 
-    // РџСЂРёРјРµРЅСЏРµРј Р°РЅРёРјР°С†РёСЋ
+    // Применяем анимацию
     if (channel) {
         XMMATRIX posMat = (channel->positions.size() >= 2) ? InterpolatePosition(channel->positions, animTime) :
             (channel->positions.empty() ? XMMatrixIdentity() : XMMatrixTranslation(channel->positions[0].position.x, channel->positions[0].position.y, channel->positions[0].position.z));
@@ -1243,27 +1231,21 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
 
     DirectX::XMMATRIX globalTransform = nodeTransform * parentTransform;
 
-    // рџ”Ґ РС‰РµРј РєРѕСЃС‚СЊ вЂ” СЃ Р”Р’РЈРњРЇ РїРѕРїС‹С‚РєР°РјРё
+    // ?? Ищем кость — с ДВУМЯ попытками
     auto boneIt = m_boneInfoMap.find(nodeName);
 
-    // РџРѕРїС‹С‚РєР° 2: РёС‰РµРј РїРѕ РѕСЂРёРіРёРЅР°Р»СЊРЅРѕРјСѓ РёРјРµРЅРё
+    // Попытка 2: ищем по оригинальному имени
     if (boneIt == m_boneInfoMap.end() && !rawName.empty()) {
         boneIt = m_boneInfoMap.find(rawName);
-        if (boneIt != m_boneInfoMap.end() && debugCount <= 20) {
-            OutputDebugStringA(("  рџ”Ѓ Fallback: '" + nodeName + "' -> '" + rawName + "'\n").c_str());
-        }
     }
 
-    // РџРѕРїС‹С‚РєР° 3: РёС‰РµРј РїРѕ РёРјРµРЅРё РєР°РЅР°Р»Р°
+    // Попытка 3: ищем по имени канала
     if (boneIt == m_boneInfoMap.end() && channel) {
         boneIt = m_boneInfoMap.find(channel->nodeName);
-        if (boneIt != m_boneInfoMap.end() && debugCount <= 20) {
-            OutputDebugStringA(("  рџ”Ѓ Fallback: '" + nodeName + "' -> Channel='" + channel->nodeName + "'\n").c_str());
-        }
     }
 
     if(boneIt != m_boneInfoMap.end()) {
-        // === РЎРљР•Р›Р•РўРќРђРЇ РђРќРРњРђР¦РРЇ ===
+        // === СКЕЛЕТНАЯ АНИМАЦИЯ ===
         int boneIndex = boneIt->second.boneIndex;
         if (boneIndex >= 0 && boneIndex < (int)outMatrices.size()) {
             DirectX::XMMATRIX offsetMat = DirectX::XMLoadFloat4x4(&boneIt->second.offsetMatrix);
@@ -1272,22 +1254,16 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
         }
     }
     else {
-        // === РќРћР”РћР’РђРЇ РђРќРРњРђР¦РРЇ (Р±РµР· РєРѕСЃС‚РµР№) ===
-        // Р—Р°РїРёСЃС‹РІР°РµРј РўРћР›Р¬РљРћ Р»РѕРєР°Р»СЊРЅСѓСЋ Р°РЅРёРјРёСЂРѕРІР°РЅРЅСѓСЋ С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёСЋ, Р±РµР· global/parent
+        // === НОДОВАЯ АНИМАЦИЯ (без костей) ===
+        // Записываем ТОЛЬКО локальную анимированную трансформацию, без global/parent
         if (!outMatrices.empty() && channel != nullptr) {
-            // nodeTransform СѓР¶Рµ СЃРѕРґРµСЂР¶РёС‚ Р°РЅРёРјР°С†РёСЋ (scale*rot*pos)
-            // РќР• СѓРјРЅРѕР¶Р°РµРј РЅР° parentTransform вЂ” СЌС‚Рѕ СЃРґРµР»Р°РµС‚ С€РµР№РґРµСЂ С‡РµСЂРµР· worldMatrix
+            // nodeTransform уже содержит анимацию (scale*rot*pos)
+            // НЕ умножаем на parentTransform — это сделает шейдер через worldMatrix
             DirectX::XMStoreFloat4x4(&outMatrices[0], globalTransform);
-
-            static bool logged = false;
-            if (!logged) {
-                OutputDebugStringA(("  [NodeAnim] Writing LOCAL transform to slot 0: '" + nodeName + "'\n").c_str());
-                logged = true;
-            }
         }
     }
 
-    // Р РµРєСѓСЂСЃРёСЏ
+    // Рекурсия
     for (unsigned int i = 0; i < node->mNumChildren; ++i) {
         ReadNodeHierarchyToComponent(node->mChildren[i], globalTransform, anim, animTime, outMatrices);
     }
@@ -1308,33 +1284,33 @@ void AssimpModelClass::ComputeBoneMatrices(int animIndex, float animTime,
 }
 
 // ============================================================================
-// Р¤СѓРЅРєС†РёСЏ РґР»СЏ РІС‹РІРѕРґР° РїРѕР»РЅРѕР№ РёРЅС„РѕСЂРјР°С†РёРё Рѕ РјРѕРґРµР»Рё (РґР»СЏ РѕС‚Р»Р°РґРєРё)
+// Функция для вывода полной информации о модели (для отладки)
 // ============================================================================
 void AssimpModelClass::PrintModelDebugInfo() {
 #if DEBUG_VERBOSE
     OutputDebugStringA("\n========== MODEL DEBUG INFO ==========\n");
 
-    // РРЅС„РѕСЂРјР°С†РёСЏ Рѕ СЃС†РµРЅРµ
+    // Информация о сцене
     if (m_scene) {
         OutputDebugStringA(("Scene: meshes=" + std::to_string(m_scene->mNumMeshes) +
             ", materials=" + std::to_string(m_scene->mNumMaterials) +
             ", textures=" + std::to_string(m_scene->mNumTextures) +
             ", animations=" + std::to_string(m_scene->mNumAnimations) + "\n").c_str());
 
-        // РљРѕСЂРЅРµРІРѕР№ СѓР·РµР»
+        // Корневой узел
         if (m_scene->mRootNode) {
             OutputDebugStringA(("Root node: '" + std::string(m_scene->mRootNode->mName.C_Str()) +
                 "', children=" + std::to_string(m_scene->mRootNode->mNumChildren) + "\n").c_str());
         }
     }
 
-    // РРЅС„РѕСЂРјР°С†РёСЏ Рѕ РєРѕСЃС‚СЏС…
+    // Информация о костях
     OutputDebugStringA(("Bones: " + std::to_string(m_boneInfoMap.size()) + "\n").c_str());
     for (const auto& [name, info] : m_boneInfoMap) {
         OutputDebugStringA(("  Bone[" + std::to_string(info.boneIndex) + "]: '" + name + "'\n").c_str());
     }
 
-    // РРЅС„РѕСЂРјР°С†РёСЏ РѕР± Р°РЅРёРјР°С†РёСЏС…
+    // Информация об анимациях
     OutputDebugStringA(("Animations: " + std::to_string(m_animations.size()) + "\n").c_str());
     for (size_t i = 0; i < m_animations.size(); ++i) {
         const auto& anim = m_animations[i];
@@ -1351,7 +1327,7 @@ void AssimpModelClass::PrintModelDebugInfo() {
         }
     }
 
-    // РРЅС„РѕСЂРјР°С†РёСЏ Рѕ РјРµС€Рё
+    // Информация о меши
     OutputDebugStringA(("Mesh parts: " + std::to_string(m_meshParts.size()) + "\n").c_str());
     for (size_t i = 0; i < m_meshParts.size(); ++i) {
         const auto& part = m_meshParts[i];
@@ -1365,18 +1341,18 @@ void AssimpModelClass::PrintModelDebugInfo() {
 }
 
 // ============================================================================
-// рџ”Ґ РљР РРўРР§Р•РЎРљРђРЇ Р”РРђР“РќРћРЎРўРРљРђ РґР»СЏ РЅРµС„С‚СЏРЅРѕРіРѕ РЅР°СЃРѕСЃР°
+// ?? КРИТИЧЕСКАЯ ДИАГНОСТИКА для нефтяного насоса
 // ============================================================================
 void AssimpModelClass::DebugAnimationBinding(const AnimationClip& anim) {
     OutputDebugStringA("\n========== ANIMATION BINDING DEBUG ==========\n");
 
-    // 1. РЎРїРёСЃРѕРє РІСЃРµС… РєРѕСЃС‚РµР№
+    // 1. Список всех костей
     OutputDebugStringA("--- Registered Bones ---\n");
     for (const auto& [name, info] : m_boneInfoMap) {
         OutputDebugStringA(("  BONE[" + std::to_string(info.boneIndex) + "]: '" + name + "'\n").c_str());
     }
 
-    // 2. РЎРїРёСЃРѕРє РєР°РЅР°Р»РѕРІ Р°РЅРёРјР°С†РёРё Рё РёС… РїСЂРёРІСЏР·РєР°
+    // 2. Список каналов анимации и их привязка
     OutputDebugStringA("--- Animation Channels Binding ---\n");
     int bound = 0, unbound = 0;
 
@@ -1385,12 +1361,12 @@ void AssimpModelClass::DebugAnimationBinding(const AnimationClip& anim) {
         auto it = m_boneInfoMap.find(ch.nodeName);
 
         if (it != m_boneInfoMap.end()) {
-            OutputDebugStringA(("  вњ“ CH[" + std::to_string(c) + "] '" + ch.nodeName +
+            OutputDebugStringA(("  ? CH[" + std::to_string(c) + "] '" + ch.nodeName +
                 "' -> BONE[" + std::to_string(it->second.boneIndex) + "]\n").c_str());
             bound++;
         }
         else {
-            OutputDebugStringA(("  вњ— CH[" + std::to_string(c) + "] '" + ch.nodeName +
+            OutputDebugStringA(("  ? CH[" + std::to_string(c) + "] '" + ch.nodeName +
                 "' -> NOT FOUND in bone map!\n").c_str());
             unbound++;
         }
@@ -1399,7 +1375,7 @@ void AssimpModelClass::DebugAnimationBinding(const AnimationClip& anim) {
     OutputDebugStringA(("Summary: bound=" + std::to_string(bound) +
         ", unbound=" + std::to_string(unbound) + "\n").c_str());
 
-    // 3. РџСЂРѕРІРµСЂРєР° РїРµСЂРІРѕР№ РјР°С‚СЂРёС†С‹
+    // 3. Проверка первой матрицы
     if (!m_finalBoneMatrices.empty()) {
         XMFLOAT4X4& m = m_finalBoneMatrices[0];
         bool isZero = (m._11 == 1 && m._22 == 1 && m._33 == 1 && m._44 == 1 &&

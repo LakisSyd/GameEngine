@@ -1,8 +1,8 @@
-п»ї// ============================================================================
+// ============================================================================
 // SceneManager.cpp
 //
-// РќР•Р”Р•Р›РЇ 4: GetObject(int) Рё m_legacyObjects СѓРґР°Р»РµРЅС‹.
-//           EditorUI Рё PickingSystem СЂР°Р±РѕС‚Р°СЋС‚ С‡РµСЂРµР· Entity + ECS.
+// НЕДЕЛЯ 4: GetObject(int) и m_legacyObjects удалены.
+//           EditorUI и PickingSystem работают через Entity + ECS.
 // ============================================================================
 
 #include "SceneManager.h"
@@ -11,9 +11,9 @@
 #include "PhysicsSystem.h"
 #include "../AnimationSystem.h"
 // ============================================================================
-// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ
+// Конструктор
 // ============================================================================
-// вњ… РЎРўРђР›Рћ:
+// ? СТАЛО:
 SceneManager::SceneManager()
     : m_defaultMaterial(nullptr)
     , m_mainModelFallback(nullptr)
@@ -27,18 +27,18 @@ SceneManager::~SceneManager()
 }
 
 // ============================================================================
-// SpawnObject вЂ” СЃРѕР·РґР°С‚СЊ РѕР±СЉРµРєС‚ РІ СЃС†РµРЅРµ
+// SpawnObject — создать объект в сцене
 //
-// РќР•Р”Р•Р›РЇ 3: СЃРѕР·РґР°С‘С‚ РўРћР›Р¬РљРћ ECS-РєРѕРјРїРѕРЅРµРЅС‚С‹. РќРёРєР°РєРѕРіРѕ GameObject РІ РІРµРєС‚РѕСЂРµ.
-// m_legacyObjects Р·Р°РїРѕР»РЅСЏРµС‚СЃСЏ В«РЅР° Р»РµС‚СѓВ» РІ GetObject() РїСЂРё РїРµСЂРІРѕРј РѕР±СЂР°С‰РµРЅРёРё.
+// НЕДЕЛЯ 3: создаёт ТОЛЬКО ECS-компоненты. Никакого GameObject в векторе.
+// m_legacyObjects заполняется «на лету» в GetObject() при первом обращении.
 //
-// Р’РѕР·РІСЂР°С‰Р°РµС‚ Entity вЂ” РёСЃРїРѕР»СЊР·СѓР№ РµРіРѕ РєР°Рє В«РєР»СЋС‡В» Рє РѕР±СЉРµРєС‚Сѓ.
+// Возвращает Entity — используй его как «ключ» к объекту.
 // ============================================================================
 Entity SceneManager::SpawnObject(AssimpModelClass* model, float x, float y, float z)
 {
     Entity e = m_registry.CreateEntity();
 
-    // в”Ђв”Ђ РљРѕРјРїРѕРЅРµРЅС‚С‹ РѕР±СЉРµРєС‚Р° РІ ECS в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Компоненты объекта в ECS ----------------------------------------------
     m_registry.AddComponent<TransformComponent>(e,
         TransformComponent{ {x, y, z}, {0, 0, 0}, {1, 1, 1} });
 
@@ -47,8 +47,8 @@ Entity SceneManager::SpawnObject(AssimpModelClass* model, float x, float y, floa
     m_registry.AddComponent<NameComponent>(e, NameComponent{ "Object" });
    
 
-    // ActiveComponent вЂ” С‚РµРі: РѕР±СЉРµРєС‚ СЃСѓС‰РµСЃС‚РІСѓРµС‚ Рё РґРѕР»Р¶РµРЅ СЂРµРЅРґРµСЂРёС‚СЊСЃСЏ
-    // RemoveObject() СѓРґР°Р»РёС‚ СЌС‚РѕС‚ РєРѕРјРїРѕРЅРµРЅС‚ в†’ RenderSystem РµРіРѕ РїСЂРѕРїСѓСЃС‚РёС‚
+    // ActiveComponent — тег: объект существует и должен рендериться
+    // RemoveObject() удалит этот компонент > RenderSystem его пропустит
     m_registry.AddComponent<ActiveComponent>(e, {});
 
     if (model && model->HasAnimations()) {
@@ -59,21 +59,21 @@ Entity SceneManager::SpawnObject(AssimpModelClass* model, float x, float y, floa
 }
 
 // ============================================================================
-// RemoveObject вЂ” РґРµР°РєС‚РёРІРёСЂРѕРІР°С‚СЊ Рё РїРѕР»РЅРѕСЃС‚СЊСЋ СѓРґР°Р»РёС‚СЊ СЃСѓС‰РЅРѕСЃС‚СЊ
-// РќР•Р”Р•Р›РЇ 4: С‚РµРїРµСЂСЊ РІС‹Р·С‹РІР°РµРј DestroyEntity вЂ” EditorUI С…СЂР°РЅРёС‚ Entity, РЅРµ int index.
+// RemoveObject — деактивировать и полностью удалить сущность
+// НЕДЕЛЯ 4: теперь вызываем DestroyEntity — EditorUI хранит Entity, не int index.
 // ============================================================================
 bool SceneManager::RemoveObject(Entity entity)
 {
     if (!m_registry.HasComponent<TransformComponent>(entity))
-        return false; // СЃСѓС‰РЅРѕСЃС‚СЊ РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚
+        return false; // сущность не существует
 
     
-    // РЈР±РёСЂР°РµРј С‚РµРі Р°РєС‚РёРІРЅРѕСЃС‚Рё вЂ” RenderSystem РїСЂРѕРїСѓСЃС‚РёС‚ СЌС‚Сѓ СЃСѓС‰РЅРѕСЃС‚СЊ
+    // Убираем тег активности — RenderSystem пропустит эту сущность
     m_registry.RemoveComponent<ActiveComponent>(entity);
     if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
     {
         if (mesh->material) {
-            delete mesh->material;  // вњ…
+            delete mesh->material;  // ?
             mesh->material = nullptr;
         }
     }
@@ -84,51 +84,51 @@ bool SceneManager::RemoveObject(Entity entity)
 }
 
 // ============================================================================
-// Clear вЂ” РѕС‡РёСЃС‚РёС‚СЊ РІСЃСЋ СЃС†РµРЅСѓ
+// Clear — очистить всю сцену
 // ============================================================================
 void SceneManager::Clear()
 {
-    // РќРµРґРµР»СЏ 3: РѕС‡РёС‰Р°РµРј ECS СЂРµРµСЃС‚СЂ С‡РµСЂРµР· РїРµСЂРµСЃРѕР·РґР°РЅРёРµ
-    // (РїРѕР»РЅС‹Р№ СЃР±СЂРѕСЃ вЂ” РІСЃРµ Entity Рё РІСЃРµ РєРѕРјРїРѕРЅРµРЅС‚С‹)
+    // Неделя 3: очищаем ECS реестр через пересоздание
+    // (полный сброс — все Entity и все компоненты)
     m_registry = ECSRegistry{};
     for (auto& [name, model] : m_modelCache)
     {
-        delete model;  // РР»Рё model->Shutdown() РµСЃР»Рё РµСЃС‚СЊ
+        delete model;  // Или model->Shutdown() если есть
     }
     m_modelCache.clear();
 
-    // Р’ MaterialClass::~MaterialClass()
+    // В MaterialClass::~MaterialClass()
   
 }
 
 // ============================================================================
-// UpdateAll вЂ” РѕР±РЅРѕРІРёС‚СЊ СЃС†РµРЅСѓ Р·Р° РєР°РґСЂ
+// UpdateAll — обновить сцену за кадр
 //
-// РќР•Р”Р•Р›РЇ 3: TransformSystem РЈР”РђР›РЃРќ.
-// Р”Р°РЅРЅС‹Рµ С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёРё Р¶РёРІСѓС‚ РўРћР›Р¬РљРћ РІ TransformComponent.
-// TransformComponent::GetWorldMatrix() РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РЅР°РїСЂСЏРјСѓСЋ РІ RenderSystem.
+// НЕДЕЛЯ 3: TransformSystem УДАЛЁН.
+// Данные трансформации живут ТОЛЬКО в TransformComponent.
+// TransformComponent::GetWorldMatrix() используется напрямую в RenderSystem.
 //
-// Р—РґРµСЃСЊ РјРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РґСЂСѓРіРёРµ СЃРёСЃС‚РµРјС‹: С„РёР·РёРєСѓ, Р°РЅРёРјР°С†РёРё, СЃРєСЂРёРїС‚С‹.
+// Здесь можно добавить другие системы: физику, анимации, скрипты.
 // ============================================================================
 void SceneManager::UpdateAll(float deltaTime)
 {
-    // РќРµРґРµР»СЏ 4: Р·РґРµСЃСЊ Р±СѓРґРµС‚ UpdateSystem::Update(m_registry, deltaTime)
-    // РџРѕРєР° вЂ” РїСѓСЃС‚Рѕ, С‚.Рє. Сѓ РЅР°СЃ РЅРµС‚ Р»РѕРіРёРєРё РѕР±РЅРѕРІР»РµРЅРёСЏ РєРѕРјРїРѕРЅРµРЅС‚РѕРІ
+    // Неделя 4: здесь будет UpdateSystem::Update(m_registry, deltaTime)
+    // Пока — пусто, т.к. у нас нет логики обновления компонентов
     AnimationSystem::Update(m_registry, deltaTime);
 }
 
 // ============================================================================
-// RenderAllECS вЂ” СЂРµРЅРґРµСЂ РІСЃРµС… Р°РєС‚РёРІРЅС‹С… РѕР±СЉРµРєС‚РѕРІ С‡РµСЂРµР· RenderSystem
+// RenderAllECS — рендер всех активных объектов через RenderSystem
 //
-// РќР•Р”Р•Р›РЇ 3: Р·Р°РјРµРЅСЏРµС‚ СЃС‚Р°СЂС‹Р№ RenderAll() С‡РµСЂРµР· m_objects.
+// НЕДЕЛЯ 3: заменяет старый RenderAll() через m_objects.
 //
-// RenderSystem::Render РёС‚РµСЂРёСЂСѓРµС‚ ECS:
-//   1. Р‘РµСЂС‘С‚ РІСЃРµ MeshRendererComponent
-//   2. РџСЂРѕРІРµСЂСЏРµС‚ ActiveComponent (С‚РµРі)
-//   3. Р‘РµСЂС‘С‚ TransformComponent в†’ GetWorldMatrix()
-//   4. Р’С‹Р·С‹РІР°РµС‚ RenderMesh()
+// RenderSystem::Render итерирует ECS:
+//   1. Берёт все MeshRendererComponent
+//   2. Проверяет ActiveComponent (тег)
+//   3. Берёт TransformComponent > GetWorldMatrix()
+//   4. Вызывает RenderMesh()
 //
-// РЎРІРµС‚ РєРѕРїРёСЂСѓРµС‚СЃСЏ РёР· m_lights РІ РїРµСЂРµРґР°РЅРЅС‹Рµ РјР°СЃСЃРёРІС‹ Р—Р”Р•РЎР¬ вЂ” РґРѕ РІС‹Р·РѕРІР° RenderSystem.
+// Свет копируется из m_lights в переданные массивы ЗДЕСЬ — до вызова RenderSystem.
 // ============================================================================
 void SceneManager::RenderAllECS(
     ID3D11DeviceContext* context,
@@ -147,7 +147,7 @@ void SceneManager::RenderAllECS(
     auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
 
 
-    // в”Ђв”Ђ РџСЂРѕС…РѕРґ 1: С‚РѕР»СЊРєРѕ РЅРµРїСЂРѕР·СЂР°С‡РЅС‹Рµ РѕР±СЉРµРєС‚С‹ (Р·Р°РїРёСЃСЊ РІ z-buffer) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Проход 1: только непрозрачные объекты (запись в z-buffer) ------------
     for (auto& [entity, mesh] : meshPool)
     {
         if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
@@ -158,10 +158,10 @@ void SceneManager::RenderAllECS(
         auto* mat = mesh.material ? mesh.material : defaultMaterial;
         if (!mat) continue;
 
-        // РџСЂРѕРїСѓСЃРєР°РµРј СЃС‚РµРєР»СЏРЅРЅС‹Рµ РѕР±СЉРµРєС‚С‹ РІ РїРµСЂРІРѕРј РїСЂРѕС…РѕРґРµ
+        // Пропускаем стеклянные объекты в первом проходе
         if (mat->IsGlass()) continue;
 
-        // РџСЂРѕРІРµСЂСЏРµРј С‚Р°РєР¶Рµ embedded transparent meshes
+        // Проверяем также embedded transparent meshes
         bool hasTransparentParts = false;
         for (const auto& part : mesh.model->GetMeshParts())
             if (part.isTransparent) { hasTransparentParts = true; break; }
@@ -177,9 +177,9 @@ void SceneManager::RenderAllECS(
             entity == selectedEntity, cameraPos, deltaTime, animComp);
     }
 
-    // в”Ђв”Ђ РџСЂРѕС…РѕРґ 2: РїСЂРѕР·СЂР°С‡РЅС‹Рµ РѕР±СЉРµРєС‚С‹ (СЃС‚РµРєР»Рѕ) вЂ” z-buffer РЅР° С‡С‚РµРЅРёРµ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-    // РћС‚РєР»СЋС‡Р°РµРј Р·Р°РїРёСЃСЊ РІ z-buffer С‡С‚РѕР±С‹ СЃС‚РµРєР»Рѕ РЅРµ РїРµСЂРµРєСЂС‹РІР°Р»Рѕ СЃР°РјРѕ СЃРµР±СЏ
-    // Рё РЅРµ СЃРєСЂС‹РІР°Р»Рѕ РѕР±СЉРµРєС‚С‹ Р·Р° РЅРёРј
+    // -- Проход 2: прозрачные объекты (стекло) — z-buffer на чтение ----------
+    // Отключаем запись в z-buffer чтобы стекло не перекрывало само себя
+    // и не скрывало объекты за ним
     for (auto& [entity, mesh] : meshPool)
     {
         if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
@@ -208,12 +208,12 @@ void SceneManager::RenderAllECS(
 }
 
 // ============================================================================
-// RenderAllECSExcluding вЂ” СЂРµРЅРґРµСЂ РІСЃРµС… РѕР±СЉРµРєС‚РѕРІ РєСЂРѕРјРµ РѕРґРЅРѕРіРѕ
+// RenderAllECSExcluding — рендер всех объектов кроме одного
 //
-// РќР•Р”Р•Р›РЇ 3: Р·Р°РјРµРЅСЏРµС‚ Render3DObjectsExcluding() РІ ApplicationClass.
-// РСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РґР»СЏ reflection pass: РїР»Р°СЃС‚РёРЅР°-Р·РµСЂРєР°Р»Рѕ РёСЃРєР»СЋС‡Р°РµС‚СЃСЏ
-// С‡С‚РѕР±С‹ РѕРЅР° РЅРµ РѕС‚СЂР°Р¶Р°Р»Р° СЃР°РјСѓ СЃРµР±СЏ (СЂРµРєСѓСЂСЃРёСЏ).
-/// TODO: РїСЂРѕРІРµСЂРёС‚СЊ СЂР°Р±РѕС‚РѕСЃРїРѕСЃРѕР±РЅРѕСЃС‚СЊ СЃ РЅРѕРІРѕР№ Р°СЂС…РёС‚РµРєС‚СѓСЂРѕР№
+// НЕДЕЛЯ 3: заменяет Render3DObjectsExcluding() в ApplicationClass.
+// Используется для reflection pass: пластина-зеркало исключается
+// чтобы она не отражала саму себя (рекурсия).
+/// TODO: проверить работоспособность с новой архитектурой
 // ============================================================================
 void SceneManager::RenderAllECSExcluding(
     ID3D11DeviceContext* context,
@@ -227,18 +227,18 @@ void SceneManager::RenderAllECSExcluding(
     float                deltaTime)
 {
 
-    // рџ”Ґ РќРћР’РћР•: РЎРѕР±РёСЂР°РµРј СЃРІРµС‚Р° РёР· ECS (РєР°Рє РІ RenderAllECS)
+    // ?? НОВОЕ: Собираем света из ECS (как в RenderAllECS)
     GatherLightsForShader(lightColors, lightPositions, NUM_LIGHTS);
 
-    // РС‚РµСЂРёСЂСѓРµРј РІСЂСѓС‡РЅСѓСЋ С‡С‚РѕР±С‹ РїСЂРѕРїСѓСЃС‚РёС‚СЊ excludeEntity
+    // Итерируем вручную чтобы пропустить excludeEntity
     auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
 
     for (auto& [entity, mesh] : meshPool)
     {
-        // РџСЂРѕРїСѓСЃРєР°РµРј РёСЃРєР»СЋС‡С‘РЅРЅСѓСЋ СЃСѓС‰РЅРѕСЃС‚СЊ (reflection РѕР±СЉРµРєС‚)
+        // Пропускаем исключённую сущность (reflection объект)
         if (entity == excludeEntity) continue;
 
-        // РџСЂРѕРїСѓСЃРєР°РµРј РЅРµР°РєС‚РёРІРЅС‹Рµ
+        // Пропускаем неактивные
         if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
 
         auto* transform = m_registry.GetComponent<TransformComponent>(entity);
@@ -297,7 +297,7 @@ void SceneManager::RenderSprites(
 
 // ============================================================================
 // SetupLightSpheres / RenderLightSpheres
-// Light-СЃС„РµСЂС‹ вЂ” С‚РѕР»СЊРєРѕ РІРёР·СѓР°Р»СЊРЅС‹Рµ РёРЅРґРёРєР°С‚РѕСЂС‹ СЂРµРґР°РєС‚РѕСЂР°, РЅРµ С‡Р°СЃС‚СЊ ECS.
+// Light-сферы — только визуальные индикаторы редактора, не часть ECS.
 // ============================================================================
 void SceneManager::SetupLightSpheres(std::vector<GameObject>& spheres, AssimpModelClass* model)
 {
@@ -314,10 +314,26 @@ void SceneManager::SetupLightSpheres(std::vector<GameObject>& spheres, AssimpMod
 
 
 
+WorldSettings& SceneManager::GetWorldSettings()
+{
+    return m_worldSettings;
+}
+
+const WorldSettings& SceneManager::GetWorldSettings() const
+{
+    return m_worldSettings;
+}
+
+void SceneManager::SetWorldSettings(const WorldSettings& settings)
+{
+
+	m_worldSettings = settings;
+}
+
 // ============================================================================
-// SaveScene вЂ” СЃРµСЂРёР°Р»РёР·Р°С†РёСЏ
+// SaveScene — сериализация
 //
-// РќР•Р”Р•Р›РЇ 3: С‡РёС‚Р°РµРј РґР°РЅРЅС‹Рµ РёР· ECS (TransformComponent, MeshRendererComponent)
+// НЕДЕЛЯ 3: читаем данные из ECS (TransformComponent, MeshRendererComponent)
 // ============================================================================
 bool SceneManager::SaveScene(const std::string& filename)
 {
@@ -328,7 +344,7 @@ bool SceneManager::SaveScene(const std::string& filename)
 
     int id = 0;
 
-    // в”Ђв”Ђ РЎРѕС…СЂР°РЅСЏРµРј РѕР±СЉРµРєС‚С‹ СЃ РјРµС€РµРј (РѕР±С‹С‡РЅС‹Рµ РѕР±СЉРµРєС‚С‹, РєРѕСЂРЅРё РїРѕРґР»РѕРґРѕРє Рё С‚.Рґ.) в”Ђв”Ђ
+    // -- Сохраняем объекты с мешем (обычные объекты, корни подлодок и т.д.) --
     auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
     for (auto& [entity, mesh] : meshPool)
     {
@@ -336,13 +352,13 @@ bool SceneManager::SaveScene(const std::string& filename)
         scene["objects"].push_back(SerializeObject(entity, id++));
     }
 
-    // в”Ђв”Ђ РЎРѕС…СЂР°РЅСЏРµРј РѕС‚СЃРµРєРё Р‘Р•Р— РјРµС€Р° (Р»РѕРіРёС‡РµСЃРєРёРµ CompartmentComponent) в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
-    // РћС‚СЃРµРєРё РјРѕРіСѓС‚ РЅРµ РёРјРµС‚СЊ MeshRendererComponent вЂ” РѕРЅРё РІСЃС‘ СЂР°РІРЅРѕ РґРѕР»Р¶РЅС‹ Р±С‹С‚СЊ СЃРѕС…СЂР°РЅРµРЅС‹,
-    // РёРЅР°С‡Рµ SubmarineComponent.allCompartments Р±СѓРґРµС‚ СѓРєР°Р·С‹РІР°С‚СЊ РЅР° РЅРµРІР°Р»РёРґРЅС‹Рµ Entity.
+    // -- Сохраняем отсеки БЕЗ меша (логические CompartmentComponent) ----------
+    // Отсеки могут не иметь MeshRendererComponent — они всё равно должны быть сохранены,
+    // иначе SubmarineComponent.allCompartments будет указывать на невалидные Entity.
     auto& compPool = m_registry.GetComponents<CompartmentComponent>();
     for (auto& [entity, comp] : compPool)
     {
-        // РЈР¶Рµ СЃРѕС…СЂР°РЅС‘РЅ С‡РµСЂРµР· meshPool вЂ” РїСЂРѕРїСѓСЃРєР°РµРј
+        // Уже сохранён через meshPool — пропускаем
         if (m_registry.HasComponent<MeshRendererComponent>(entity)) continue;
         if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
 
@@ -356,17 +372,17 @@ bool SceneManager::SaveScene(const std::string& filename)
 }
 
 // ============================================================================
-// SerializeObject вЂ” СѓРїР°РєРѕРІР°С‚СЊ ECS-СЃСѓС‰РЅРѕСЃС‚СЊ РІ JSON
+// SerializeObject — упаковать ECS-сущность в JSON
 //
-// РќР•Р”Р•Р›РЇ 3: С‡РёС‚Р°РµС‚ РёР· TransformComponent, РЅРµ РёР· GameObject
+// НЕДЕЛЯ 3: читает из TransformComponent, не из GameObject
 // ============================================================================
 json SceneManager::SerializeObject(Entity entity, int id)
 {
     json objJson;
     objJson["id"] = id;
-    objJson["entity_id"] = static_cast<uint32_t>(entity); // в†ђ СЃРѕС…СЂР°РЅСЏРµРј РѕСЂРёРіРёРЅР°Р»СЊРЅС‹Р№ Entity ID
+    objJson["entity_id"] = static_cast<uint32_t>(entity); // < сохраняем оригинальный Entity ID
 
-    // в”Ђв”Ђ Model / Texture paths в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Model / Texture paths -------------------------------------------------
     std::string modelPath = "assets/model/sphere.obj";
     std::string texturePath = "assets/texture/stone.tga";
 
@@ -380,7 +396,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
     objJson["model_path"] = modelPath;
     objJson["texture_path"] = texturePath;
 
-    // в”Ђв”Ђ TransformComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- TransformComponent ----------------------------------------------------
     if (auto* t = m_registry.GetComponent<TransformComponent>(entity))
     {
         objJson["position"] = { {"x", t->position.x}, {"y", t->position.y}, {"z", t->position.z} };
@@ -388,14 +404,14 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["scale"] = { {"x", t->scale.x},    {"y", t->scale.y},    {"z", t->scale.z} };
     }
 
-    // в”Ђв”Ђ Shader в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Shader ----------------------------------------------------------------
     if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
     {
         if (mesh->material && mesh->material->GetShader())
             objJson["shader_type"] = static_cast<int>(mesh->material->GetShader()->GetType());
     }
 
-    // в”Ђв”Ђ LightComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- LightComponent --------------------------------------------------------
     if (auto* light = m_registry.GetComponent<LightComponent>(entity))
     {
         objJson["is_light"] = true;
@@ -407,7 +423,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["light_attached_to"] = static_cast<uint32_t>(light->attachedTo);
     }
 
-    // в”Ђв”Ђ RigidBodyComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- RigidBodyComponent ----------------------------------------------------
     if (auto* rig = m_registry.GetComponent<RigidBodyComponent>(entity))
     {
         objJson["has_rigidbody"] = true;
@@ -442,13 +458,13 @@ json SceneManager::SerializeObject(Entity entity, int id)
             e["height_offset_top"] = elem.heightOffsetTop;
             e["height_offset_bot"] = elem.heightOffsetBottom;
             e["debug_weight"] = elem.debugWeight;
-            // editorEulerDegrees вЂ” С‚РѕР»СЊРєРѕ РґР»СЏ UI, РЅРµ СЃРѕС…СЂР°РЅСЏРµРј
+            // editorEulerDegrees — только для UI, не сохраняем
             elemsJson.push_back(e);
         }
         objJson["rb_compound_elements"] = elemsJson;
     }
 
-    // в”Ђв”Ђ SubmarineHullConfig в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- SubmarineHullConfig ---------------------------------------------------
     if (auto* hull = m_registry.GetComponent<SubmarineHullConfig>(entity))
     {
         objJson["has_hull_config"] = true;
@@ -458,13 +474,13 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["hull_show_debug"] = hull->showDebugHull;
     }
 
-    // в”Ђв”Ђ StaticColliderComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- StaticColliderComponent -----------------------------------------------
     if (auto* collider = m_registry.GetComponent<StaticColliderComponent>(entity))
     {
         objJson["has_static_collider"] = true;
     }
 
-    // в”Ђв”Ђ BuoyancyComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- BuoyancyComponent -----------------------------------------------------
     if (auto* buoyancy = m_registry.GetComponent<BuoyancyComponent>(entity))
     {
         objJson["has_buoyancy"] = true;
@@ -474,7 +490,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["buoyancy_multiplier"] = buoyancy->buoyancyMultiplier;
     }
 
-    // в”Ђв”Ђ CompartmentComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- CompartmentComponent --------------------------------------------------
     if (auto* comp = m_registry.GetComponent<CompartmentComponent>(entity))
     {
         objJson["has_compartment"] = true;
@@ -506,7 +522,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["compartment_connected"] = connectionsJson;
     }
 
-    // в”Ђв”Ђ SubmarineComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- SubmarineComponent ----------------------------------------------------
     if (auto* sub = m_registry.GetComponent<SubmarineComponent>(entity))
     {
         objJson["has_submarine"] = true;
@@ -520,7 +536,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["sub_all_compartments"] = compartmentsJson;
     }
 
-    // в”Ђв”Ђ PressureHullComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- PressureHullComponent -------------------------------------------------
     if (auto* phull = m_registry.GetComponent<PressureHullComponent>(entity))
     {
         objJson["has_pressure_hull"] = true;
@@ -531,7 +547,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["hull_leak_intensity"] = phull->leakIntensity;
     }
 
-    // в”Ђв”Ђ SubmarineJointComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- SubmarineJointComponent -----------------------------------------------
     if (auto* joint = m_registry.GetComponent<SubmarineJointComponent>(entity))
     {
         objJson["has_sub_joint"] = true;
@@ -542,7 +558,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["sub_joint_is_broken"] = joint->isBroken;
     }
 
-    // в”Ђв”Ђ JointConnectionComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- JointConnectionComponent ----------------------------------------------
     if (auto* conn = m_registry.GetComponent<JointConnectionComponent>(entity))
     {
         objJson["has_joint_connection"] = true;
@@ -561,12 +577,11 @@ json SceneManager::SerializeObject(Entity entity, int id)
 }
 
 // ============================================================================
-// LoadScene вЂ” РґРµСЃРµСЂРёР°Р»РёР·Р°С†РёСЏ
+// LoadScene — десериализация
 // ============================================================================
 bool SceneManager::LoadScene(const std::string& filename,
     ID3D11Device* device, ID3D11DeviceContext* deviceContext)
 {
-    OutputDebugStringA(("LoadScene: " + filename + "\n").c_str());
 
     if (filename.empty()) return false;
 
@@ -588,7 +603,7 @@ bool SceneManager::LoadScene(const std::string& filename,
 
     Clear();
 
-    // в”Ђв”Ђ РўР°Р±Р»РёС†Р° СЂРµРјР°РїРїРёРЅРіР°: СЃС‚Р°СЂС‹Р№ Entity ID в†’ РЅРѕРІС‹Р№ Entity ID в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Таблица ремаппинга: старый Entity ID > новый Entity ID --------------
     std::unordered_map<uint32_t, Entity> entityRemap;
 
     if (j.contains("objects") && j["objects"].is_array())
@@ -600,32 +615,26 @@ bool SceneManager::LoadScene(const std::string& filename,
             {
                 uint32_t oldId = objJson["entity_id"].get<uint32_t>();
                 entityRemap[oldId] = newEntity;
-
-                char buf[128];
-                sprintf_s(buf, "[LoadScene] Remap: old=%u в†’ new=%u\n", oldId, newEntity);
-                OutputDebugStringA(buf);
             }
         }
     }
 
-    // в”Ђв”Ђ Р¤Р°Р·Р° 2: РїРµСЂРµР±РёРЅРґРёС‚СЊ РІСЃРµ СЃСЃС‹Р»РєРё РЅР° Entity в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Фаза 2: перебиндить все ссылки на Entity -----------------------------
     RemapEntityReferences(entityRemap);
-
-    OutputDebugStringA("LoadScene: OK\n");
     return true;
 }
 
 // ============================================================================
-// DeserializeObject вЂ” СЃРѕР·РґР°С‚СЊ ECS-СЃСѓС‰РЅРѕСЃС‚СЊ РёР· JSON
+// DeserializeObject — создать ECS-сущность из JSON
 //
-// РќР•Р”Р•Р›РЇ 3: РІРѕР·РІСЂР°С‰Р°РµС‚ Entity РІРјРµСЃС‚Рѕ GameObject
+// НЕДЕЛЯ 3: возвращает Entity вместо GameObject
 Entity SceneManager::DeserializeObject(const json& j,
     ID3D11Device* device, ID3D11DeviceContext* deviceContext)
 {
     std::string modelPath = j.value("model_path", "");
     std::string texturePath = j.value("texture_path", "assets/texture/stone.tga");
 
-    // РћС‚СЃРµРє Р±РµР· РјРµС€Р° вЂ” С‚РѕР»СЊРєРѕ Р»РѕРіРёС‡РµСЃРєР°СЏ СЃСѓС‰РЅРѕСЃС‚СЊ (Transform + Active)
+    // Отсек без меша — только логическая сущность (Transform + Active)
     const bool isLogicalOnly = j.value("has_compartment", false) && modelPath.empty();
 
     Entity e = INVALID_ENTITY;
@@ -655,7 +664,7 @@ Entity SceneManager::DeserializeObject(const json& j,
 
     if (e == INVALID_ENTITY) return INVALID_ENTITY;
 
-    // в”Ђв”Ђ TransformComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- TransformComponent ----------------------------------------------------
     if (auto* t = m_registry.GetComponent<TransformComponent>(e))
     {
         if (j.contains("rotation"))
@@ -672,7 +681,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         }
     }
 
-    // в”Ђв”Ђ Shader в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- Shader ----------------------------------------------------------------
     if (j.contains("shader_type"))
     {
         ShaderType type = static_cast<ShaderType>(j["shader_type"].get<int>());
@@ -694,7 +703,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         }
     }
 
-    // в”Ђв”Ђ LightComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- LightComponent --------------------------------------------------------
     if (j.value("is_light", false))
     {
         LightComponent light;
@@ -716,7 +725,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         m_registry.AddComponent<LightComponent>(e, light);
     }
 
-    // в”Ђв”Ђ RigidBodyComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- RigidBodyComponent ----------------------------------------------------
     if (j.value("has_rigidbody", false))
     {
         RigidBodyComponent rig;
@@ -760,7 +769,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         PhysicsSystem::CreateRigidBody(m_registry, e);
     }
 
-    // в”Ђв”Ђ SubmarineHullConfig в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- SubmarineHullConfig ---------------------------------------------------
     if (j.value("has_hull_config", false))
     {
         SubmarineHullConfig hull;
@@ -771,11 +780,11 @@ Entity SceneManager::DeserializeObject(const json& j,
         m_registry.AddComponent<SubmarineHullConfig>(e, hull);
     }
 
-    // в”Ђв”Ђ StaticColliderComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- StaticColliderComponent -----------------------------------------------
     if (j.value("has_static_collider", false))
         m_registry.AddComponent<StaticColliderComponent>(e, StaticColliderComponent{});
 
-    // в”Ђв”Ђ BuoyancyComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- BuoyancyComponent -----------------------------------------------------
     if (j.value("has_buoyancy", false))
     {
         BuoyancyComponent buoyancy;
@@ -787,7 +796,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         m_registry.AddComponent<BuoyancyComponent>(e, buoyancy);
     }
 
-    // в”Ђв”Ђ CompartmentComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- CompartmentComponent --------------------------------------------------
     if (j.value("has_compartment", false))
     {
         CompartmentComponent comp;
@@ -821,7 +830,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         m_registry.AddComponent<CompartmentComponent>(e, comp);
     }
 
-    // в”Ђв”Ђ SubmarineComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- SubmarineComponent ----------------------------------------------------
     if (j.value("has_submarine", false))
     {
         SubmarineComponent sub;
@@ -838,7 +847,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         m_registry.AddComponent<SubmarineComponent>(e, sub);
     }
 
-    // в”Ђв”Ђ PressureHullComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- PressureHullComponent -------------------------------------------------
     if (j.value("has_pressure_hull", false))
     {
         PressureHullComponent phull;
@@ -850,7 +859,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         m_registry.AddComponent<PressureHullComponent>(e, phull);
     }
 
-    // в”Ђв”Ђ SubmarineJointComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- SubmarineJointComponent -----------------------------------------------
     if (j.value("has_sub_joint", false))
     {
         SubmarineJointComponent joint;
@@ -863,7 +872,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         m_registry.AddComponent<SubmarineJointComponent>(e, joint);
     }
 
-    // в”Ђв”Ђ JointConnectionComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- JointConnectionComponent ----------------------------------------------
     if (j.value("has_joint_connection", false))
     {
         JointConnectionComponent conn;
@@ -879,7 +888,7 @@ Entity SceneManager::DeserializeObject(const json& j,
         m_registry.AddComponent<JointConnectionComponent>(e, conn);
     }
 
-    // в”Ђв”Ђ DefaultMaterial fallback в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- DefaultMaterial fallback ----------------------------------------------
     if (m_defaultMaterial)
     {
         if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(e))
@@ -893,7 +902,7 @@ Entity SceneManager::DeserializeObject(const json& j,
 json SceneManager::SerializeMaterial(const MaterialClass* mat) { return json(); }
 
 // ============================================================================
-// GetOrCreateModel вЂ” РєСЌС€ РјРѕРґРµР»РµР№
+// GetOrCreateModel — кэш моделей
 // ============================================================================
 AssimpModelClass* SceneManager::GetOrCreateModel(
     const std::string& path,
@@ -914,8 +923,8 @@ AssimpModelClass* SceneManager::GetOrCreateModel(
         return m_mainModelFallback;
     }
 
-    // Р”Р»СЏ GLB texturePath Р±СѓРґРµС‚ РїСѓСЃС‚С‹Рј вЂ” РїРµСЂРµРґР°С‘Рј nullptr,
-    // С‡С‚РѕР±С‹ AssimpModelClass РЅРµ РіСЂСѓР·РёР» fallback С‚РµРєСЃС‚СѓСЂСѓ РїРѕРІРµСЂС… РІС€РёС‚С‹С…
+    // Для GLB texturePath будет пустым — передаём nullptr,
+    // чтобы AssimpModelClass не грузил fallback текстуру поверх вшитых
     const std::string ext = fs::path(path).extension().string();
     const bool isGLB = (ext == ".glb" || ext == ".gltf");
     const char* texPath = (!isGLB && !texturePath.empty()) ? texturePath.c_str() : nullptr;
@@ -936,7 +945,7 @@ void SceneManager::SetObjectShader(Entity entity, ShaderBaseClass* shader, ID3D1
     auto* mesh = m_registry.GetComponents<MeshRendererComponent>().Get(entity);
     if (!mesh) return;
 
-    // рџ”Ґ FIX: Р•СЃР»Рё РѕР±СЉРµРєС‚ РёСЃРїРѕР»СЊР·СѓРµС‚ РѕР±С‰РёР№ defaultMaterial вЂ” СЃРѕР·РґР°С‘Рј РµРјСѓ Р»РёС‡РЅС‹Р№ РєРѕРїРёСЋ
+    // ?? FIX: Если объект использует общий defaultMaterial — создаём ему личный копию
     if (mesh->material == m_defaultMaterial)
     {
         if (!device) return;
@@ -944,24 +953,23 @@ void SceneManager::SetObjectShader(Entity entity, ShaderBaseClass* shader, ID3D1
         auto* newMat = new MaterialClass();
         newMat->Initialize(device, L"RuntimeMaterial_Custom");
 
-        // РљРѕРїРёСЂСѓРµРј С‚РµРєСЃС‚СѓСЂС‹ РёР· РґРµС„РѕР»С‚РЅРѕРіРѕ РјР°С‚РµСЂРёР°Р»Р°
+        // Копируем текстуры из дефолтного материала
         if (m_defaultMaterial)
         {
             newMat->SetMainTexture(m_defaultMaterial->GetMainTexture());
-            // Р•СЃР»Рё РµСЃС‚СЊ РґСЂСѓРіРёРµ СЃР»РѕС‚С‹ вЂ” СЃРєРѕРїРёСЂСѓР№ РёС… С‚РѕР¶Рµ:
+            // Если есть другие слоты — скопируй их тоже:
             // newMat->SetTexture(1, m_defaultMaterial->GetTexture(1));
         }
 
-        mesh->material = newMat;  // РўРµРїРµСЂСЊ Сѓ РѕР±СЉРµРєС‚Р° СЃРІРѕР№ РјР°С‚РµСЂРёР°Р»!
-        OutputDebugStringA("[SetObjectShader] Created unique material for entity\n");
+        mesh->material = newMat;  // Теперь у объекта свой материал!
     }
 
-    // РўРµРїРµСЂСЊ Р±РµР·РѕРїР°СЃРЅРѕ РјРµРЅСЏРµРј С€РµР№РґРµСЂ вЂ” С‚РѕР»СЊРєРѕ Сѓ СЌС‚РѕРіРѕ РѕР±СЉРµРєС‚Р°
+    // Теперь безопасно меняем шейдер — только у этого объекта
     if (mesh->material && shader)
     {
         mesh->material->SetShader(shader);
 
-        // Glass-С€РµР№РґРµСЂ С‚СЂРµР±СѓРµС‚ refractionSRV + normalTexture (slot 1)
+        // Glass-шейдер требует refractionSRV + normalTexture (slot 1)
         if (shader->GetType() == ShaderType::Light || shader->GetType() == ShaderType::Glass)
         {
             if (!mesh->material->GetMainTexture() && m_defaultMaterial && m_defaultMaterial->GetMainTexture())
@@ -980,7 +988,7 @@ void SceneManager::SetObjectTexture(Entity entity, int slot,
     if (!mesh) return;
     if (!device || !context) return;
 
-    // 1. РЎРѕР·РґР°С‘Рј РјР°С‚РµСЂРёР°Р», РµСЃР»Рё РЅРµС‚
+    // 1. Создаём материал, если нет
     if (!mesh->material)
     {
         auto* mat = new MaterialClass();
@@ -990,22 +998,21 @@ void SceneManager::SetObjectTexture(Entity entity, int slot,
         mesh->material = mat;
     }
 
-    // РџРѕР·РІРѕР»СЏРµРј РѕС‡РёС‰Р°С‚СЊ СЃР»РѕС‚ РїСѓСЃС‚С‹Рј РїСѓС‚С‘Рј
+    // Позволяем очищать слот пустым путём
     if (path.empty())
     {
         mesh->material->SetTexture(slot, nullptr);
-        OutputDebugStringA(("SetObjectTexture: Cleared texture slot " + std::to_string(slot) + "\n").c_str());
         return;
     }
 
-    // РџСЂРѕРІРµСЂРєР° РЅР°Р»РёС‡РёСЏ С„Р°Р№Р»Р°
+    // Проверка наличия файла
     if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES)
     {
         OutputDebugStringA(("SetObjectTexture: File not found: " + path + "\n").c_str());
         return;
     }
 
-    // 2. Р—Р°РіСЂСѓР¶Р°РµРј С‚РµРєСЃС‚СѓСЂСѓ (РёСЃРїРѕР»СЊР·СѓРµРј TextureClass, РєР°Рє РІ SpawnObjectFromRequest)
+    // 2. Загружаем текстуру (используем TextureClass, как в SpawnObjectFromRequest)
     TextureClass* loadedTexture = new TextureClass();
     if (!loadedTexture->Initialize(device, context, path.c_str()))
     {
@@ -1014,23 +1021,21 @@ void SceneManager::SetObjectTexture(Entity entity, int slot,
         return;
     }
 
-    // 3. РќР°Р·РЅР°С‡Р°РµРј С‚РµРєСЃС‚СѓСЂСѓ РІ РЅСѓР¶РЅС‹Р№ СЃР»РѕС‚ РјР°С‚РµСЂРёР°Р»Р°
+    // 3. Назначаем текстуру в нужный слот материала
     mesh->material->SetTexture(slot, loadedTexture);
 
-    // 4. Р•СЃР»Рё СЌС‚Рѕ РіР»Р°РІРЅР°СЏ С‚РµРєСЃС‚СѓСЂР° (slot 0) Рё С€РµР№РґРµСЂ РµС‰С‘ РЅРµ РЅР°Р·РЅР°С‡РµРЅ вЂ” РјРѕР¶РЅРѕ РїРѕРґС‚СЏРЅСѓС‚СЊ РґРµС„РѕР»С‚РЅС‹Р№ С€РµР№РґРµСЂ
+    // 4. Если это главная текстура (slot 0) и шейдер ещё не назначен — можно подтянуть дефолтный шейдер
     if (slot == 0 && !mesh->material->GetShader() && m_defaultMaterial)
     {
         mesh->material->SetShader(m_defaultMaterial->GetShader());
     }
-
-    OutputDebugStringA(("SetObjectTexture: Assigned texture to slot " + std::to_string(slot) + " -> " + path + "\n").c_str());
 }
 
 
 
 
 // ============================================================================
-// SpawnLight вЂ” СЃРѕР·РґР°С‚СЊ РёСЃС‚РѕС‡РЅРёРє СЃРІРµС‚Р° РєР°Рє ECS-СЃСѓС‰РЅРѕСЃС‚СЊ
+// SpawnLight — создать источник света как ECS-сущность
 // ============================================================================
 Entity SceneManager::SpawnLight(const XMFLOAT3& position, const XMFLOAT4& color, bool isGizmo)
 {
@@ -1040,21 +1045,21 @@ Entity SceneManager::SpawnLight(const XMFLOAT3& position, const XMFLOAT4& color,
     Entity e = SpawnObject(model, position.x, position.y, position.z);
     if (e == INVALID_ENTITY) return INVALID_ENTITY;
 
-    // РњР°СЃС€С‚Р°Р±
+    // Масштаб
     if (auto* t = m_registry.GetComponent<TransformComponent>(e))
     {
         float s = isGizmo ? 0.2f : 0.3f;
         t->scale = { s, s, s };
     }
 
-    // вњ… РќРћР’РћР•: РЎРѕР·РґР°С‘Рј РјР°С‚РµСЂРёР°Р» СЃ ColorShader, С‡С‚РѕР±С‹ СЃС„РµСЂР° СЃРІРµС‚РёР»Р°СЃСЊ
+    // ? НОВОЕ: Создаём материал с ColorShader, чтобы сфера светилась
     if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(e))
     {
-        // Р—РґРµСЃСЊ РЅСѓР¶РЅРѕ РїРµСЂРµРґР°С‚СЊ device РґР»СЏ СЃРѕР·РґР°РЅРёСЏ РјР°С‚РµСЂРёР°Р»Р°
-        // РР»Рё СѓСЃС‚Р°РЅРѕРІРёС‚СЊ СѓР¶Рµ СЃСѓС‰РµСЃС‚РІСѓСЋС‰РёР№ РјР°С‚РµСЂРёР°Р» СЃ ColorShader
+        // Здесь нужно передать device для создания материала
+        // Или установить уже существующий материал с ColorShader
     }
 
-    // Р”РѕР±Р°РІР»СЏРµРј LightComponent
+    // Добавляем LightComponent
     LightComponent light;
     light.color = color;
     light.enabled = true;
@@ -1068,20 +1073,20 @@ Entity SceneManager::SpawnLight(const XMFLOAT3& position, const XMFLOAT4& color,
 
 
 // ============================================================================
-// RemoveLight вЂ” СѓРґР°Р»РёС‚СЊ РёСЃС‚РѕС‡РЅРёРє СЃРІРµС‚Р°
+// RemoveLight — удалить источник света
 // ============================================================================
 bool SceneManager::RemoveLight(Entity entity)
 {
     if (!m_registry.HasComponent<LightComponent>(entity))
         return false;
 
-    // Р”РµР°РєС‚РёРІРёСЂСѓРµРј вЂ” RenderSystem Рё GatherLights РїСЂРѕРїСѓСЃС‚СЏС‚
+    // Деактивируем — RenderSystem и GatherLights пропустят
     m_registry.RemoveComponent<ActiveComponent>(entity);
     return true;
 }
 
 // ============================================================================
-// РҐРµР»РїРµСЂС‹ РґР»СЏ СЂРµРґР°РєС‚РѕСЂР°
+// Хелперы для редактора
 // ============================================================================
 void SceneManager::SetLightColor(Entity entity, const XMFLOAT4& color)
 {
@@ -1126,7 +1131,7 @@ void SceneManager::AttachLightToObject(Entity lightEntity, Entity targetEntity, 
 
     light->attachedTo = targetEntity;
     light->offset = offset;
-    // РџРѕР·РёС†РёСЏ РѕР±РЅРѕРІРёС‚СЃСЏ РІ UpdateLights()
+    // Позиция обновится в UpdateLights()
 }
 
 void SceneManager::DetachLight(Entity lightEntity)
@@ -1140,12 +1145,12 @@ void SceneManager::DetachLight(Entity lightEntity)
 }
 
 // ============================================================================
-// GatherLightsForShader вЂ” СЃРѕР±СЂР°С‚СЊ РґР°РЅРЅС‹Рµ РґР»СЏ РїРµСЂРµРґР°С‡Рё РІ С€РµР№РґРµСЂ
-// Р’С‹Р·С‹РІР°РµС‚СЃСЏ РїРµСЂРµРґ RenderSystem::Render
+// GatherLightsForShader — собрать данные для передачи в шейдер
+// Вызывается перед RenderSystem::Render
 // ============================================================================
 void SceneManager::GatherLightsForShader(XMFLOAT4 outColors[], XMFLOAT4 outPositions[], int maxLights)
 {
-    // РћР±РЅСѓР»СЏРµРј СЃР»РѕС‚С‹
+    // Обнуляем слоты
     for (int i = 0; i < maxLights; ++i)
     {
         outColors[i] = XMFLOAT4(0, 0, 0, 0);
@@ -1161,23 +1166,23 @@ void SceneManager::GatherLightsForShader(XMFLOAT4 outColors[], XMFLOAT4 outPosit
         if (slot >= maxLights) break;
         if (!light.enabled) continue;
 
-        // РџСЂРѕРїСѓСЃРєР°РµРј СЂРµРґР°РєС‚РѕСЂРЅС‹Рµ РіРёР·РјРѕ РІ РёРіСЂРѕРІРѕРј СЂРµРЅРґРµСЂРµ
+        // Пропускаем редакторные гизмо в игровом рендере
         if (light.isEditorGizmo) continue;
 
-        // РџСЂРѕРїСѓСЃРєР°РµРј РЅРµР°РєС‚РёРІРЅС‹Рµ РѕР±СЉРµРєС‚С‹
+        // Пропускаем неактивные объекты
         if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
 
         auto* transform = transforms.Get(entity);
         if (!transform) continue;
 
-        // Р•СЃР»Рё СЃРІРµС‚ РїСЂРёРІСЏР·Р°РЅ Рє РѕР±СЉРµРєС‚Сѓ вЂ” РґРѕР±Р°РІР»СЏРµРј РѕС„С„СЃРµС‚
+        // Если свет привязан к объекту — добавляем оффсет
         XMFLOAT3 worldPos = transform->position;
         if (light.attachedTo != INVALID_ENTITY)
         {
             auto* targetTransform = transforms.Get(light.attachedTo);
             if (targetTransform)
             {
-                // РџСЂРѕСЃС‚РѕРµ СЃР»РѕР¶РµРЅРёРµ (РґР»СЏ РїРѕР»РЅРѕС†РµРЅРЅРѕР№ РїСЂРёРІСЏР·РєРё РЅСѓР¶РЅРѕ СѓС‡РёС‚С‹РІР°С‚СЊ СЂРѕС‚Р°С†РёСЋ)
+                // Простое сложение (для полноценной привязки нужно учитывать ротацию)
                 worldPos = {
                     targetTransform->position.x + light.offset.x,
                     targetTransform->position.y + light.offset.y,
@@ -1193,8 +1198,8 @@ void SceneManager::GatherLightsForShader(XMFLOAT4 outColors[], XMFLOAT4 outPosit
 }
 
 // ============================================================================
-// UpdateLights вЂ” РѕР±РЅРѕРІРёС‚СЊ РїРѕР·РёС†РёРё РїСЂРёРІСЏР·Р°РЅРЅС‹С… РёСЃС‚РѕС‡РЅРёРєРѕРІ
-// Р’С‹Р·С‹РІР°РµС‚СЃСЏ РєР°Р¶РґС‹Р№ РєР°РґСЂ РїРµСЂРµРґ СЂРµРЅРґРµСЂРѕРј
+// UpdateLights — обновить позиции привязанных источников
+// Вызывается каждый кадр перед рендером
 // ============================================================================
 void SceneManager::UpdateLights()
 {
@@ -1227,7 +1232,7 @@ void SceneManager::RemapEntityReferences(
             auto it = remap.find(static_cast<uint32_t>(old));
             if (it != remap.end()) return it->second;
 
-            // вљ пёЏ ID РЅРµ РЅР°Р№РґРµРЅ РІ С‚Р°Р±Р»РёС†Рµ вЂ” Р·РЅР°С‡РёС‚ РѕР±СЉРµРєС‚ РЅРµ Р±С‹Р» СЃРѕС…СЂР°РЅС‘РЅ
+            // ?? ID не найден в таблице — значит объект не был сохранён
             char buf[128];
             sprintf_s(buf, "[Remap] WARNING: old entity %u not found in remap table!\n",
                 static_cast<uint32_t>(old));
@@ -1235,31 +1240,19 @@ void SceneManager::RemapEntityReferences(
             return INVALID_ENTITY;
         };
 
-    // в”Ђв”Ђ SubmarineComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- SubmarineComponent ----------------------------------------------------
     auto& subPool = m_registry.GetComponents<SubmarineComponent>();
     for (auto& [entity, sub] : subPool)
     {
-        char buf[256];
-        sprintf_s(buf, "[Remap] SubComp on entity=%u: root=%u, compartments=%zu\n",
-            entity, static_cast<uint32_t>(sub.submarineRoot),
-            sub.allCompartments.size());
-        OutputDebugStringA(buf);
-
         sub.submarineRoot = remapEntity(sub.submarineRoot);
 
         for (Entity& c : sub.allCompartments)
         {
-            uint32_t oldId = static_cast<uint32_t>(c);
             c = remapEntity(c);
-            sprintf_s(buf, "[Remap]   compartment old=%u в†’ new=%u, hasComp=%s\n",
-                oldId, static_cast<uint32_t>(c),
-                (c != INVALID_ENTITY && m_registry.HasComponent<CompartmentComponent>(c))
-                ? "YES" : "NO");
-            OutputDebugStringA(buf);
         }
     }
 
-    // в”Ђв”Ђ CompartmentComponent.connectedCompartments в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- CompartmentComponent.connectedCompartments ----------------------------
     auto& compPool = m_registry.GetComponents<CompartmentComponent>();
     for (auto& [entity, comp] : compPool)
     {
@@ -1267,7 +1260,7 @@ void SceneManager::RemapEntityReferences(
             c = remapEntity(c);
     }
 
-    // в”Ђв”Ђ LightComponent.attachedTo в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- LightComponent.attachedTo ---------------------------------------------
     auto& lightPool = m_registry.GetComponents<LightComponent>();
     for (auto& [entity, light] : lightPool)
     {
@@ -1275,7 +1268,7 @@ void SceneManager::RemapEntityReferences(
             light.attachedTo = remapEntity(light.attachedTo);
     }
 
-    // в”Ђв”Ђ SubmarineJointComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- SubmarineJointComponent -----------------------------------------------
     auto& jointPool = m_registry.GetComponents<SubmarineJointComponent>();
     for (auto& [entity, joint] : jointPool)
     {
@@ -1283,13 +1276,11 @@ void SceneManager::RemapEntityReferences(
         joint.compartmentB = remapEntity(joint.compartmentB);
     }
 
-    // в”Ђв”Ђ JointConnectionComponent в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- JointConnectionComponent ----------------------------------------------
     auto& connPool = m_registry.GetComponents<JointConnectionComponent>();
     for (auto& [entity, conn] : connPool)
     {
         if (conn.targetEntity != INVALID_ENTITY)
             conn.targetEntity = remapEntity(conn.targetEntity);
     }
-
-    OutputDebugStringA("[LoadScene] Entity remapping complete\n");
 }

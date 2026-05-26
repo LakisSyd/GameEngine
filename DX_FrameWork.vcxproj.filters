@@ -491,6 +491,9 @@
     <ClInclude Include="CharacterFacingSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
+    <ClInclude Include="JobSystem.h">
+      <Filter>Core</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\Render\Shader\Vs\Lightmap.vs">

@@ -1,2 +1,1 @@
-C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Ps\SkyShader.ps(24,12-67): warning X3206: implicit truncation of vector type
-error X3501: 'SkyPS': entrypoint not found
+C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Ps\SkyShader.ps(26,16-27): error X4000: variable 'uv' used without having been completely initialized

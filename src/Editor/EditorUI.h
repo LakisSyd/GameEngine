@@ -131,6 +131,8 @@ private:
     char  m_spawnTexturePath[256] = "assets/texture/stone.tga";
     float m_spawnPos[3] = { 0.0f, 0.0f, 0.0f };
 
+    char m_skyboxPathBuf[256] = "assets/texture/cubemap/day.hdr";
+
     static constexpr int PRESET_COUNT = 4;
     static constexpr std::array<const char*, PRESET_COUNT> MODEL_PRESETS = {
         "assets/model/sphere.obj",
