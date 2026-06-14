@@ -67,10 +67,13 @@ public:
     {
         bool        pending = false;
         std::string modelPath;
+        std::string collisionModelPath;
+
         std::string texturePath;
         float       posX = 0.0f;
         float       posY = 0.0f;
         float       posZ = 0.0f;
+        bool useSeparateCollisionMesh;
     };
     SpawnRequest ConsumeSpawnRequest()
     {
@@ -101,6 +104,16 @@ public:
     PhysicsDebugSettings& GetPhysicsDebugSettings() { return m_debugSettings; }
 
 
+    bool ConsumeRebuildGrassRequest()
+    {
+        if (!m_rebuildGrassRequested)
+            return false;
+
+        m_rebuildGrassRequested = false;
+        return true;
+    }
+
+
     bool WantCaptureMouse() const;
     void ToggleObjectDebugWindow() { m_showObjectDebugWindow = !m_showObjectDebugWindow; }
     bool IsObjectDebugWindowVisible() const { return m_showObjectDebugWindow; }
@@ -121,6 +134,9 @@ private:
     FileActionRequest m_saveRequest;
     FileActionRequest m_loadRequest;
 
+
+    bool useSeparateCollisionMesh = false;
+
     char  m_savePathBuf[256] = "scene.json";
     char  m_loadPathBuf[256] = "scene.json";
 
@@ -128,6 +144,7 @@ private:
     bool  m_openLoadDialog = false;
 
     char  m_spawnModelPath[256] = "assets/model/sphere.obj";
+	char m_spawnCollisionModelPath[256] = "physics_";
     char  m_spawnTexturePath[256] = "assets/texture/stone.tga";
     float m_spawnPos[3] = { 0.0f, 0.0f, 0.0f };
 
@@ -233,13 +250,29 @@ private:
     char m_tex1PathBuf[256] = "assets/texture/dirt.tga";
     char m_tex2PathBuf[256] = "";   // metalness — пустой по умолчанию
     char m_tex3PathBuf[256] = "";   // roughness — пустой по умолчанию
+    char m_terrainGrassPathBuf[256] = "assets/terrain/textures/grass_base.png";
+    char m_terrainDirtPathBuf[256] = "assets/terrain/textures/dirt_base.png";
+    char m_terrainMaskPathBuf[256] = "assets/terrain/masks/dirt_mask.png";
+    char m_terrainGrassNormalPathBuf[256] = "assets/terrain/textures/grass_normal.jpg";
+    char m_terrainDirtNormalPathBuf[256] = "assets/terrain/textures/dirt_normal.jpg";
+    char m_terrainGrassVariationPathBuf[256] = "assets/terrain/textures/grass_variation_base.png";
+    char m_terrainGrassVariationNormalPathBuf[256] = "assets/terrain/textures/grass_variation_normal.jpg";
+    float m_terrainTileScale = 2.0f;
+    float m_terrainNormalStrength = 1.0f;
+    float m_terrainVariationScale = 0.08f;
+    float m_terrainVariationStrength = 1.0f;
+    float m_terrainBrightness = 1.0f;
+    float m_terrainAmbientBoost = 1.0f;
+    float m_terrainMinXZ[2] = { -50.0f, -50.0f };
+    float m_terrainSizeXZ[2] = { 100.0f, 100.0f };
 
     ID3D11Device* m_device = nullptr;
     ID3D11DeviceContext* m_context = nullptr;
+    bool m_initialized = false;
 
     int                      m_activeFilterIndex = 0;
-    std::vector<std::string> m_filterExtensions = { "", ".fbx", ".obj", ".png", ".jpg", ".dds" };
-    std::vector<std::string> m_filterLabels = { "All", "Models(FBX)", "Models(OBJ)", "Textures(PNG)", "Textures(JPG)", "Textures(DDS)" };
+    std::vector<std::string> m_filterExtensions = { "", ".glb", ".fbx", ".obj", ".png", ".jpg", ".dds" };
+    std::vector<std::string> m_filterLabels = { "All", "Models(GLB)", "Models(FBX)", "Models(OBJ)", "Textures(PNG)", "Textures(JPG)", "Textures(DDS)" };
 
     char m_searchBuf[128] = {};
 
@@ -286,7 +319,8 @@ private:
     XMFLOAT3 m_cornerDragStartMax = {};
 
     
- 
+    bool m_rebuildGrassRequested = false;
+
 
     // Синхронизация кэша из внешнего кода (ApplicationClass → corner drag)
     void UpdateCacheFromCompartment_Public(const CompartmentComponent* comp) { UpdateCacheFromCompartment(comp); }
@@ -302,6 +336,7 @@ private:
     Entity CreateSubmarineWithMesh(SceneManager& sceneManager, const XMFLOAT3& position, const char* modelPath, float hullRadius, float hullMass);
     void UpdateBreachesOnResize(CompartmentComponent* comp, const XMFLOAT3& oldMin, const XMFLOAT3& oldMax);
     void DrawSubmarineCollisionSetup(ECSRegistry& registry, Entity entity);
+    void RenderWorldAreaSpawner(SceneManager& sceneManager);
     void UpdateCacheFromCompartment(const CompartmentComponent* comp);
     void RenderCompartmentGizmo(ECSRegistry& registry, const XMMATRIX& view, const XMMATRIX& projection);
 };

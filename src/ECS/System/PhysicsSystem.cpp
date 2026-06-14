@@ -1,9 +1,9 @@
-п»ї    #define NOMINMAX
+    #define NOMINMAX
     #define WIN32_LEAN_AND_MEAN
-    #define ENABLE_VHACD_IMPLEMENTATION 1  // вљ пёЏ РўРѕР»СЊРєРѕ РІ РћР”РќРћРњ .cpp С„Р°Р№Р»Рµ!
+    #define ENABLE_VHACD_IMPLEMENTATION 1  // ?? Только в ОДНОМ .cpp файле!
     #define USE_VHACD
 
-    // РўРµРїРµСЂСЊ РјРѕР¶РЅРѕ РїРѕРґРєР»СЋС‡Р°С‚СЊ Р·Р°РіРѕР»РѕРІРєРё
+    // Теперь можно подключать заголовки
     #include "PhysicsSystem.h"
     #include "FloodingSystem.h"
     #include "assimpmodelclass.h"
@@ -34,19 +34,22 @@
 
             if (pushToBulletBeforeStep)
             {
-                // Р•СЃР»Рё СЂРµРґР°РєС‚РѕСЂ РёР·РјРµРЅРёР» Transform вЂ” РѕС‚РїСЂР°РІР»СЏРµРј РІ Bullet РїРµСЂРµРґ С€Р°РіРѕРј С„РёР·РёРєРё
+                // Если редактор изменил Transform — отправляем в Bullet перед шагом физики
                 if (changedFromEditor)
                 {
                     btTransform bt;
                     bt.setIdentity();
-                    bt.setOrigin(btVector3(tf->position.x, tf->position.y, tf->position.z));
+                    bt.setOrigin(btVector3(
+                        tf->position.x,
+                        tf->position.y + controller.capsuleCenterOffsetY,
+                        tf->position.z));
                     bt.setRotation(EulerToQuaternion(tf->rotation));
 
-                    // РћР±РЅРѕРІР»СЏРµРј ghost Рё character controller РїРѕР·РёС†РёСЋ (warp, РµСЃР»Рё РµСЃС‚СЊ)
+                    // Обновляем ghost и character controller позицию (warp, если есть)
                     controller.ghostObj->setWorldTransform(bt);
                     if (controller.controller)
                     {
-                        // warp Р·Р°РґР°С‘С‚ РјРіРЅРѕРІРµРЅРЅС‹Р№ РїРµСЂРµРЅРѕСЃ РєРѕРЅС‚СЂРѕР»Р»РµСЂР°
+                        // warp задаёт мгновенный перенос контроллера
                         controller.controller->warp(bt.getOrigin());
                     }
 
@@ -56,15 +59,18 @@
             }
             else
             {
-                // РџРѕСЃР»Рµ С€Р°РіР° С„РёР·РёРєРё вЂ” С‡РёС‚Р°РµРј РёР· Bullet РІ Transform (РІРёР·СѓР°Р»)
+                // После шага физики — читаем из Bullet в Transform (визуал)
                 btTransform trans = controller.ghostObj->getWorldTransform();
                 btVector3 pos = trans.getOrigin();
 
-                // Р—Р°С‰РёС‚Р° РѕС‚ NaN
+                // Защита от NaN
                 if (!isnan(pos.x()) && !isnan(pos.y()) && !isnan(pos.z()))
                 {
-                    tf->position = XMFLOAT3(pos.x(), pos.y(), pos.z());
-                    // РџРѕРІС‚РѕСЂРЅРѕ Р·Р°РїРёСЃС‹РІР°С‚СЊ СЂРѕС‚Р°С†РёСЋ РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ, РµСЃР»Рё РЅСѓР¶РµРЅ РІРёРґРёРјС‹Р№ РїРѕРІРѕСЂРѕС‚
+                    tf->position = XMFLOAT3(
+                        pos.x(),
+                        pos.y() - controller.capsuleCenterOffsetY,
+                        pos.z());
+                    // Повторно записывать ротацию опционально, если нужен видимый поворот
                     // btQuaternion rot = trans.getRotation();
                     // tf->rotation = QuaternionToEuler(rot);
                     controller.lastSyncedPosition = tf->position;
@@ -81,8 +87,8 @@
         XMFLOAT3 position;
         XMFLOAT2 texture;
         XMFLOAT3 normal;
-        XMFLOAT3 tangent;  // в†ђ РЅСѓР¶РµРЅ РґР»СЏ TBN РјР°С‚СЂРёС†С‹ РІ pbr.vs
-        XMFLOAT3 binormal; // в†ђ РЅСѓР¶РµРЅ РґР»СЏ TBN РјР°С‚СЂРёС†С‹ РІ pbr.vs
+        XMFLOAT3 tangent;  // < нужен для TBN матрицы в pbr.vs
+        XMFLOAT3 binormal; // < нужен для TBN матрицы в pbr.vs
     };
 
     bool PhysicsSystem::InitializeWorld()
@@ -125,20 +131,43 @@
         return new btCapsuleShape(scaledRadius, scaledHeight);
     }
 
+    btCollisionShape* PhysicsSystem::CreateStairRampShape(
+        const btVector3& size, const XMFLOAT3& scale)
+    {
+        const float width = fmaxf(0.01f, size.x() * scale.x);
+        const float height = fmaxf(0.01f, size.y() * scale.y);
+        const float depth = fmaxf(0.01f, size.z() * scale.z);
+
+        const float halfWidth = width * 0.5f;
+        const float halfDepth = depth * 0.5f;
+
+        auto* ramp = new btConvexHullShape();
+        ramp->addPoint(btVector3(-halfWidth, 0.0f, -halfDepth), false);
+        ramp->addPoint(btVector3( halfWidth, 0.0f, -halfDepth), false);
+        ramp->addPoint(btVector3(-halfWidth, 0.0f,  halfDepth), false);
+        ramp->addPoint(btVector3( halfWidth, 0.0f,  halfDepth), false);
+        ramp->addPoint(btVector3(-halfWidth, height, halfDepth), false);
+        ramp->addPoint(btVector3( halfWidth, height, halfDepth), false);
+        ramp->recalcLocalAabb();
+        ramp->optimizeConvexHull();
+        ramp->setMargin(0.01f);
+        return ramp;
+    }
+
     btCollisionShape* PhysicsSystem::CreateConvexHullShape(
         AssimpModelClass* model, const XMFLOAT3& scale)
     {
         if (!model) return nullptr;
 
-        // рџ”Ґ 1. РЎРѕР·РґР°С‘Рј СЃР°Рј convex hull
+        // ?? 1. Создаём сам convex hull
         auto* convexHull = new btConvexHullShape();
         if (!convexHull) return nullptr;
 
-        // рџ”Ґ 2. РџРѕР»СѓС‡Р°РµРј РІРµСЂС€РёРЅС‹ РёР· РјРѕРґРµР»Рё
+        // ?? 2. Получаем вершины из модели
         std::vector<XMFLOAT3> vertices;
         model->GetRawVertices(vertices);
 
-        // рџ”Ґ 3. Р—Р°С‰РёС‚Р° РѕС‚ РїСѓСЃС‚РѕР№ РјРѕРґРµР»Рё
+        // ?? 3. Защита от пустой модели
         if (vertices.empty())
         {
             OutputDebugStringA("[Physics] ConvexHull: no vertices, using fallback box\n");
@@ -146,7 +175,7 @@
             return new btBoxShape(btVector3(0.5f, 0.5f, 0.5f));
         }
 
-        // рџ”Ґ 4. Р”РѕР±Р°РІР»СЏРµРј РІРµСЂС€РёРЅС‹ СЃ СѓС‡С‘С‚РѕРј РјР°СЃС€С‚Р°Р±Р°
+        // ?? 4. Добавляем вершины с учётом масштаба
         for (const auto& v : vertices)
         {
             btVector3 point(
@@ -154,15 +183,15 @@
                 v.y * scale.y,
                 v.z * scale.z
             );
-            convexHull->addPoint(point, false); // false = РЅРµ РїРµСЂРµСЃС‡РёС‚С‹РІР°С‚СЊ AABB РЅР° РєР°Р¶РґРѕРј С€Р°РіРµ
+            convexHull->addPoint(point, false); // false = не пересчитывать AABB на каждом шаге
         }
 
-        // рџ”Ґ 5. РљР РРўРР§РќРћ: С„РёРЅР°Р»СЊРЅР°СЏ РѕРїС‚РёРјРёР·Р°С†РёСЏ Рё РїРµСЂРµСЃС‡С‘С‚ AABB
+        // ?? 5. КРИТИЧНО: финальная оптимизация и пересчёт AABB
         convexHull->recalcLocalAabb();
         convexHull->optimizeConvexHull();
         convexHull->setMargin(0.04f);
 
-        // рџ”Ґ 6. Р’РѕР·РІСЂР°С‰Р°РµРј СЃРѕР·РґР°РЅРЅСѓСЋ С„РѕСЂРјСѓ
+        // ?? 6. Возвращаем созданную форму
         return convexHull;
     }
 
@@ -171,13 +200,13 @@
     {
         if (!model || !rb) return nullptr;
 
-        // рџ”Ґ 1. РЎРѕР·РґР°С‘Рј btTriangleMesh
+        // ?? 1. Создаём btTriangleMesh
         auto* triangleMesh = new btTriangleMesh();
         if (!triangleMesh) return nullptr;
 
-        // рџ”Ґ 2. РџРѕР»СѓС‡Р°РµРј С‚СЂРµСѓРіРѕР»СЊРЅРёРєРё
+        // ?? 2. Получаем треугольники
         std::vector<XMFLOAT3> triangles;
-        model->GetRawTriangles(triangles); // в†ђ Р°РЅР°Р»РѕРіРёС‡РЅР°СЏ С„СѓРЅРєС†РёСЏ РґР»СЏ С‚СЂРµСѓРіРѕР»СЊРЅРёРєРѕРІ
+        model->GetRawTriangles(triangles); // < аналогичная функция для треугольников
 
         if (triangles.size() < 3)
         {
@@ -187,7 +216,7 @@
             return new btBoxShape(btVector3(0.5f, 0.5f, 0.5f));
         }
 
-        // рџ”Ґ 3. Р”РѕР±Р°РІР»СЏРµРј С‚СЂРµСѓРіРѕР»СЊРЅРёРєРё (РїРѕ 3 РІРµСЂС€РёРЅС‹)
+        // ?? 3. Добавляем треугольники (по 3 вершины)
         for (size_t i = 0; i + 2 < triangles.size(); i += 3)
         {
             btVector3 v0(triangles[i].x * scale.x, triangles[i].y * scale.y, triangles[i].z * scale.z);
@@ -197,23 +226,23 @@
             triangleMesh->addTriangle(v0, v1, v2, true); // true = useQuantizedAabbCompression
         }
 
-        // рџ”Ґ 4. РЎРѕР·РґР°С‘Рј С„РёРЅР°Р»СЊРЅСѓСЋ С„РѕСЂРјСѓ
+        // ?? 4. Создаём финальную форму
         auto* meshShape = new btBvhTriangleMeshShape(triangleMesh, true, true);
-        meshShape->setMargin(0.04f);
+        meshShape->setMargin(0.0f);
 
-        // рџ”Ґ 5. РЎРѕС…СЂР°РЅСЏРµРј СЃСЃС‹Р»РєСѓ РЅР° triangleMesh РІ РєРѕРјРїРѕРЅРµРЅС‚Рµ!
+        // ?? 5. Сохраняем ссылку на triangleMesh в компоненте!
         rb->triangleMesh = triangleMesh;
 
         return meshShape;
     }
 
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџ”Ґ CreateGImpactMeshShape вЂ” DYNAMIC concave mesh collision
+    // ==============================================================================
+    // ?? CreateGImpactMeshShape — DYNAMIC concave mesh collision
     // Unlike btBvhTriangleMeshShape (static only), btGImpactMeshShape supports
     // dynamic bodies with mass > 0. This allows objects to exist INSIDE the mesh
     // (e.g. crew/cargo inside a submarine hull) while the hull itself collides
     // with external objects.
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ==============================================================================
     btCollisionShape* PhysicsSystem::CreateGImpactMeshShape(
         AssimpModelClass* model, const XMFLOAT3& scale, RigidBodyComponent* rb)
     {
@@ -244,7 +273,7 @@
             triangleMesh->addTriangle(v0, v1, v2, true);
         }
 
-        // 4. Create GImpact shape вЂ” this is the KEY difference from TriangleMesh!
+        // 4. Create GImpact shape — this is the KEY difference from TriangleMesh!
         //    btGImpactMeshShape supports dynamic bodies (mass > 0)
 
 
@@ -267,7 +296,7 @@
 
             auto* world = PhysicsWorld::Get().GetWorld();
 
-            // 1. РЎРѕС…СЂР°РЅСЏРµРј С‚РµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ С‚РµР»Р°
+            // 1. Сохраняем текущее состояние тела
             btTransform oldTransform;
             if (rb->body->getMotionState())
                 rb->body->getMotionState()->getWorldTransform(oldTransform);
@@ -279,22 +308,22 @@
 
 
 
-            // 2. РЈРґР°Р»СЏРµРј СЃС‚Р°СЂРѕРµ С‚РµР»Рѕ РёР· РјРёСЂР°
+            // 2. Удаляем старое тело из мира
             world->removeRigidBody(rb->body);
 
-            // 3. РћС‡РёС‰Р°РµРј РїР°РјСЏС‚СЊ (РЅРѕ РќР• СѓРґР°Р»СЏРµРј shape, РµСЃР»Рё РѕРЅР° РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ РІ compound!)
+            // 3. Очищаем память (но НЕ удаляем shape, если она используется в compound!)
             delete rb->body->getMotionState();
             delete rb->body;
             rb->body = nullptr;
 
-            // triangleMesh СѓРґР°Р»СЏС‚СЊ РќР• РЅР°РґРѕ вЂ” РѕРЅ РјРѕР¶РµС‚ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ РІ GImpact/TriangleMesh shapes
-            // Рё СѓРґР°Р»СЏРµС‚СЃСЏ РІ РґРµСЃС‚СЂСѓРєС‚РѕСЂРµ RigidBodyComponent
+            // triangleMesh удалять НЕ надо — он может использоваться в GImpact/TriangleMesh shapes
+            // и удаляется в деструкторе RigidBodyComponent
 
-            // 4. РЎРѕР·РґР°С‘Рј РЅРѕРІРѕРµ С‚РµР»Рѕ С‡РµСЂРµР· СЃСѓС‰РµСЃС‚РІСѓСЋС‰СѓСЋ Р»РѕРіРёРєСѓ
-            // вљ пёЏ CreateRigidBody СЃР°РјР° РґРѕР±Р°РІРёС‚ С‚РµР»Рѕ РІ РјРёСЂ СЃ РїСЂР°РІРёР»СЊРЅС‹РјРё РјР°СЃРєР°РјРё
+            // 4. Создаём новое тело через существующую логику
+            // ?? CreateRigidBody сама добавит тело в мир с правильными масками
             PhysicsSystem::CreateRigidBody(registry, entity);
 
-            // 5. Р•СЃР»Рё С‚РµР»Рѕ СЃРѕР·РґР°Р»РѕСЃСЊ вЂ” РІРѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј СЃРєРѕСЂРѕСЃС‚Рё (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)
+            // 5. Если тело создалось — восстанавливаем скорости (опционально)
             if (rb->body)
             {
                 rb->body->setLinearVelocity(oldLinVel);
@@ -308,10 +337,18 @@
         auto* rb = registry.GetComponent<RigidBodyComponent>(entity);
         auto* transform = registry.GetComponent<TransformComponent>(entity);
         auto* meshRenderer = registry.GetComponent<MeshRendererComponent>(entity);
+      
 
         if (!rb || !transform) return;
 
-        // РџСЂРѕРІРµСЂРєРё РЅР° NaN Рё РјР°СЃС€С‚Р°Р±
+        AssimpModelClass* physicsModel = nullptr;
+
+        if (rb->useSeparateCollisionMesh && rb->collisionModel)
+            physicsModel = rb->collisionModel;
+        else if (meshRenderer)
+            physicsModel = meshRenderer->model;
+
+        // Проверки на NaN и масштаб
         if (isnan(transform->position.x) || isnan(transform->position.y) || isnan(transform->position.z))
         {
             OutputDebugStringA("[ERROR] NaN in transform position! Resetting to (0,10,0)\n");
@@ -362,10 +399,28 @@
             }
         }
 
-        // Р¤РѕСЂРјРёСЂРѕРІР°РЅРёРµ shape (compound РёР»Рё РѕРґРёРЅРѕС‡РЅС‹Р№) вЂ” РћР РР“РРќРђР›Р¬РќРђРЇ Р›РћР“РРљРђ
+        // Формирование shape (compound или одиночный) — ОРИГИНАЛЬНАЯ ЛОГИКА
         if (rb->isCompound && !rb->compoundElements.empty())
         {
             btCompoundShape* compoundShape = new btCompoundShape();
+
+            if (rb->shapeType == RigidBodyComponent::TriangleMesh && physicsModel)
+            {
+                btCollisionShape* baseTriangleMesh = CreateTriangleMeshShape(
+                    physicsModel,
+                    transform->scale,
+                    rb
+                );
+
+                if (baseTriangleMesh)
+                {
+                    baseTriangleMesh->setMargin(0.0f);
+                    btTransform baseTrans;
+                    baseTrans.setIdentity();
+                    compoundShape->addChildShape(baseTrans, baseTriangleMesh);
+                    rb->mass = 0.0f;
+                }
+            }
 
             for (const auto& elem : rb->compoundElements)
             {
@@ -395,7 +450,7 @@
 
                 case RigidBodyComponent::CompoundElement::VHACD:
                 {
-                    // VHACD Р»РѕРіРёРєР° РѕСЃС‚Р°РІР»РµРЅР° Р±РµР· РёР·РјРµРЅРµРЅРёР№ (РµСЃР»Рё РЅСѓР¶РЅР° вЂ” РІС‹РЅРµСЃС‚Рё РѕС‚РґРµР»СЊРЅРѕ)
+                    // VHACD логика оставлена без изменений (если нужна — вынести отдельно)
                     AssimpModelClass* vhacdModel = elem.vhacdModel;
                     if (!vhacdModel)
                     {
@@ -414,7 +469,7 @@
                         }
                     }
                     if (!vhacdModel) childShape = new btBoxShape(btVector3(0.5f, 0.5f, 0.5f));
-                    // (РґРѕРї. VHACD РѕР±СЂР°Р±РѕС‚РєР° РѕРїСѓС‰РµРЅР°)
+                    // (доп. VHACD обработка опущена)
                     break;
                 }
 
@@ -445,6 +500,14 @@
                     childShape = new btCapsuleShape(r, cylHeight);
                     break;
                 }
+
+                case RigidBodyComponent::CompoundElement::StairRamp:
+                {
+                    childShape = CreateStairRampShape(
+                        btVector3(elem.rampSize.x, elem.rampSize.y, elem.rampSize.z),
+                        XMFLOAT3(1.0f, 1.0f, 1.0f));
+                    break;
+                }
                 }
 
                 if (childShape)
@@ -461,7 +524,7 @@
         }
         else
         {
-            // РћРґРёРЅРѕС‡РЅС‹Рµ С„РѕСЂРјС‹
+            // Одиночные формы
             switch (rb->shapeType)
             {
             case RigidBodyComponent::Sphere:
@@ -516,6 +579,12 @@
                 shape = new btStaticPlaneShape(btVector3(0, 1, 0), height);
                 break;
             }
+            case RigidBodyComponent::StairRamp:
+            {
+                shape = CreateStairRampShape(rb->shapeSize, transform->scale);
+                rb->mass = 0.0f;
+                break;
+            }
             case RigidBodyComponent::ConvexHull:
             {
                 if (meshRenderer && meshRenderer->model)
@@ -526,13 +595,21 @@
             }
             case RigidBodyComponent::TriangleMesh:
             {
-                if (meshRenderer && meshRenderer->model)
+                if (physicsModel)
                 {
-                    shape = CreateTriangleMeshShape(meshRenderer->model, transform->scale, rb);
-                    if (rb->mass > 0.0f) rb->mass = 0.0f; // triangle mesh вЂ” static only
+                    shape = CreateTriangleMeshShape(
+                        physicsModel,
+                        transform->scale,
+                        rb
+                    );
+
+                    rb->mass = 0.0f;
                 }
                 else
+                {
                     return;
+                }
+
                 break;
             }
             case RigidBodyComponent::GImpactMesh:
@@ -551,12 +628,17 @@
         }
 
         if (!shape) return;
-        shape->setMargin(0.04f);
+        if (rb->shapeType == RigidBodyComponent::TriangleMesh)
+            shape->setMargin(0.0f);
+        else if (rb->shapeType == RigidBodyComponent::StairRamp)
+            shape->setMargin(0.01f);
+        else
+            shape->setMargin(0.04f);
 
-        // РСЃРїРѕР»СЊР·СѓРµРј massForBody: РµСЃР»Рё РѕР±СЉРµРєС‚ РїРѕРјРµС‡РµРЅ kinematic вЂ” РјР°СЃСЃР° РІ Bullet РґРѕР»Р¶РЅР° Р±С‹С‚СЊ 0
+        // Используем massForBody: если объект помечен kinematic — масса в Bullet должна быть 0
         float massForBody = rb->isKinematic ? 0.0f : rb->mass;
 
-        // Р Р°СЃС‡С‘С‚ РёРЅРµСЂС†РёРё вЂ” РЅР° РѕСЃРЅРѕРІРµ massForBody
+        // Расчёт инерции — на основе massForBody
         btVector3 localInertia(0, 0, 0);
         if (massForBody > 0.0f)
         {
@@ -568,7 +650,7 @@
             }
         }
 
-        // РЎРѕР·РґР°РЅРёРµ С‚РµР»Р° СЃ РїСЂР°РІРёР»СЊРЅРѕР№ РјР°СЃСЃРѕР№
+        // Создание тела с правильной массой
         btTransform startTransform;
         startTransform.setIdentity();
         startTransform.setOrigin(btVector3(transform->position.x, transform->position.y, transform->position.z));
@@ -585,14 +667,14 @@
 
         rb->body = new btRigidBody(ci);
 
-        // CCD Рё РїСЂРѕС‡РµРµ вЂ” РЅР° РѕСЃРЅРѕРІРµ massForBody
+        // CCD и прочее — на основе massForBody
         if (massForBody > 0.0f && rb->enableCCD)
         {
             rb->body->setCcdMotionThreshold(1.0f);
             rb->body->setCcdSweptSphereRadius(0.2f);
         }
 
-        // Р¤Р»Р°РіРё: STATIC С‚РѕР»СЊРєРѕ РµСЃР»Рё РјР°СЃСЃР° 0 Рё РќР• kinematic
+        // Флаги: STATIC только если масса 0 и НЕ kinematic
         if (massForBody == 0.0f && !rb->isKinematic)
         {
             rb->body->setCollisionFlags(rb->body->getCollisionFlags() | btCollisionObject::CF_STATIC_OBJECT);
@@ -600,11 +682,11 @@
         }
         else if (rb->isKinematic)
         {
-            // Kinematic вЂ” РјР°СЃСЃР° РЅРѕР»СЊ, СЃС‚Р°РІРёРј С„Р»Р°Рі kinematic
+            // Kinematic — масса ноль, ставим флаг kinematic
             rb->body->setCollisionFlags(rb->body->getCollisionFlags() | btCollisionObject::CF_KINEMATIC_OBJECT);
             rb->body->setActivationState(DISABLE_DEACTIVATION);
 
-            // РћР±РЅСѓР»РµРЅРёРµ СЃРєРѕСЂРѕСЃС‚РµР№ Рё СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ transform
+            // Обнуление скоростей и синхронизация transform
             rb->body->setLinearVelocity(btVector3(0, 0, 0));
             rb->body->setAngularVelocity(btVector3(0, 0, 0));
             rb->body->clearForces();
@@ -617,30 +699,39 @@
         rb->body->setRollingFriction(0.3f);
         rb->body->setSpinningFriction(0.1f);
 
-        // Р РµРіРёСЃС‚СЂР°С†РёСЏ РІ РјРёСЂРµ вЂ” РіСЂСѓРїРїР° СѓС‡РёС‚С‹РІР°РµС‚ kinematic РѕС‚РґРµР»СЊРЅРѕ
+        // Регистрация в мире — группа учитывает kinematic отдельно
         auto* world = PhysicsWorld::Get().GetWorld();
         int group = btBroadphaseProxy::DefaultFilter;
+        int mask = btBroadphaseProxy::AllFilter;
         if (rb->isKinematic) group = btBroadphaseProxy::KinematicFilter;
-        else if (massForBody == 0.0f) group = btBroadphaseProxy::StaticFilter;
+        else if (massForBody == 0.0f)
+        {
+            group = btBroadphaseProxy::StaticFilter;
+            mask = btBroadphaseProxy::AllFilter & ~btBroadphaseProxy::StaticFilter;
+        }
 
-        world->addRigidBody(rb->body, group, btBroadphaseProxy::AllFilter);
+        world->addRigidBody(rb->body, group, mask);
 
         rb->lastSyncedPosition = transform->position;
         rb->lastSyncedRotation = transform->rotation;
+        rb->lastSyncedScale = transform->scale;
 
     }
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-    // рџ”Ґ HELPER: РџСЂРѕРІРµСЂРєР°, РёР·РјРµРЅРёР»СЃСЏ Р»Рё С‚СЂР°РЅСЃС„РѕСЂРј СЃРЅР°СЂСѓР¶Рё (СЂРµРґР°РєС‚РѕСЂ, СЃРєСЂРёРїС‚)
-    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // ===========================================================================
+    // ?? HELPER: Проверка, изменился ли трансформ снаружи (редактор, скрипт)
+    // ===========================================================================
     static bool TransformChangedExternally(const TransformComponent* t, const RigidBodyComponent& rb)
     {
-        // РЎСЂР°РІРЅРёРІР°РµРј РїРѕР±РёС‚РѕРІРѕ вЂ” СЌС‚Рѕ Р±РµР·РѕРїР°СЃРЅРѕ, С‚.Рє. РјС‹ СЃР°РјРё Р·Р°РїРёСЃР°Р»Рё СЌС‚Рё Р·РЅР°С‡РµРЅРёСЏ
+        // Сравниваем побитово — это безопасно, т.к. мы сами записали эти значения
         return (t->position.x != rb.lastSyncedPosition.x ||
             t->position.y != rb.lastSyncedPosition.y ||
             t->position.z != rb.lastSyncedPosition.z ||
             t->rotation.x != rb.lastSyncedRotation.x ||
             t->rotation.y != rb.lastSyncedRotation.y ||
-            t->rotation.z != rb.lastSyncedRotation.z);
+            t->rotation.z != rb.lastSyncedRotation.z ||
+            t->scale.x != rb.lastSyncedScale.x ||
+            t->scale.y != rb.lastSyncedScale.y ||
+            t->scale.z != rb.lastSyncedScale.z);
     }
 
     void PhysicsSystem::Update(ECSRegistry& registry, float deltaTime, float waterLevel)
@@ -649,31 +740,31 @@
         auto& rigidBodies = registry.GetComponents<RigidBodyComponent>();
         auto& transforms = registry.GetComponents<TransformComponent>();
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-        // рџ”Ґ FIX: FORWARD SYNC (ECS в†’ Bullet)
+        // =======================================================================
+        // ?? FIX: FORWARD SYNC (ECS > Bullet)
         //
-        // Р РђРќР¬РЁР•: РљР°Р¶РґС‹Р№ РєР°РґСЂ РїРµСЂРµР·Р°РїРёСЃС‹РІР°Р»Рё Р’РЎР• С‚РµР»Р° РёР· ECS РІ Bullet.
-        //   Р­С‚Рѕ РІС‹Р·С‹РІР°Р»Рѕ Eulerв†’Quatв†’Euler jitter, СЃРѕР·РґР°РІР°РІС€РёР№ С„Р°РЅС‚РѕРјРЅС‹Рµ
-        //   РёРјРїСѓР»СЊСЃС‹ РЅР° РґР¶РѕР№РЅС‚Р°С… в†’ РґР¶РѕР№РЅС‚С‹ РјРіРЅРѕРІРµРЅРЅРѕ СЂРІР°Р»РёСЃСЊ.
+        // РАНЬШЕ: Каждый кадр перезаписывали ВСЕ тела из ECS в Bullet.
+        //   Это вызывало Euler>Quat>Euler jitter, создававший фантомные
+        //   импульсы на джойнтах > джойнты мгновенно рвались.
         //
-        // РўР•РџР•Р Р¬:
-        //   - STATIC С‚РµР»Р°: РќР• С‚СЂРѕРіР°РµРј РІРѕРѕР±С‰Рµ (РѕРЅРё РЅРµ РґРІРёРіР°СЋС‚СЃСЏ)
-        //   - KINEMATIC С‚РµР»Р°: sync ECS в†’ Bullet РљРђР–Р”Р«Р™ РљРђР”Р  (СѓРїСЂР°РІР»СЏСЋС‚СЃСЏ РІСЂСѓС‡РЅСѓСЋ)
-        //   - DYNAMIC С‚РµР»Р°: sync РўРћР›Р¬РљРћ РµСЃР»Рё С‚СЂР°РЅСЃС„РѕСЂРј РёР·РјРµРЅС‘РЅ СЃРЅР°СЂСѓР¶Рё
-        //     (РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РїРѕРґРІРёРЅСѓР» РѕР±СЉРµРєС‚ РІ СЂРµРґР°РєС‚РѕСЂРµ). РРЅР°С‡Рµ вЂ” РЅРµ С‚СЂРѕРіР°РµРј.
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // ТЕПЕРЬ:
+        //   - STATIC тела: НЕ трогаем вообще (они не двигаются)
+        //   - KINEMATIC тела: sync ECS > Bullet КАЖДЫЙ КАДР (управляются вручную)
+        //   - DYNAMIC тела: sync ТОЛЬКО если трансформ изменён снаружи
+        //     (пользователь подвинул объект в редакторе). Иначе — не трогаем.
+        // =======================================================================
         for (auto& [entity, rb] : rigidBodies)
         {
             if (!rb.body) continue;
             auto* transform = transforms.Get(entity);
             if (!transform) continue;
 
-            // рџ”Ґ KINEMATIC С‚РµР»Р° Р’РЎР•Р“Р”Рђ СЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓСЋС‚СЃСЏ РёР· ECS
+            // ?? KINEMATIC тела ВСЕГДА синхронизируются из ECS
             bool isKinematic = (rb.body->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT) != 0;
         
             if (isKinematic)
             {
-                // Kinematic: РѕР±РЅРѕРІР»СЏРµРј РїРѕР·РёС†РёСЋ/СЂРѕС‚Р°С†РёСЋ РљРђР–Р”Р«Р™ РєР°РґСЂ
+                // Kinematic: обновляем позицию/ротацию КАЖДЫЙ кадр
                 btTransform bt;
                 bt.setIdentity();
                 bt.setOrigin(btVector3(
@@ -682,25 +773,26 @@
                     transform->position.z));
                 bt.setRotation(EulerToQuaternion(transform->rotation));
 
-                // рџ”Ґ РљР РРўРР§РќРћ: РѕР±РЅРѕРІР»СЏРµРј РћР‘РћРРҐ
+                // ?? КРИТИЧНО: обновляем ОБОИХ
                 rb.body->setWorldTransform(bt);
                 if (rb.body->getMotionState())
                     rb.body->getMotionState()->setWorldTransform(bt);
 
-                // рџ”Ґ Р’РђР–РќРћ: РїРѕСЃР»Рµ РёР·РјРµРЅРµРЅРёСЏ С‚СЂР°РЅСЃС„РѕСЂРјР° РЅСѓР¶РЅРѕ РїРµСЂРµСЃС‡РёС‚Р°С‚СЊ collision
+                // ?? ВАЖНО: после изменения трансформа нужно пересчитать collision
                 rb.body->getCollisionShape()->setLocalScaling(btVector3(
                     transform->scale.x,
                     transform->scale.y,
                     transform->scale.z
                 ));
 
-                // РЎРѕС…СЂР°РЅСЏРµРј РґР»СЏ РґРµС‚РµРєС‚Р° РІРЅРµС€РЅРёС… РёР·РјРµРЅРµРЅРёР№ РЅР° Р”РРќРђРњРР§Р•РЎРљРРҐ С‚РµР»Р°С…
+                // Сохраняем для детекта внешних изменений на ДИНАМИЧЕСКИХ телах
                 rb.lastSyncedPosition = transform->position;
                 rb.lastSyncedRotation = transform->rotation;
+                rb.lastSyncedScale = transform->scale;
             }
             else if (rb.mass > 0.0f)
             {
-                // DYNAMIC BODY: СЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј РўРћР›Р¬РљРћ РїСЂРё РІРЅРµС€РЅРµРј РёР·РјРµРЅРµРЅРёРё
+                // DYNAMIC BODY: синхронизируем ТОЛЬКО при внешнем изменении
                 if (TransformChangedExternally(transform, rb))
                 {
                     btTransform bt;
@@ -719,31 +811,59 @@
                     // CRITICAL: reset interpolation transform so Bullet won't infer huge velocity
                     rb.body->setInterpolationWorldTransform(bt);
 
-                    // РЎР±СЂР°СЃС‹РІР°РµРј СЃРєРѕСЂРѕСЃС‚Рё С‡С‚РѕР±С‹ РЅРµ Р±С‹Р»Рѕ СЂС‹РІРєР°
+                    // Сбрасываем скорости чтобы не было рывка
                     rb.body->setLinearVelocity(btVector3(0, 0, 0));
                     rb.body->setAngularVelocity(btVector3(0, 0, 0));
                     rb.body->clearForces();
 
-                    // РЈРІРµРґРѕРјР»СЏРµРј broadphase РѕР± РёР·РјРµРЅС‘РЅРЅРѕРј AABB
+                    // Уведомляем broadphase об изменённом AABB
                     if (auto* world = PhysicsWorld::Get().GetWorld())
                         world->updateSingleAabb(rb.body);
 
-                    // РђРєС‚РёРІРёСЂСѓРµРј С‚РµР»Рѕ С‡С‚РѕР±С‹ РѕРЅРѕ РєРѕСЂСЂРµРєС‚РЅРѕ РІСЃС‚СѓРїРёР»Рѕ РІ СЃРёРјСѓР»СЏС†РёСЋ
+                    // Активируем тело чтобы оно корректно вступило в симуляцию
                     rb.body->activate(true);
 
                     rb.lastSyncedPosition = transform->position;
                     rb.lastSyncedRotation = transform->rotation;
+                    rb.lastSyncedScale = transform->scale;
 
                 }
 
                 rb.body->activate();
             }
-            // STATIC С‚РµР»Р° (mass == 0.0f && !kinematic): РЅРµ С‚СЂРѕРіР°РµРј РІРѕРѕР±С‰Рµ
+            else if (TransformChangedExternally(transform, rb))
+            {
+                btTransform bt;
+                bt.setIdentity();
+                bt.setOrigin(btVector3(
+                    transform->position.x,
+                    transform->position.y,
+                    transform->position.z));
+                bt.setRotation(EulerToQuaternion(transform->rotation));
+
+                rb.body->setWorldTransform(bt);
+                if (rb.body->getMotionState())
+                    rb.body->getMotionState()->setWorldTransform(bt);
+                rb.body->setInterpolationWorldTransform(bt);
+
+                rb.body->getCollisionShape()->setLocalScaling(btVector3(
+                    transform->scale.x,
+                    transform->scale.y,
+                    transform->scale.z
+                ));
+
+                if (auto* world = PhysicsWorld::Get().GetWorld())
+                    world->updateSingleAabb(rb.body);
+
+                rb.lastSyncedPosition = transform->position;
+                rb.lastSyncedRotation = transform->rotation;
+                rb.lastSyncedScale = transform->scale;
+            }
         }
 
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-        // РџР›РђР’РЈР§Р•РЎРўР¬ РЎ РЈР§РЃРўРћРњ РћРўРЎР•РљРћР’
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // =======================================================================
+        // ПЛАВУЧЕСТЬ С УЧЁТОМ ОТСЕКОВ
+        // =======================================================================
         for (auto& [entity, buoyancy] : buoyancyPool)
         {
             if (!registry.HasComponent<RigidBodyComponent>(entity))
@@ -758,9 +878,9 @@
             btVector3 pos = rigidBody->body->getWorldTransform().getOrigin();
             float objectY = pos.getY();
 
-            // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-            // РћРїСЂРµРґРµР»СЏРµРј, СЏРІР»СЏРµС‚СЃСЏ Р»Рё entity РєРѕСЂРЅРµРј РїРѕРґР»РѕРґРєРё
-            // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+            // ===============================================================
+            // Определяем, является ли entity корнем подлодки
+            // ===============================================================
             bool isSubmarineRoot = false;
             auto* subComp = registry.GetComponent<SubmarineComponent>(entity);
             if (subComp && subComp->submarineRoot == entity && !subComp->allCompartments.empty())
@@ -797,9 +917,9 @@
                 }
             }
 
-            // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-            // Р”Р»СЏ РїРѕРґР»РѕРґРєРё: СЃС‡РёС‚Р°РµРј РІРѕРґСѓ РІРѕ РІСЃРµС… РѕС‚СЃРµРєР°С… Рё РѕР±С‰РёР№ РѕР±СЉС‘Рј
-            // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+            // ===============================================================
+            // Для подлодки: считаем воду во всех отсеках и общий объём
+            // ===============================================================
             float totalWaterInCompartments = 0.0f;
             float totalCompartmentVolume = 0.0f;
             if (isSubmarineRoot && subComp)
@@ -846,54 +966,54 @@
 
             if (submersionRatio > 0.01f)
             {
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-                // РљР›Р®Р§Р•Р’РћР• РР—РњР•РќР•РќРР•: Р¤РёР·РёС‡РµСЃРєРё РєРѕСЂСЂРµРєС‚РЅР°СЏ РјРѕРґРµР»СЊ Р·Р°С‚РѕРїР»РµРЅРёСЏ
+                // ===========================================================
+                // КЛЮЧЕВОЕ ИЗМЕНЕНИЕ: Физически корректная модель затопления
                 //
-                // РЎСѓС…Р°СЏ РїРѕРґР»РѕРґРєР°: F_buoy = ПЃВ·gВ·VВ·submersion (РІС‹С‚Р°Р»РєРёРІР°РµС‚)
-                //                 F_grav = massВ·g (С‚СЏРЅРµС‚ РІРЅРёР·) вЂ” Bullet РґРµР»Р°РµС‚ СЃР°Рј
+                // Сухая подлодка: F_buoy = ?·g·V·submersion (выталкивает)
+                //                 F_grav = mass·g (тянет вниз) — Bullet делает сам
                 //
-                // Р—Р°С‚РѕРїР»РµРЅРЅР°СЏ:    Р’РѕРґР° РІРЅСѓС‚СЂРё Р”РћР‘РђР’Р›Р•Рў РІРµСЃ, РЅРѕ РќР• РґРѕР±Р°РІР»СЏРµС‚ РѕР±СЉС‘Рј!
-                //                 F_buoy РѕСЃС‚Р°С‘С‚СЃСЏ РїСЂРµР¶РЅРµР№ (РІРЅРµС€РЅРёР№ РѕР±СЉС‘Рј РЅРµ РјРµРЅСЏРµС‚СЃСЏ)
-                //                 F_grav = (mass + waterMass)В·g
+                // Затопленная:    Вода внутри ДОБАВЛЕТ вес, но НЕ добавляет объём!
+                //                 F_buoy остаётся прежней (внешний объём не меняется)
+                //                 F_grav = (mass + waterMass)·g
                 //
-                // Р Р°РЅСЊС€Рµ РјС‹ РІС‹С‡РёС‚Р°Р»Рё waterVolume РёР· buoyancyVolume вЂ” СЌС‚Рѕ РќР•РџР РђР’РР›Р¬РќРћ.
-                // РљРѕСЂРїСѓСЃ РїРѕРґР»РѕРґРєРё РЅРµ СЃР¶РёРјР°РµС‚СЃСЏ РѕС‚ РІРѕРґС‹ РІРЅСѓС‚СЂРё. РћР±СЉС‘Рј СЃРЅР°СЂСѓР¶Рё РѕСЃС‚Р°С‘С‚СЃСЏ
-                // С‚РµРј Р¶Рµ. РќРѕ РњРђРЎРЎРђ СЂР°СЃС‚С‘С‚!
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+                // Раньше мы вычитали waterVolume из buoyancyVolume — это НЕПРАВИЛЬНО.
+                // Корпус подлодки не сжимается от воды внутри. Объём снаружи остаётся
+                // тем же. Но МАССА растёт!
+                // ===========================================================
 
                 float gravity = 9.81f;
 
-                // РћР±СЉС‘Рј РґР»СЏ РїР»Р°РІСѓС‡РµСЃС‚Рё = РџРћР›РќР«Р™ РІРЅРµС€РЅРёР№ РѕР±СЉС‘Рј (РЅРµ Р·Р°РІРёСЃРёС‚ РѕС‚ РІРѕРґС‹ РІРЅСѓС‚СЂРё)
+                // Объём для плавучести = ПОЛНЫЙ внешний объём (не зависит от воды внутри)
                 float buoyancyForce = buoyancy.fluidDensity * gravity * buoyancy.volume *
                     submersionRatio * buoyancy.buoyancyMultiplier;
 
-                // Р’РµСЃ РІРѕРґС‹ РІРЅСѓС‚СЂРё РѕС‚СЃРµРєРѕРІ (1000 РєРі/РјВі Г— РѕР±СЉС‘Рј РІРѕРґС‹ Г— g)
-                // Р­С‚Р° СЃРёР»Р° Р”РћРџРћР›РќРРўР•Р›Р¬РќРћ С‚СЏРЅРµС‚ РІРЅРёР· (Bullet РЅРµ Р·РЅР°РµС‚ Рѕ РЅРµР№)
+                // Вес воды внутри отсеков (1000 кг/м? ? объём воды ? g)
+                // Эта сила ДОПОЛНИТЕЛЬНО тянет вниз (Bullet не знает о ней)
                 float waterWeight = totalWaterInCompartments * 1000.0f * gravity;
 
-                // РС‚РѕРіРѕРІР°СЏ СЃРёР»Р°: РїР»Р°РІСѓС‡РµСЃС‚СЊ РІРІРµСЂС…, РјРёРЅСѓСЃ РґРѕРї. РІРµСЃ РІРѕРґС‹ РІРЅРёР·
+                // Итоговая сила: плавучесть вверх, минус доп. вес воды вниз
                 float netUpForce = buoyancyForce - waterWeight;
 
-                // Р—Р°С‰РёС‚Р° РѕС‚ СЌРєСЃС‚СЂРµРјР°Р»СЊРЅС‹С… Р·РЅР°С‡РµРЅРёР№
+                // Защита от экстремальных значений
                 float weight = rigidBody->mass * gravity;
                 float maxForce = weight * 5.0f;
                 netUpForce = fmaxf(-maxForce, fminf(netUpForce, maxForce));
 
                 rigidBody->body->applyCentralForce(btVector3(0, netUpForce, 0));
 
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-                // Р”РµРјРїС„РёСЂРѕРІР°РЅРёРµ вЂ” СѓРјРµРЅСЊС€Р°РµРј vertical drag С‡С‚РѕР±С‹ Р·Р°С‚РѕРїР»РµРЅРЅР°СЏ
-                // РїРѕРґР»РѕРґРєР° С‚РѕРЅСѓР»Р° Р±С‹СЃС‚СЂРµРµ, Р° РЅРµ Р·Р°РІРёСЃР°Р»Р°
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+                // ===========================================================
+                // Демпфирование — уменьшаем vertical drag чтобы затопленная
+                // подлодка тонула быстрее, а не зависала
+                // ===========================================================
                 btVector3 vel = rigidBody->body->getLinearVelocity();
 
-                // Р”РѕР»СЏ Р·Р°С‚РѕРїР»РµРЅРёСЏ (0.0 = СЃСѓС…Р°СЏ, 1.0 = РїРѕР»РЅРѕСЃС‚СЊСЋ Р·Р°С‚РѕРїР»РµРЅР°)
+                // Доля затопления (0.0 = сухая, 1.0 = полностью затоплена)
                 float floodRatio = (totalCompartmentVolume > 0.01f)
                     ? (totalWaterInCompartments / totalCompartmentVolume)
                     : 0.0f;
                 floodRatio = fminf(1.0f, floodRatio);
 
-                // Р§РµРј Р±РѕР»СЊС€Рµ Р·Р°С‚РѕРїР»РµРЅР° вЂ” С‚РµРј РњР•РќР¬РЁР• РІРµСЂС‚РёРєР°Р»СЊРЅС‹Р№ drag (Р±С‹СЃС‚СЂРµРµ С‚РѕРЅРµС‚)
+                // Чем больше затоплена — тем МЕНЬШЕ вертикальный drag (быстрее тонет)
                 float verticalDragCoeff = 50.0f * submersionRatio * (1.0f - floodRatio * 0.8f);
                 float horizontalDragCoeff = 5.0f * submersionRatio;
 
@@ -904,10 +1024,10 @@
                 );
                 rigidBody->body->applyCentralForce(dragForce);
 
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-                // РџСЂСѓР¶РёРЅРЅР°СЏ СЃС‚Р°Р±РёР»РёР·Р°С†РёСЏ вЂ” РўРћР›Р¬РљРћ РµСЃР»Рё РїРѕРґР»РѕРґРєР° РќР• С‚РѕРЅРµС‚
-                // Р•СЃР»Рё Р·Р°С‚РѕРїР»РµРЅРѕ > 30% вЂ” РїСЂСѓР¶РёРЅСѓ РІС‹РєР»СЋС‡Р°РµРј!
-                // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+                // ===========================================================
+                // Пружинная стабилизация — ТОЛЬКО если подлодка НЕ тонет
+                // Если затоплено > 30% — пружину выключаем!
+                // ===========================================================
                 if (submersionRatio > 0.9f && floodRatio < 0.3f)
                 {
                     float depthFromSurface = effectiveWaterLevel - objectY;
@@ -923,7 +1043,7 @@
                     rigidBody->body->applyCentralForce(btVector3(0, springForce, 0));
                 }
 
-                // РЈРіР»РѕРІРѕРµ РґРµРјРїС„РёСЂРѕРІР°РЅРёРµ
+                // Угловое демпфирование
                 btVector3 angVel = rigidBody->body->getAngularVelocity();
                 float angularDragCoeff = 20.0f * submersionRatio;
                 rigidBody->body->applyTorque(-angVel * angularDragCoeff);
@@ -939,22 +1059,22 @@
             }
         }
         SyncCharacter(registry, true);
-        // РЁР°Рі С„РёР·РёРєРё
+        // Шаг физики
         PhysicsWorld::Get().Update(deltaTime);
         SyncCharacter(registry, false);
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
-        // рџ”Ґ REVERSE SYNC (Bullet в†’ ECS) вЂ” С‚РѕР»СЊРєРѕ РґР»СЏ DYNAMIC С‚РµР»
-        //    Kinematic С‚РµР»Р° РќР• РѕР±РЅРѕРІР»СЏРµРј СЃРЅРёР·Сѓ (РѕРЅРё РєРѕРЅС‚СЂРѕР»РёСЂСѓСЋС‚СЃСЏ СЃРІРµСЂС…Сѓ)
-        // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+        // =======================================================================
+        // ?? REVERSE SYNC (Bullet > ECS) — только для DYNAMIC тел
+        //    Kinematic тела НЕ обновляем снизу (они контролируются сверху)
+        // =======================================================================
         for (auto& [entity, rb] : rigidBodies)
         {
             if (!rb.body) continue;
         
-            // рџ”Ґ РџСЂРѕРїСѓСЃРєР°РµРј KINEMATIC С‚РµР»Р° вЂ” РѕРЅРё РєРѕРЅС‚СЂРѕР»РёСЂСѓСЋС‚СЃСЏ РёР· ECS
+            // ?? Пропускаем KINEMATIC тела — они контролируются из ECS
             bool isKinematic = (rb.body->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT) != 0;
             if (isKinematic) continue;
         
-            if (rb.mass <= 0.0f) continue;  // РџСЂРѕРїСѓСЃРєР°РµРј STATIC С‚РµР»Р°
+            if (rb.mass <= 0.0f) continue;  // Пропускаем STATIC тела
 
             auto* transform = transforms.Get(entity);
             if (!transform) continue;
@@ -963,7 +1083,7 @@
             btVector3 pos = bt.getOrigin();
             btQuaternion rot = bt.getRotation();
 
-            // рџ”Ґ РџР РћР’Р•Р РљРђ: РЅРµ Р·Р°РїРёСЃС‹РІР°РµРј NaN РІ С‚СЂР°РЅСЃС„РѕСЂРј
+            // ?? ПРОВЕРКА: не записываем NaN в трансформ
             if (isnan(pos.x()) || isnan(pos.y()) || isnan(pos.z()))
             {
                 OutputDebugStringA("[PHYSICS] NaN from Bullet! Skipping sync, freezing body\n");
@@ -972,7 +1092,7 @@
                 continue;
             }
 
-            // рџ”Ґ РџР РћР’Р•Р РљРђ: Р·Р°С‰РёС‚Р° РѕС‚ "РІС‹СЃС‚СЂРµР»РёРІР°РЅРёСЏ" Р·Р° РїСЂРµРґРµР»С‹ СЂР°Р·СѓРјРЅРѕРіРѕ
+            // ?? ПРОВЕРКА: защита от "выстреливания" за пределы разумного
             if (fabs(pos.y()) > 10000.0f)
             {
                 OutputDebugStringA("[PHYSICS] Position out of bounds! Resetting body\n");
@@ -986,6 +1106,7 @@
 
             rb.lastSyncedPosition = transform->position;
             rb.lastSyncedRotation = transform->rotation;
+            rb.lastSyncedScale = transform->scale;
         }
     }
 
@@ -998,21 +1119,21 @@
         {
             float halfSize = elem.size * 0.5f;
 
-            // РџСЂРёРјРµРЅСЏРµРј СЃРјРµС‰РµРЅРёСЏ РіСЂР°РЅРµР№
-            // РќРѕРІР°СЏ РїРѕР»РѕРІРёРЅР° СЂР°Р·РјРµСЂР° = Р±Р°Р·РѕРІР°СЏ РїРѕР»РѕРІРёРЅР° + СЃРјРµС‰РµРЅРёРµ
-            // Р’Р°Р¶РЅРѕ: СЃРјРµС‰РµРЅРёРµ РјРѕР¶РµС‚ Р±С‹С‚СЊ РѕС‚СЂРёС†Р°С‚РµР»СЊРЅС‹Рј (СѓРјРµРЅСЊС€Р°С‚СЊ РіСЂР°РЅСЊ)
+            // Применяем смещения граней
+            // Новая половина размера = базовая половина + смещение
+            // Важно: смещение может быть отрицательным (уменьшать грань)
             float hx = halfSize + elem.boxOffsetMax.x;
             float hy = halfSize + elem.boxOffsetMax.y;
             float hz = halfSize + elem.boxOffsetMax.y;
 
-            // РЈС‡РёС‚С‹РІР°РµРј СЃРјРµС‰РµРЅРёРµ РјРёРЅРёРјСѓРјР° (РѕРЅРѕ "СЃСЉРµРґР°РµС‚" СЂР°Р·РјРµСЂ СЃ РґСЂСѓРіРѕР№ СЃС‚РѕСЂРѕРЅС‹)
-            // Р¤Р°РєС‚РёС‡РµСЃРєРёР№ С†РµРЅС‚СЂ РјРѕР¶РµС‚ СЃРјРµСЃС‚РёС‚СЊСЃСЏ, РЅРѕ btBoxShape СЃС‚СЂРѕРёС‚СЃСЏ РѕС‚ С†РµРЅС‚СЂР°.
-            // Р”Р»СЏ С‚РѕС‡РЅРѕР№ РЅР°СЃС‚СЂРѕР№РєРё С„РѕСЂРјС‹ С‡РµСЂРµР· СЃРјРµС‰РµРЅРёСЏ Р»СѓС‡С€Рµ РїСЂРѕСЃС‚Рѕ РјРµРЅСЏС‚СЊ РёС‚РѕРіРѕРІС‹Р№ СЂР°Р·РјРµСЂ:
+            // Учитываем смещение минимума (оно "съедает" размер с другой стороны)
+            // Фактический центр может сместиться, но btBoxShape строится от центра.
+            // Для точной настройки формы через смещения лучше просто менять итоговый размер:
 
-            float finalHalfX = halfSize + (elem.boxOffsetMax.x - elem.boxOffsetMin.x) * 0.5f; // РЈРїСЂРѕС‰РµРЅРЅР°СЏ Р»РѕРіРёРєР°
-            // РќРѕ РїСЂР°РІРёР»СЊРЅРµРµ РґР»СЏ Box РїСЂРѕСЃС‚Рѕ СЃР»РѕР¶РёС‚СЊ РІР»РёСЏРЅРёСЏ:
-            // РС‚РѕРіРѕРІС‹Р№ РїРѕР»СѓСЂР°Р·РјРµСЂ = (Max - Min) / 2. 
-            // Р•СЃР»Рё РјС‹ СЃС‡РёС‚Р°РµРј, С‡С‚Рѕ size СЌС‚Рѕ РїРѕР»РЅС‹Р№ СЂР°Р·РјРµСЂ, Р° РѕС„С„СЃРµС‚С‹ РґРІРёРіР°СЋС‚ РіСЂР°РЅРёС†С‹:
+            float finalHalfX = halfSize + (elem.boxOffsetMax.x - elem.boxOffsetMin.x) * 0.5f; // Упрощенная логика
+            // Но правильнее для Box просто сложить влияния:
+            // Итоговый полуразмер = (Max - Min) / 2. 
+            // Если мы считаем, что size это полный размер, а оффсеты двигают границы:
 
             float minX = -halfSize + elem.boxOffsetMin.x;
             float maxX = halfSize + elem.boxOffsetMax.x;
@@ -1021,7 +1142,7 @@
             float minZ = -halfSize + elem.boxOffsetMin.z;
             float maxZ = halfSize + elem.boxOffsetMax.z;
 
-            // Bullet С‚СЂРµР±СѓРµС‚ РїРѕР»РѕР¶РёС‚РµР»СЊРЅС‹Рµ СЂР°Р·РјРµСЂС‹
+            // Bullet требует положительные размеры
             float finalHX = fmaxf(0.01f, (maxX - minX) * 0.5f);
             float finalHY = fmaxf(0.01f, (maxY - minY) * 0.5f);
             float finalHZ = fmaxf(0.01f, (maxZ - minZ) * 0.5f);
@@ -1034,7 +1155,7 @@
         }
         case RigidBodyComponent::CompoundElement::Cylinder:
         {
-            // Cylinder РІ Bullet РѕСЂРёРµРЅС‚РёСЂРѕРІР°РЅ РІРґРѕР»СЊ Y, РЅР°Рј РјРѕР¶РµС‚ РїРѕРЅР°РґРѕР±РёС‚СЊСЃСЏ СЂРѕС‚Р°С†РёСЏ
+            // Cylinder в Bullet ориентирован вдоль Y, нам может понадобиться ротация
             btCylinderShape* cyl = new btCylinderShape(btVector3(
                 elem.radius,
                 elem.height * 0.5f,
@@ -1045,7 +1166,7 @@
 
         case RigidBodyComponent::CompoundElement::Capsule:
         {
-            // Capsule С‚Р°РєР¶Рµ РѕСЂРёРµРЅС‚РёСЂРѕРІР°РЅ РІРґРѕР»СЊ Y
+            // Capsule также ориентирован вдоль Y
             return new btCapsuleShape(elem.radius, elem.height);
         }
 

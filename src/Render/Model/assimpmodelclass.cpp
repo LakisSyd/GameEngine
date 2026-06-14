@@ -248,7 +248,9 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                         }
                         m_ownedTextures.push_back(t);
                         DeleteFileA(filename.c_str());
-                        return t->GetTexture();
+                        ID3D11ShaderResourceView* srv = t->GetTexture();
+                        if (srv) srv->AddRef();
+                        return srv;
                     }
                     else // Raw RGBA данные
                     {
@@ -285,7 +287,9 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                     return nullptr;
                 }
                 m_ownedTextures.push_back(t);
-                return t->GetTexture();
+                ID3D11ShaderResourceView* srv = t->GetTexture();
+                if (srv) srv->AddRef();
+                return srv;
             }
         }
     }
@@ -837,9 +841,9 @@ bool AssimpModelClass::Initialize(
                 part.metalness = Create1x1SRVFromColor(device, aiColor4D(metallic, metallic, metallic, 1.0f));
             }
             if (!part.roughness) {
-                float roughness = 50.0f / 255.0f;
+                float roughness = 220.0f / 255.0f;
                 if (aiGetMaterialFloat(mat, AI_MATKEY_ROUGHNESS_FACTOR, &roughness) != AI_SUCCESS)
-                    roughness = 50.0f / 255.0f;
+                    roughness = 220.0f / 255.0f;
                 part.roughness = Create1x1SRVFromColor(device, aiColor4D(roughness, roughness, roughness, 1.0f));
             }
 
@@ -887,9 +891,6 @@ bool AssimpModelClass::Initialize(
     GetBoundingSphere(&m_cachedSphereCenter, &m_cachedSphereRadius);
     m_boundsCached = true;
 
-#ifdef _DEBUG
-    DebugCompareNames();
-#endif
 
 #if DEBUG_VERBOSE
     OutputDebugStringA("========== MODEL INITIALIZED SUCCESSFULLY ==========\n\n");

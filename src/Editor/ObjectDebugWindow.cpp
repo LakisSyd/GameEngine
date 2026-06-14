@@ -1,4 +1,4 @@
-﻿#include "ObjectDebugWindow.h"
+#include "ObjectDebugWindow.h"
 
 #include <algorithm>
 
@@ -36,6 +36,7 @@ static const char* ShaderTypeName(ShaderType type)
     case ShaderType::Glass: return "Glass";
     case ShaderType::Projection: return "Projection";
     case ShaderType::PBR: return "PBR";
+    case ShaderType::TerrainBlend: return "TerrainBlend";
     default: return "Unknown";
     }
 }
@@ -53,6 +54,7 @@ static const char* RigidBodyShapeName(RigidBodyComponent::ShapeType type)
     case RigidBodyComponent::TriangleMesh: return "TriangleMesh";
     case RigidBodyComponent::GImpactMesh: return "GImpactMesh";
     case RigidBodyComponent::VHACD: return "VHACD";
+    case RigidBodyComponent::StairRamp: return "StairRamp";
     default: return "Unknown";
     }
 }

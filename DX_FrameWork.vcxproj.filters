@@ -64,6 +64,9 @@
     <Filter Include="Debug">
       <UniqueIdentifier>{6d5bac05-de90-4757-b97c-8d956e7310dc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Render\DebugRender">
+      <UniqueIdentifier>{cc038d9d-9a4d-41b7-9d78-29f664cd3f2c}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\Core\ApplicationClass.cpp">
@@ -247,6 +250,15 @@
       <Filter>Исходные файлы</Filter>
     </ClCompile>
     <ClCompile Include="src\Editor\ObjectDebugWindow.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Grass\GrassRenderer.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="CharacterSpawnSystem.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Render\Shader\TerrainBlendShaderClass.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
@@ -494,6 +506,24 @@
     <ClInclude Include="JobSystem.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="AssetsLoadSystem.h">
+      <Filter>Render\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Grass\GrassRenderer.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Model\ModelScaleUtils.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="WorldAreaComponent.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="AreaDebugRenderer.h">
+      <Filter>Render\DebugRender</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\TerrainBlendShaderClass.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="src\Render\Shader\Vs\Lightmap.vs">
@@ -556,5 +586,9 @@
       <Filter>Файлы ресурсов</Filter>
     </None>
     <None Include="packages.config" />
+    <None Include="src\Render\Grass\grass_instanced.ps" />
+    <None Include="src\Render\Grass\grass_instanced.vs" />
+    <None Include="src\Render\Shader\Ps\TerrainBlend.ps" />
+    <None Include="src\Render\Shader\Vs\TerrainBlend.vs" />
   </ItemGroup>
 </Project>

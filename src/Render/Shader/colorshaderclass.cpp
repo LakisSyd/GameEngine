@@ -111,7 +111,7 @@ bool ColorShaderClass::Render(ID3D11DeviceContext* deviceContext, int indexCount
 	XMMATRIX viewMatrix, 
 	XMMATRIX projectMatrix)
 {
-	DX_CHECK(SetShaderParameters(deviceContext, worldMatrix, viewMatrix, projectMatrix));
+ 	DX_CHECK(SetShaderParameters(deviceContext, worldMatrix, viewMatrix, projectMatrix));
 
 	RenderShader(deviceContext, indexCount);
 

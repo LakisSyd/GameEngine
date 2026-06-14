@@ -11,6 +11,8 @@
 #include <algorithm>
 #include "../../../AnimationComponent.h"
 
+
+
 class TextureShaderClass;
 class PBRShaderClass;
 
@@ -37,7 +39,6 @@ public:
         float opacity = 1.0f;
     };
 
-    // ── Вершина — добавили tangent и binormal для PBR/NormalMap ──────────────
     struct VertexType
     {
         XMFLOAT3 position;
@@ -50,6 +51,10 @@ public:
         int boneIDs[4];        // или XMFLOAT4/int4
         float boneWeights[4];  // или XMFLOAT4
     };
+
+
+    // ── Вершина — добавили tangent и binormal для PBR/NormalMap ──────────────
+    
 
 public:
     AssimpModelClass();

@@ -1,0 +1,35 @@
+Texture2D grassTexture : register(t0);
+SamplerState grassSampler : register(s0);
+
+cbuffer LightBuffer : register(b0)
+{
+    float4 sunDirection;
+    float4 ambientColor;
+};
+
+cbuffer GrassSettingsBuffer : register(b1)
+{
+    float4 cameraPositionAndTime;
+    float4 distancesAndWind;
+};
+
+struct PixelInputType
+{
+    float4 position : SV_POSITION;
+    float2 tex : TEXCOORD0;
+    float3 normal : NORMAL;
+    float distanceToCamera : TEXCOORD1;
+};
+
+float4 GrassPixelShader(PixelInputType input) : SV_TARGET
+{
+    float4 textureColor = grassTexture.Sample(grassSampler, input.tex);
+    float fadeRange = max(0.001f, distancesAndWind.y - distancesAndWind.x);
+    float distanceFade = saturate((distancesAndWind.y - input.distanceToCamera) / fadeRange);
+    clip(textureColor.a * distanceFade - 0.35f);
+
+    float3 normal = normalize(input.normal);
+    float diffuse = saturate(dot(normal, normalize(-sunDirection.xyz)));
+    float3 light = ambientColor.rgb + diffuse * float3(0.75f, 0.72f, 0.62f);
+    return float4(textureColor.rgb * saturate(light), textureColor.a);
+}

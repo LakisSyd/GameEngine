@@ -36,6 +36,7 @@ bool LightShaderClass::SetShadowMap(
     const XMMATRIX& lightViewProj)
 {
     // 1. Привязываем shadow map к слоту t7 (выделенный глобальный слот)
+    m_shadowMapSRV = shadowMapSRV;
     context->PSSetShaderResources(7, 1, &shadowMapSRV);
 
     // 2. Привязываем comparison sampler к слоту s7
@@ -337,6 +338,18 @@ void LightShaderClass::RenderShader(ID3D11DeviceContext* deviceContext, int inde
     if (m_directionalLightBuffer)
     {
         deviceContext->PSSetConstantBuffers(4, 1, &m_directionalLightBuffer);
+    }
+    if (m_shadowBuffer)
+    {
+        deviceContext->PSSetConstantBuffers(5, 1, &m_shadowBuffer);
+    }
+    if (m_shadowMapSRV)
+    {
+        deviceContext->PSSetShaderResources(7, 1, &m_shadowMapSRV);
+    }
+    if (m_shadowSampler)
+    {
+        deviceContext->PSSetSamplers(7, 1, &m_shadowSampler);
     }
     deviceContext->DrawIndexed(indexCount, 0, 0);
 }

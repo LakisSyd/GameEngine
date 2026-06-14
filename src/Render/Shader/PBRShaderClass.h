@@ -89,6 +89,7 @@ private:
     ID3D11ShaderResourceView* m_defaultCrackSRV = nullptr; // чёрный fallback (нет трещин)
     ID3D11ShaderResourceView* m_crackTextureSRV = nullptr; // внешняя, ApplicationClass владеет
     ID3D11ShaderResourceView* m_environmentMapSRV = nullptr; // внешняя skybox cubemap, ApplicationClass владеет
+    ID3D11ShaderResourceView* m_shadowMapSRV = nullptr; // внешняя, ShadowMap владеет
 
     ID3D11SamplerState* m_shadowSampler = nullptr;
 };

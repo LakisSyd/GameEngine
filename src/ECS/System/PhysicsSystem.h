@@ -128,7 +128,10 @@ public:
             btVector3 pos = trans.getOrigin();
 
             if (auto* tf = transformPool.Get(entity)) {
-                tf->position = XMFLOAT3(pos.x(), pos.y(), pos.z());
+                tf->position = XMFLOAT3(
+                    pos.x(),
+                    pos.y() - controller.capsuleCenterOffsetY,
+                    pos.z());
                 // Опционально: поворот, если нужно
                 // btQuaternion rot = trans.getRotation();
                 // tf->rotation = ...;
@@ -143,6 +146,9 @@ public:
 
     static btCollisionShape* CreateCapsuleShape(
         float radius, float height, const XMFLOAT3& scale);
+
+    static btCollisionShape* CreateStairRampShape(
+        const btVector3& size, const XMFLOAT3& scale);
 
     static btCollisionShape* CreateConvexHullShape(
         AssimpModelClass* model, const XMFLOAT3& scale);

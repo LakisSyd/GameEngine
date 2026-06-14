@@ -12,6 +12,9 @@
     #include "PhysicsDebugRenderer.h"
     #include "CompartmentDebugRenderer.h"
     #include "SkyShaderClass.h"
+    #include "AssetsLoadSystem.h"
+    #include "src/Render/Grass/GrassRenderer.h"
+#include "src/Render/Shader/TerrainBlendShaderClass.h"
 
     // ============================================================================
 Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
@@ -20,7 +23,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
     , m_camera(camera)
     , m_sceneManager(sceneManager)
     , m_shadowMap(shadowMap)
-    // ✅ Инициализируй ВСЕ указатели в списке инициализации:
+    // ? Инициализируй ВСЕ указатели в списке инициализации:
     , m_skyDepthState(nullptr)
     , m_lightShader(nullptr)
     , m_pbrShader(nullptr)
@@ -36,9 +39,9 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
     , m_defaultMaterial(nullptr)
     , m_previewCallback(nullptr)
     {
-        D3D11_DEPTH_STENCIL_DESC dsDesc = {};  // ✅ Обнуляем всё
+        D3D11_DEPTH_STENCIL_DESC dsDesc = {};  // ? Обнуляем всё
         dsDesc.DepthEnable = TRUE;
-        dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;  // 🔑 КЛЮЧЕВОЕ
+        dsDesc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;  // ?? КЛЮЧЕВОЕ
         dsDesc.DepthFunc = D3D11_COMPARISON_LESS_EQUAL;
         dsDesc.StencilEnable = FALSE;  // на всякий случай
 
@@ -79,9 +82,9 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
 
 
         // Проверка критических указателей
-        if (m_direct3D == nullptr) OutputDebugStringA("❌ m_direct3D is null\n");
-        if (m_camera == nullptr) OutputDebugStringA("❌ m_camera is null\n");
-        if (m_sceneManager == nullptr) OutputDebugStringA("❌ m_sceneManager is null\n");
+        if (m_direct3D == nullptr) OutputDebugStringA("? m_direct3D is null\n");
+        if (m_camera == nullptr) OutputDebugStringA("? m_camera is null\n");
+        if (m_sceneManager == nullptr) OutputDebugStringA("? m_sceneManager is null\n");
 
         // Проверка шейдеров
         auto checkPtr = [](void* p, const char* name) {
@@ -92,7 +95,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             }
             __except (EXCEPTION_EXECUTE_HANDLER) {
                 char buf[256];
-                sprintf_s(buf, "❌ %s is CORRUPTED (0x%p)\n", name, p);
+                sprintf_s(buf, "? %s is CORRUPTED (0x%p)\n", name, p);
                 OutputDebugStringA(buf);
             }
             };
@@ -110,7 +113,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
                 m_skyShader ? m_skyShader->GetSkyTexture() : nullptr);
         }
 
-        // ── Pass: Shadow Map ──────────────────────────────────────────────────────
+        // -- Pass: Shadow Map ------------------------------------------------------
         if (m_shadowMap)
         {
             m_shadowMap->SetRenderTarget(context);
@@ -120,11 +123,11 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             m_direct3D->ResetViewport();
         }
 
-        // ── Вычисляем матрицу отражения ──────────────────────────────────────────
+        // -- Вычисляем матрицу отражения ------------------------------------------
         const XMMATRIX reflectionMatrix = BuildReflectionMatrix(0.0f);
         UpdateWaterMaterials(context, reflectionMatrix);
 
-        // ── Pass: Reflection → m_reflectionTexture ────────────────────────────────
+        // -- Pass: Reflection > m_reflectionTexture --------------------------------
         if (m_reflectionTexture)
         {
             m_reflectionTexture->SetRenderTarget(context);
@@ -135,7 +138,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             ClearSRVSlots(context);
         }
 
-        // ── Pass: Refraction → m_refractionTexture ───────────────────────────────
+        // -- Pass: Refraction > m_refractionTexture -------------------------------
         if (m_refractionTexture)
         {
             m_refractionTexture->SetRenderTarget(context);
@@ -176,7 +179,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             ClearSRVSlots(context);
         }
 
-        // ── Pass: Scene Preview → m_renderTexture (для EditorUI) ─────────────────
+        // -- Pass: Scene Preview > m_renderTexture (для EditorUI) -----------------
         if (m_renderTexture)
         {
             auto fog = m_sceneManager->BuildFogSettingsFromWorld();
@@ -195,7 +198,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             ClearSRVSlots(context);
         }
 
-        // ── Pass: Main scene → backbuffer ─────────────────────────────────────────
+        // -- Pass: Main scene > backbuffer -----------------------------------------
         m_direct3D->SetBackBufferRenderTarget();
         m_direct3D->ResetViewport();
 
@@ -240,10 +243,10 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         Render3DObjects(context, view, projection,
             m_lightShader, m_pbrShader, m_defaultMaterial, selectedEntity);
 
-        // ── Sprites ───────────────────────────────────────────────────────────────
+        // -- Sprites ---------------------------------------------------------------
         RenderSprites(context, view, projection);
 
-        // ── Compartments (solid) ──────────────────────────────────────────────────
+        // -- Compartments (solid) --------------------------------------------------
         if (m_compartmentRenderer && m_colorShader)
         {
             ID3D11RasterizerState* oldRS = nullptr;
@@ -258,7 +261,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             if (oldRS) oldRS->Release();
         }
 
-        // ── Physics debug (wireframe) ─────────────────────────────────────────────
+        // -- Physics debug (wireframe) ---------------------------------------------
         if (m_physicsDebugRenderer && m_colorShader &&
             (debugSettings.showColliders || debugSettings.showAABB || debugSettings.showContacts))
         {
@@ -309,6 +312,15 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             XMMATRIX lvp = m_shadowMap->GetLightViewProjection();
             pbrShader->SetShadowMap(context, m_shadowMap->GetShaderResourceView(), lvp);
         }
+        if (m_shadowMap)
+        {
+            auto* terrainShader = ShaderManager::Get().GetAs<TerrainBlendShaderClass>("terrain_blend");
+            if (terrainShader)
+            {
+                XMMATRIX lvp = m_shadowMap->GetLightViewProjection();
+                terrainShader->SetShadowMap(context, m_shadowMap->GetShaderResourceView(), lvp);
+            }
+        }
 
         // Передаём данные о трещинах в PBR шейдер
         if (pbrShader)
@@ -339,6 +351,19 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             fog,
             selectedEntity, camPos,
             TimeManager::UnscaledDeltaTime());
+
+        if (m_grassRenderer)
+        {
+            const auto& world = m_sceneManager->GetWorldSettings();
+            m_grassRenderer->Render(
+                context,
+                view,
+                projection,
+                camPos,
+                TimeManager::UnscaledDeltaTime(),
+                world.sunDirection,
+                world.ambientStrength);
+        }
 
         // Очищаем слот shadow map
         ID3D11ShaderResourceView* nullSRV = nullptr;
@@ -397,18 +422,29 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             if (!mat || !mat->GetShader()) continue;
 
             ShaderType st = mat->GetShader()->GetType();
-            if (st != ShaderType::Light && st != ShaderType::PBR) continue;
+            if (st != ShaderType::Light && st != ShaderType::PBR && st != ShaderType::TerrainBlend) continue;
 
             XMMATRIX world = transform->GetWorldMatrix();
+
+            if (mesh.useAsyncMesh && m_sceneManager->GetAssetLoadSystem() && !mesh.asyncModelPath.empty())
+            {
+                uint32_t indexCount = 0;
+                if (m_sceneManager->GetAssetLoadSystem()->BindMeshAsset(context, mesh.asyncModelPath, indexCount))
+                {
+                    m_shadowShader->Render(context, static_cast<int>(indexCount), world, lightViewProj);
+                    continue;
+                }
+            }
+
             mesh.model->Render(context);
             m_shadowShader->Render(context, mesh.model->GetIndexCount(), world, lightViewProj);
         }
 
-        // Очистка
-        ID3D11Buffer* nullCB[6] = {};
+        // Shadow pass uses only VS slot b0. Keep the pixel-shader light buffers
+        // bound: UpdateDirectionalLight prepared them for the following passes.
+        ID3D11Buffer* nullCB = nullptr;
         ID3D11ShaderResourceView* nullSRV[8] = {};
-        context->VSSetConstantBuffers(0, 6, nullCB);
-        context->PSSetConstantBuffers(0, 6, nullCB);
+        context->VSSetConstantBuffers(0, 1, &nullCB);
         context->PSSetShaderResources(0, 8, nullSRV);
     }
 
@@ -446,7 +482,7 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         const XMFLOAT4 sunColor = { 1.0f, 0.95f, 0.8f, 1.0f };
         const XMFLOAT4 ambientLight = { 0.8f, 0.9f, 1.0f, world.ambientStrength };
 
-        // ✅ ПРАВИЛЬНАЯ проверка: просто на nullptr
+        // Проверка: просто на nullptr
         if (m_lightShader != nullptr)
         {
             m_lightShader->SetDirectionalLight(
@@ -466,6 +502,55 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
                 ambientLight,
                 world.sunIntensity);
         }
+
+        if (auto* terrainShader = ShaderManager::Get().GetAs<TerrainBlendShaderClass>("terrain_blend"))
+        {
+            terrainShader->SetDirectionalLight(
+                context,
+                sunDir,
+                sunColor,
+                ambientLight,
+                world.sunIntensity);
+        }
+        UpdateShadowLightViewProjection();
+    }
+
+    void Renderer::UpdateShadowLightViewProjection()
+    {
+        if (!m_shadowMap || !m_sceneManager)
+            return;
+
+        const auto& world = m_sceneManager->GetWorldSettings();
+
+        XMFLOAT3 sunDir = world.sunDirection;
+        float lenSq = sunDir.x * sunDir.x + sunDir.y * sunDir.y + sunDir.z * sunDir.z;
+        if (lenSq < 0.0001f)
+        {
+            sunDir = { 0.3f, -1.0f, 0.5f };
+        }
+
+        XMVECTOR lightDir = XMVector3Normalize(XMLoadFloat3(&sunDir));
+        XMVECTOR sceneCenter = XMVectorZero();
+
+        float shadowDistance = world.shadowDistance;
+        if (shadowDistance < 10.0f)
+            shadowDistance = 100.0f;
+
+        XMVECTOR lightPos = XMVectorSubtract(sceneCenter, XMVectorScale(lightDir, shadowDistance));
+        XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+
+        float dotUp = XMVectorGetX(XMVector3Dot(lightDir, up));
+        if (dotUp > 0.95f || dotUp < -0.95f)
+            up = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+
+        XMMATRIX lightView = XMMatrixLookAtLH(lightPos, sceneCenter, up);
+        XMMATRIX lightProj = XMMatrixOrthographicLH(
+            shadowDistance,
+            shadowDistance,
+            0.5f,
+            shadowDistance * 2.5f);
+
+        m_shadowMap->SetLightViewProjection(lightView, lightProj);
     }
     XMMATRIX Renderer::BuildReflectionMatrix(float reflectY) const
     {

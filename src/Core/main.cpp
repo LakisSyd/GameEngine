@@ -15,29 +15,28 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 {
     _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
     _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
-   // _CrtSetBreakAlloc(4452);
+   _CrtSetBreakAlloc(4452);
     // 💡 DPI Awareness — отключаем автоматическое масштабирование Windows
-    //    Без этого окно может "поплыть" на мониторах с высоким DPI (4K и т.д.)
-    //    Важно для точного контроля над размерами рендера в DirectX
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
+//    //    Без этого окно может "поплыть" на мониторах с высоким DPI (4K и т.д.)
+//    //    Важно для точного контроля над размерами рендера в DirectX
+  SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_SYSTEM_AWARE);
 
-    // 📌 Создаём основной объект системы — он управляет ВСЕМ приложением
-    // ⚙️ Используем стековый объект (не через new), чтобы избежать утечек памяти
-    //    даже при аварийном завершении (исключения, аварийные выходы)
-    SystemClass system;
-
-    // 📌 Шаг 1: Инициализация — создаёт окно, подсистемы ввода и графики
-    bool result = system.Initialize();
+//    // 📌 Создаём основной объект системы — он управляет ВСЕМ приложением
+//    // ⚙️ Используем стековый объект (не через new), чтобы избежать утечек памяти
+//    //    даже при аварийном завершении (исключения, аварийные выходы)
+   SystemClass system;
+//
+//    // 📌 Шаг 1: Инициализация — создаёт окно, подсистемы ввода и графики
+   bool result = system.Initialize();
     if (result)
     {
         // 📌 Шаг 2: Главный цикл приложения — работает пока пользователь не выйдет
-        system.Run();
-        
-    }
+      system.Run();
+           }
 
-    // 📌 Шаг 3: Очистка ресурсов — освобождает окно, устройства DirectX, память
-    // 💡 ВАЖНО: очистка вызывается ЯВНО, а не в деструкторе (см. systemclass.cpp)
+//    // 📌 Шаг 3: Очистка ресурсов — освобождает окно, устройства DirectX, память
+//    // 💡 ВАЖНО: очистка вызывается ЯВНО, а не в деструкторе (см. systemclass.cpp)
     system.Shutdown();
-
+//
     return 0;
 }

@@ -17,6 +17,7 @@
 #include "GlassShaderClass.h"
 #include "ProjectionShaderClass.h"
 #include "PBRShaderClass.h"
+#include "TerrainBlendShaderClass.h"
 using namespace DirectX;
 
 #ifndef NUM_LIGHTS
@@ -405,6 +406,46 @@ inline void RenderMesh(
         context->PSSetShaderResources(0, 2, nullSRVs);
         break;
     }
+    case ShaderType::TerrainBlend:
+    {
+        auto* s = static_cast<TerrainBlendShaderClass*>(shader);
+        ID3D11ShaderResourceView* grassSRV = material->GetTexture(0) ? material->GetTexture(0)->GetTexture() : nullptr;
+        ID3D11ShaderResourceView* dirtSRV = material->GetTexture(1) ? material->GetTexture(1)->GetTexture() : nullptr;
+        ID3D11ShaderResourceView* maskSRV = material->GetTexture(2) ? material->GetTexture(2)->GetTexture() : nullptr;
+        ID3D11ShaderResourceView* grassNormalSRV = material->GetTexture(3) ? material->GetTexture(3)->GetTexture() : nullptr;
+        ID3D11ShaderResourceView* dirtNormalSRV = material->GetTexture(4) ? material->GetTexture(4)->GetTexture() : nullptr;
+        ID3D11ShaderResourceView* grassVariationSRV = material->GetTexture(5) ? material->GetTexture(5)->GetTexture() : nullptr;
+        ID3D11ShaderResourceView* grassVariationNormalSRV = material->GetTexture(6) ? material->GetTexture(6)->GetTexture() : nullptr;
+
+        UINT stride = sizeof(AssimpModelClass::VertexType);
+        UINT offset = 0;
+        for (const auto& part : model->GetMeshParts())
+        {
+            if (!part.vertexBuffer || !part.indexBuffer) continue;
+
+            context->IASetVertexBuffers(0, 1, &part.vertexBuffer, &stride, &offset);
+            context->IASetIndexBuffer(part.indexBuffer, DXGI_FORMAT_R32_UINT, 0);
+            context->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+            s->Render(context, part.indexCount,
+                world, view, projection,
+                grassSRV, dirtSRV, maskSRV,
+                grassNormalSRV, dirtNormalSRV,
+                grassVariationSRV, grassVariationNormalSRV,
+                material->GetTerrainTileScale(),
+                material->GetTerrainNormalStrength(),
+                material->GetTerrainVariationScale(),
+                material->GetTerrainVariationStrength(),
+                material->GetTerrainBrightness(),
+                material->GetTerrainAmbientBoost(),
+                material->GetTerrainMinXZ(),
+                material->GetTerrainSizeXZ());
+        }
+
+        ID3D11ShaderResourceView* nullSRVs[7] = { nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr };
+        context->PSSetShaderResources(0, 7, nullSRVs);
+        break;
+    }
     case ShaderType::NormalMap:
     {
         auto* s = static_cast<NormalMapShaderClass*>(shader);
@@ -563,8 +604,8 @@ inline void RenderMesh(
             reflectionSRV, refractionSRV, normalMapSRV,
             material->GetWaterTranslation(),
             material->GetReflectRefractScale());
-        ID3D11ShaderResourceView* nullSRVs[3] = { nullptr, nullptr, nullptr };
-        context->PSSetShaderResources(0, 3, nullSRVs);
+        ID3D11ShaderResourceView* nullSRVs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+        context->PSSetShaderResources(0, 5, nullSRVs);
         break;
     }
     case ShaderType::Glass:
@@ -584,8 +625,8 @@ inline void RenderMesh(
             material->GetReflectRefractScale());
         if (!ok) OutputDebugStringA("Glass: Render() returned false!\n");
 
-        ID3D11ShaderResourceView* nullSRVs[3] = { nullptr, nullptr, nullptr };
-        context->PSSetShaderResources(0, 3, nullSRVs);
+        ID3D11ShaderResourceView* nullSRVs[5] = { nullptr, nullptr, nullptr, nullptr, nullptr };
+        context->PSSetShaderResources(0, 5, nullSRVs);
         break;
     }
     default:

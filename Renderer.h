@@ -20,6 +20,7 @@ class ColorShaderClass;
 class PhysicsDebugRenderer;
 class CompartmentDebugRenderer;
 class RenderTextureClass;
+class GrassRenderer;
 struct PhysicsDebugSettings;
 
 using namespace DirectX;
@@ -45,7 +46,7 @@ public:
         }
     }
 
-    // ── Setters — вызывай после конструктора, до первого кадра ──────────────
+    // -- Setters — вызывай после конструктора, до первого кадра --------------
     void SetShadowShader(ShadowShaderClass* s) { m_shadowShader = s; }
     void SetLightShader(LightShaderClass* s) { m_lightShader = s; }
     void SetSkyShader(SkyShaderClass* s) { m_skyShader = s; }
@@ -56,6 +57,7 @@ public:
     void SetCompartmentRenderer(CompartmentDebugRenderer* r) { m_compartmentRenderer = r; }
     void SetColorShader(ColorShaderClass* s) { m_colorShader = s; }
     void SetWireframeRS(ID3D11RasterizerState* rs) { m_wireframeRS = rs; }
+    void SetGrassRenderer(GrassRenderer* r) { m_grassRenderer = r; }
 
     void SetRenderTextures(RenderTextureClass* reflection,
         RenderTextureClass* refraction,
@@ -73,7 +75,7 @@ public:
         m_previewCallback = std::move(cb);
     }
 
-    // ── Единственный публичный вызов на кадр ────────────────────────────────
+    // -- Единственный публичный вызов на кадр --------------------------------
     void RenderFrame(
         ID3D11DeviceContext* context,
         const XMMATRIX& view,
@@ -81,7 +83,7 @@ public:
         Entity                       selectedEntity,
         const PhysicsDebugSettings& debugSettings);
 
-    // ── Отдельные пассы (если нужны снаружи) ────────────────────────────────
+    // -- Отдельные пассы (если нужны снаружи) --------------------------------
     void Render3DObjects(
         ID3D11DeviceContext* context,
         const XMMATRIX& view,
@@ -107,13 +109,13 @@ public:
         const XMMATRIX& projection);
 
 private:
-    // ── Ядро ─────────────────────────────────────────────────────────────────
+    // -- Ядро -----------------------------------------------------------------
     D3DClass* m_direct3D;
     CameraClass* m_camera;
     ShadowMap* m_shadowMap;     // не владеем: lifetime у ApplicationClass
     SceneManager* m_sceneManager;
 
-    // ── Ресурсы пайплайна ─────────────────────────────────────────────────────
+    // -- Ресурсы пайплайна -----------------------------------------------------
     ShadowShaderClass* m_shadowShader = nullptr;
     LightShaderClass* m_lightShader = nullptr;
     PBRShaderClass* m_pbrShader = nullptr;
@@ -126,6 +128,7 @@ private:
     RenderTextureClass* m_reflectionTexture = nullptr;
     RenderTextureClass* m_refractionTexture = nullptr;
     RenderTextureClass* m_renderTexture = nullptr;
+    GrassRenderer* m_grassRenderer = nullptr;
     ID3D11RasterizerState* m_skyRS = nullptr;
     ID3D11DepthStencilState* m_skyDepthState = nullptr;
 
@@ -136,10 +139,11 @@ private:
 
     std::function<void(ID3D11ShaderResourceView*)> m_previewCallback;
 
-    // ── Приватные хелперы ─────────────────────────────────────────────────────
+    // -- Приватные хелперы -----------------------------------------------------
     XMMATRIX BuildReflectionMatrix(float reflectY = 0.0f) const;
     void     UpdateWaterMaterials(ID3D11DeviceContext* context,
         const XMMATRIX& reflectionMatrix);
     void     UpdateDirectionalLight(ID3D11DeviceContext* context);
+    void     UpdateShadowLightViewProjection();
     static void ClearSRVSlots(ID3D11DeviceContext* context, int count = 8);
 };

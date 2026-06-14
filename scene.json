@@ -1,13 +1,13 @@
 {
     "objects": [
         {
-            "entity_id": 2,
+            "entity_id": 0,
             "id": 0,
-            "model_path": "assets/model/plane.obj",
+            "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\terrain1.glb",
             "position": {
-                "x": 1.428182601928711,
-                "y": 0.0,
-                "z": 0.18960285186767578
+                "x": -0.18860149383544922,
+                "y": -0.3651461601257324,
+                "z": 2.185676336288452
             },
             "rotation": {
                 "x": 0.0,
@@ -15,11 +15,45 @@
                 "z": 0.0
             },
             "scale": {
-                "x": 5.0,
+                "x": 1.0,
                 "y": 1.0,
-                "z": 5.0
+                "z": 1.0
             },
-            "shader_type": 3,
+            "shader_type": 14,
+            "terrain_dirt_texture": "assets/terrain/textures/dirt_base.jpg",
+            "terrain_grass_texture": "assets/terrain/textures/grass_base.jpg",
+            "terrain_mask_texture": "assets/terrain/masks/dirt_mask.png",
+            "terrain_min_xz": [
+                -50.0,
+                -50.0
+            ],
+            "terrain_size_xz": [
+                100.0,
+                100.0
+            ],
+            "terrain_tile_scale": 0.75,
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "entity_id": 2,
+            "id": 1,
+            "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\House\\Wood_house.glb",
+            "position": {
+                "x": 44.21099853515625,
+                "y": 2.4509999752044678,
+                "z": -2.6099891662597656
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shader_type": 13,
             "texture_path": "assets/texture/stone.tga"
         }
     ],

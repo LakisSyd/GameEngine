@@ -2,6 +2,7 @@
 #include <string>
 #include <cstdint>
 #include <algorithm>
+#include <filesystem>
 #include "SceneManager.h"
 #include "ObjectDebugWindow.h"
 #include <backends/imgui_impl_win32.h>
@@ -18,7 +19,15 @@ inline btQuaternion XMFloat4ToBtQuaternion(const DirectX::XMFLOAT4& q)
     return btQuaternion(q.x, q.y, q.z, q.w);
 }
 
+std::string BuildCollisionModelPath(const std::string& modelPath)
+{
+    std::filesystem::path path(modelPath);
 
+    return (
+        path.parent_path() /
+        (path.stem().string() + "_collision" + path.extension().string())
+        ).string();
+}
 
 
 // -- Цвета темы (UE5-стиль) ---------------------------------------------------
@@ -103,16 +112,30 @@ bool EditorUI::Initialize(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* 
     io.FontGlobalScale = 1.0f;
 
     if (!ImGui_ImplWin32_Init(hwnd))           return false;
-    if (!ImGui_ImplDX11_Init(device, context)) return false;
+    if (!ImGui_ImplDX11_Init(device, context))
+    {
+        ImGui_ImplWin32_Shutdown();
+        ImGui::DestroyContext();
+        return false;
+    }
 
+    m_initialized = true;
     return true;
 }
 
 void EditorUI::Shutdown()
 {
+    if (!m_initialized)
+        return;
+
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
+
+    m_initialized = false;
+    m_device = nullptr;
+    m_context = nullptr;
+    m_hwnd = nullptr;
 }
 
 void EditorUI::NewFrame()
@@ -462,6 +485,59 @@ void EditorUI::RenderSceneOutliner(SceneManager& sceneManager)
     ImGui::Spacing();
 
     // -- Спрайты (остаются как раньше) ---------------------------------------
+    auto& areaPool = registry.GetComponents<WorldAreaComponent>();
+    for (auto& [entity, area] : areaPool)
+    {
+        if (!sceneManager.IsObjectActive(entity)) continue;
+        if (registry.HasComponent<MeshRendererComponent>(entity)) continue;
+
+        const char* typeName = "World";
+        if (area.type == WorldAreaType::Grass) typeName = "Grass";
+        if (area.type == WorldAreaType::NoGrass) typeName = "No Grass";
+        if (area.type == WorldAreaType::Forest) typeName = "Forest";
+        if (area.type == WorldAreaType::Spawn) typeName = "Spawn";
+        if (area.type == WorldAreaType::Trigger) typeName = "Trigger";
+
+        char label[64];
+        snprintf(label, sizeof(label), "  Area: %s [%u]", typeName, entity);
+
+        const bool selected =
+            m_selectedType == SelectedType::Object && m_selectedEntity == entity;
+
+        if (selected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
+        if (ImGui::Selectable(label, selected))
+            SetSelection(SelectedType::Object, entity);
+        if (selected) ImGui::PopStyleColor();
+    }
+
+    ImGui::Spacing();
+
+    // -- Collision-only entities ---------------------------------------------
+    auto& rbPool = registry.GetComponents<RigidBodyComponent>();
+    for (auto& [entity, rb] : rbPool)
+    {
+        if (!sceneManager.IsObjectActive(entity)) continue;
+        if (registry.HasComponent<MeshRendererComponent>(entity)) continue;
+        if (registry.HasComponent<WorldAreaComponent>(entity)) continue;
+
+        const char* name = "Collision";
+        if (auto* nameComp = registry.GetComponent<NameComponent>(entity))
+            name = nameComp->name.c_str();
+
+        char label[96];
+        snprintf(label, sizeof(label), "  Collider: %s [%u]", name, entity);
+
+        const bool selected =
+            m_selectedType == SelectedType::Object && m_selectedEntity == entity;
+
+        if (selected) ImGui::PushStyleColor(ImGuiCol_Header, COL_SELECTED);
+        if (ImGui::Selectable(label, selected))
+            SetSelection(SelectedType::Object, entity);
+        if (selected) ImGui::PopStyleColor();
+    }
+
+    ImGui::Spacing();
+
     for (int i = 0; i < sceneManager.GetSpriteCount(); ++i)
     {
         char label[64];
@@ -514,14 +590,33 @@ void EditorUI::RenderDetailsPanel(SceneManager& sceneManager)
 //=============================================================================
 void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
 {
+    auto& registry = sceneManager.GetECSRegistry();
     auto* transform = sceneManager.GetObjectTransform(entity);
     if (!transform)
     {
+        if (registry.HasComponent<WorldAreaComponent>(entity))
+        {
+            RenderComponentManager(sceneManager, entity);
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::PushStyleColor(ImGuiCol_Button, COL_RED);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.3f, 0.3f, 1.0f));
+            if (ImGui::Button("Remove Area", ImVec2(-1, 0)))
+            {
+                sceneManager.RemoveObject(entity);
+                m_selectedEntity = INVALID_ENTITY;
+                m_selectedType = SelectedType::None;
+            }
+            ImGui::PopStyleColor(2);
+            return;
+        }
+
         ImGui::TextColored(COL_RED, "Entity not found");
         return;
     }
-
-    auto& registry = sceneManager.GetECSRegistry();
 
     if (registry.HasComponent<SubmarineHullConfig>(entity))
     {
@@ -633,6 +728,28 @@ void EditorUI::RenderObjectProperties(SceneManager& sceneManager, Entity entity)
 void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
 {
     auto& registry = sceneManager.GetECSRegistry();
+
+
+    if (registry.HasComponent<WorldAreaComponent>(entity))
+    {
+        auto* area = registry.GetComponent<WorldAreaComponent>(entity);
+
+        if (area)
+        {
+            const char* areaTypes[] = { "Grass", "No Grass", "Forest", "Spawn", "Trigger" };
+            int type = static_cast<int>(area->type);
+
+            ImGui::SeparatorText("World Area");
+            if (ImGui::Combo("Type", &type, areaTypes, IM_ARRAYSIZE(areaTypes)))
+                area->type = static_cast<WorldAreaType>(type);
+
+            ImGui::DragFloat3("Center", &area->center.x, 0.1f);
+            ImGui::DragFloat3("Size", &area->size.x, 0.1f, 0.1f, 500.0f);
+            ImGui::DragFloat("Density", &area->density, 0.01f, 0.0f, 20.0f);
+            ImGui::InputScalar("Seed", ImGuiDataType_U32, &area->seed);
+            ImGui::Checkbox("Enabled", &area->enabled);
+        }
+    }
 
     // -- DoorComponent ---------------------------------------------------------
     if (registry.HasComponent<DoorComponent>(entity))
@@ -975,7 +1092,8 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
             ImGui::Spacing();
 
             // ?? 1. ПЕРЕКЛЮЧАТЕЛЬ COMPOUND MODE
-            ImGui::Checkbox(" Compound Collision", &rb->isCompound);
+            if (ImGui::Checkbox(" Compound Collision", &rb->isCompound))
+                rb->needsCollisionRebuild = true;
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("Enable to build collision from multiple primitive shapes");
 
@@ -997,6 +1115,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                     newElem.size = 1.0f;
                     newElem.radius = 0.5f;
                     newElem.height = 1.0f;
+                    newElem.rampSize = { 2.0f, 1.0f, 3.0f };
                     // VHACD defaults
                     newElem.vhacdModel = nullptr;
                     newElem.vhacdScale = { 1.0f, 1.0f, 1.0f };
@@ -1025,7 +1144,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                         ImGui::Indent();
 
                         // ?? FIX #1: Правильный массив типов + IM_ARRAYSIZE
-                        const char* types[] = { "Box", "Sphere", "Cylinder", "Capsule", "ConvexHull", "VHACD" };
+                        const char* types[] = { "Box", "Sphere", "Cylinder", "Capsule", "ConvexHull", "VHACD", "StairRamp" };
                         int typeIdx = static_cast<int>(elem.type);
                         if (ImGui::Combo("Type", &typeIdx, types, IM_ARRAYSIZE(types)))
                         {
@@ -1087,7 +1206,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                                     vhacdChanged = true;
                                 }
                             }
-                            ImGui::SameLine(); HelpMarker("Assign the mesh to decompose.");
+                            ImGui::SameLine();
 
                             // Масштаб коллизии
                             ImGui::Spacing(); ImGui::Text("Collision Scale:");
@@ -1106,19 +1225,19 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                                 ImGui::Indent();
                                 int res = static_cast<int>(elem.vhacdResolution);
                                 if (ImGui::SliderInt("Resolution", &res, 10000, 400000, "%dk")) { elem.vhacdResolution = static_cast<uint32_t>(res); vhacdChanged = true; }
-                                ImGui::SameLine(); HelpMarker("Higher = more accurate but slower.");
+                                ImGui::SameLine();
 
                                 int maxHulls = static_cast<int>(elem.vhacdMaxHulls);
                                 if (ImGui::SliderInt("Max Hulls", &maxHulls, 1, 128, "%d")) { elem.vhacdMaxHulls = static_cast<uint32_t>(maxHulls); vhacdChanged = true; }
-                                ImGui::SameLine(); HelpMarker("Limit convex parts count.");
+                                ImGui::SameLine();
 
                                 int verts = static_cast<int>(elem.vhacdMaxVertsPerHull);
                                 if (ImGui::SliderInt("Verts/Hull", &verts, 4, 256, "%d")) { elem.vhacdMaxVertsPerHull = static_cast<uint32_t>(verts); vhacdChanged = true; }
-                                ImGui::SameLine(); HelpMarker("Max vertices per hull. 64 is good for Bullet.");
+                                ImGui::SameLine();
 
                                 float err = elem.vhacdVolumeError;
                                 if (ImGui::SliderFloat("Volume Error %%", &err, 0.001f, 0.1f, "%.3f%%")) { elem.vhacdVolumeError = err; vhacdChanged = true; }
-                                ImGui::SameLine(); HelpMarker("Lower = tighter fit.");
+                                ImGui::SameLine();
                                 ImGui::Unindent();
                             }
 
@@ -1159,6 +1278,11 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                             if (ImGui::DragFloat("Radius", &elem.radius, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
                             if (ImGui::DragFloat("Height", &elem.height, 0.1f, 0.1f, 10.0f)) sizeChanged = true;
                         }
+                        else if (elem.type == RigidBodyComponent::CompoundElement::StairRamp)
+                        {
+                            ImGui::TextColored(COL_TEXT_DIM, "Ramp Size: X width, Y climb height, Z stair length");
+                            if (ImGui::DragFloat3("##CompoundStairRampSize", &elem.rampSize.x, 0.05f, 0.01f, 100.0f)) sizeChanged = true;
+                        }
                         // VHACD, ConvexHull и другие типы просто пропускают этот блок — как и нужно!
 
                         if (sizeChanged) needsRecreate = true;
@@ -1183,9 +1307,9 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                         {
                             ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), " Half-Extents Adjustment");
                             if (ImGui::DragFloat3(" Min Offset (Neg)", &elem.boxOffsetMin.x, 0.05f, -100.0f, 100.0f)) shapeChanged = true;
-                            ImGui::SameLine(); HelpMarker("Сдвигает отрицательные грани");
+                            ImGui::SameLine();
                             if (ImGui::DragFloat3(" Max Offset (Pos)", &elem.boxOffsetMax.x, 0.05f, -100.0f, 100.0f)) shapeChanged = true;
-                            ImGui::SameLine(); HelpMarker("Сдвигает положительные грани");
+                            ImGui::SameLine();
 
                             // Кнопка Corner Edit (оставляем как было)
                             ImGui::Spacing();
@@ -1219,8 +1343,8 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                     ImGui::PopID();
                 }
 
-                if (needsRecreate && rb->body)
-                    PhysicsSystem::RefreshRigidBody(registry, entity, rb);
+                if (needsRecreate)
+                    rb->needsCollisionRebuild = true;
                 needsRecreate = false;  // ?? КРИТИЧНО: сброс флага!
             }
             else
@@ -1240,7 +1364,7 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 // ?? FIX #4: Правильный массив + IM_ARRAYSIZE для одиночных форм
                 const char* shapeNames[] = {
                     "Box", "Sphere", "Cylinder", "Capsule",
-                    "Plane", "ConvexHull", "TriangleMesh", "GImpactMesh", "VHACD"
+                    "Plane", "ConvexHull", "TriangleMesh", "GImpactMesh", "VHACD", "StairRamp"
                 };
                 int shapeIdx = static_cast<int>(rb->shapeType);
                 if (ImGui::Combo("##RBShape", &shapeIdx, shapeNames, IM_ARRAYSIZE(shapeNames)))
@@ -1349,7 +1473,20 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                     break;
                 }
                 // ?? FIX #5: Добавлен кейс для VHACD в одиночном режиме
-                case RigidBodyComponent::VHACD:
+                case RigidBodyComponent::StairRamp:
+                {
+                    ImGui::TextColored(ImVec4(0.4f, 0.8f, 0.4f, 1.0f), " Smooth player stair collision");
+                    ImGui::TextColored(COL_TEXT_DIM, " Size: X width, Y climb height, Z stair length");
+                    float size[3] = { rb->shapeSize.x(), rb->shapeSize.y(), rb->shapeSize.z() };
+                    ImGui::SetNextItemWidth(-1);
+                    if (ImGui::DragFloat3("##StairRampSize", size, 0.05f, 0.01f, 100.0f))
+                    {
+                        rb->shapeSize = btVector3(size[0], size[1], size[2]);
+                        if (rb->body) PhysicsSystem::RefreshRigidBody(registry, entity, rb);
+                    }
+                    rb->mass = 0.0f;
+                    break;
+                }                case RigidBodyComponent::VHACD:
                 {
                     ImGui::TextColored(ImVec4(0.4f, 0.8f, 1.0f, 1.0f), " VHACD: Dynamic concave collision");
                     ImGui::TextColored(COL_TEXT_DIM, " Decomposes mesh into convex hulls for stable physics.");
@@ -1379,6 +1516,21 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 // ?? COLLISION FILTERING
 // ===============================================================
                
+            }
+
+            const bool canApplyRbRebuild =
+                rb->needsCollisionRebuild &&
+                !ImGui::IsAnyItemActive() &&
+                !ImGui::IsMouseDown(ImGuiMouseButton_Left);
+
+            if (canApplyRbRebuild)
+            {
+                if (rb->body)
+                    PhysicsSystem::RefreshRigidBody(registry, entity, rb);
+                else
+                    PhysicsSystem::CreateRigidBody(registry, entity);
+
+                rb->needsCollisionRebuild = false;
             }
         }
     }
@@ -1615,7 +1767,21 @@ void EditorUI::RenderComponentManager(SceneManager& sceneManager, Entity entity)
                 ImGui::TextColored(COL_TEXT_DIM, "(already added)");
             }
         }
-
+        {
+            const bool hasArea = registry.HasComponent<WorldAreaComponent>(entity);
+            ImGui::BeginDisabled(hasArea);
+            if (ImGui::Selectable("  World Area Component"))
+            {
+                registry.AddComponent<WorldAreaComponent>(entity, WorldAreaComponent{});
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndDisabled();
+            if (hasArea)
+            {
+                ImGui::SameLine();
+                ImGui::TextColored(COL_TEXT_DIM, "(already added)");
+            }
+        }
         // -- Compartment Component -----------------------------------------------
         {
             const bool hasComp = registry.HasComponent<CompartmentComponent>(entity);
@@ -1903,6 +2069,49 @@ void EditorUI::RenderSpawnPanel(SceneManager& sceneManager)
 
     ImGui::PushStyleColor(ImGuiCol_Button, COL_GREEN);
     ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_GREEN_HOV);
+
+    ImGui::Checkbox("Spawn with physics", &useSeparateCollisionMesh);
+
+    if (useSeparateCollisionMesh)
+    {
+        const std::string collisionPath = BuildCollisionModelPath(m_spawnModelPath);
+        strncpy_s(m_spawnCollisionModelPath, sizeof(m_spawnCollisionModelPath), collisionPath.c_str(), _TRUNCATE);
+
+        std::error_code collisionPathError;
+        const bool collisionExists = std::filesystem::exists(collisionPath, collisionPathError);
+
+        ImGui::TextColored(COL_TEXT_DIM, "Collision mesh");
+        ImGui::TextWrapped("%s", collisionPath.c_str());
+        ImGui::TextColored(collisionExists ? COL_GREEN : COL_RED,
+            collisionExists ? "Found" : "Missing");
+    }
+
+    if (ImGui::Button("  Create Collision  ", ImVec2(-1, 0)))
+    {
+        auto& registry = sceneManager.GetECSRegistry();
+        Entity collisionEntity = registry.CreateEntity();
+
+        registry.AddComponent<TransformComponent>(collisionEntity, TransformComponent{
+            { m_spawnPos[0], m_spawnPos[1], m_spawnPos[2] },
+            { 0.0f, 0.0f, 0.0f },
+            { 1.0f, 1.0f, 1.0f }
+        });
+        registry.AddComponent<NameComponent>(collisionEntity, NameComponent{ "Collision" });
+        registry.AddComponent<ActiveComponent>(collisionEntity, {});
+
+        RigidBodyComponent rb{};
+        rb.mass = 0.0f;
+        rb.isDynamic = false;
+        rb.shapeType = RigidBodyComponent::Box;
+        rb.shapeSize = btVector3(2.0f, 2.0f, 2.0f);
+        rb.useManualSize = true;
+        registry.AddComponent<RigidBodyComponent>(collisionEntity, std::move(rb));
+        PhysicsSystem::CreateRigidBody(registry, collisionEntity);
+
+        SetSelection(SelectedType::Object, collisionEntity);
+    }
+
+    ImGui::Spacing();
     if (ImGui::Button("  Spawn  ", ImVec2(-1, 0)))
     {
         m_spawnRequest.pending = true;
@@ -1912,8 +2121,16 @@ void EditorUI::RenderSpawnPanel(SceneManager& sceneManager)
         m_spawnRequest.posX = m_spawnPos[0];
         m_spawnRequest.posY = m_spawnPos[1];
         m_spawnRequest.posZ = m_spawnPos[2];
+        m_spawnRequest.useSeparateCollisionMesh = useSeparateCollisionMesh;
+        if (useSeparateCollisionMesh)
+            m_spawnRequest.collisionModelPath = m_spawnCollisionModelPath;
     }
     ImGui::PopStyleColor(2);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::Spacing();
+    RenderWorldAreaSpawner(sceneManager);
 }
 
 void EditorUI::RenderFogPanel(SceneManager& sceneManager)
@@ -2328,6 +2545,123 @@ void EditorUI::RenderShaderSelector(SceneManager& sceneManager)
             SectionHeader("Textures");
             ImGui::Spacing();
 
+            auto* meshForTerrain = sceneManager.GetECSRegistry().GetComponent<MeshRendererComponent>(m_selectedEntity);
+            MaterialClass* terrainMat = meshForTerrain ? meshForTerrain->material : nullptr;
+            ShaderBaseClass* activeShader = terrainMat ? terrainMat->GetShader() : nullptr;
+            const bool isTerrainBlend = activeShader && activeShader->GetType() == ShaderType::TerrainBlend;
+
+            ImGui::PushStyleColor(ImGuiCol_Header, ImVec4(0.10f, 0.24f, 0.14f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_HeaderHovered, ImVec4(0.15f, 0.34f, 0.20f, 1.0f));
+            bool terrainOpen = ImGui::CollapsingHeader("  Terrain Blend", ImGuiTreeNodeFlags_DefaultOpen);
+            ImGui::PopStyleColor(2);
+
+            if (terrainOpen)
+            {
+                ImGui::Spacing();
+                ImGui::TextColored(COL_TEXT_DIM, "GLB terrain slots: 0 grass, 1 dirt, 2 mask, 5 grass variation");
+
+                ImGui::PushStyleColor(ImGuiCol_Button, COL_GREEN);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_GREEN_HOV);
+                if (ImGui::Button(isTerrainBlend ? "Terrain Blend Active" : "Apply Terrain Blend Shader", ImVec2(-1, 0)))
+                {
+                    auto* shader = ShaderManager::Get().Get("terrain_blend");
+                    if (shader) sceneManager.SetObjectShader(m_selectedEntity, shader, m_device);
+                }
+                ImGui::PopStyleColor(2);
+
+                ImGui::Spacing();
+                ImGui::TextColored(COL_TEXT_DIM, " Grass Base Color");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##TerrainGrassPath", m_terrainGrassPathBuf, sizeof(m_terrainGrassPathBuf));
+
+                ImGui::TextColored(COL_TEXT_DIM, " Dirt Base Color");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##TerrainDirtPath", m_terrainDirtPathBuf, sizeof(m_terrainDirtPathBuf));
+
+                ImGui::TextColored(COL_TEXT_DIM, " Dirt Mask (linear)");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##TerrainMaskPath", m_terrainMaskPathBuf, sizeof(m_terrainMaskPathBuf));
+
+                ImGui::TextColored(COL_TEXT_DIM, " Grass Normal (linear)");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##TerrainGrassNormalPath", m_terrainGrassNormalPathBuf, sizeof(m_terrainGrassNormalPathBuf));
+
+                ImGui::TextColored(COL_TEXT_DIM, " Dirt Normal (linear)");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##TerrainDirtNormalPath", m_terrainDirtNormalPathBuf, sizeof(m_terrainDirtNormalPathBuf));
+
+                ImGui::TextColored(COL_TEXT_DIM, " Grass Variation Base Color");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##TerrainGrassVariationPath", m_terrainGrassVariationPathBuf, sizeof(m_terrainGrassVariationPathBuf));
+
+                ImGui::TextColored(COL_TEXT_DIM, " Grass Variation Normal (linear)");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::InputText("##TerrainGrassVariationNormalPath", m_terrainGrassVariationNormalPathBuf, sizeof(m_terrainGrassVariationNormalPathBuf));
+
+                ImGui::Spacing();
+                ImGui::SetNextItemWidth(-1);
+                ImGui::DragFloat("Tile Scale", &m_terrainTileScale, 0.05f, 0.001f, 100.0f, "%.3f");
+
+                ImGui::SetNextItemWidth(-1);
+                ImGui::DragFloat("Normal Strength", &m_terrainNormalStrength, 0.05f, 0.0f, 8.0f, "%.3f");
+
+                ImGui::SetNextItemWidth(-1);
+                ImGui::DragFloat("Variation Scale", &m_terrainVariationScale, 0.005f, 0.001f, 5.0f, "%.3f");
+
+                ImGui::SetNextItemWidth(-1);
+                ImGui::DragFloat("Variation Strength", &m_terrainVariationStrength, 0.05f, 0.0f, 8.0f, "%.3f");
+
+                ImGui::SetNextItemWidth(-1);
+                ImGui::DragFloat("Terrain Brightness", &m_terrainBrightness, 0.02f, 0.0f, 4.0f, "%.3f");
+
+                ImGui::SetNextItemWidth(-1);
+                ImGui::DragFloat("Terrain Ambient Boost", &m_terrainAmbientBoost, 0.02f, 0.0f, 4.0f, "%.3f");
+
+                ImGui::TextColored(COL_TEXT_DIM, " Mask World Min XZ");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::DragFloat2("##TerrainMinXZ", m_terrainMinXZ, 0.1f);
+
+                ImGui::TextColored(COL_TEXT_DIM, " Mask World Size XZ");
+                ImGui::SetNextItemWidth(-1);
+                ImGui::DragFloat2("##TerrainSizeXZ", m_terrainSizeXZ, 0.1f, 0.001f, 100000.0f);
+
+                ImGui::PushStyleColor(ImGuiCol_Button, COL_ACCENT);
+                ImGui::PushStyleColor(ImGuiCol_ButtonHovered, COL_ACCENT_HOV);
+                if (ImGui::Button("Apply Terrain Textures", ImVec2(-1, 0)))
+                {
+                    auto* shader = ShaderManager::Get().Get("terrain_blend");
+                    if (shader) sceneManager.SetObjectShader(m_selectedEntity, shader, m_device);
+
+                    sceneManager.SetObjectTexture(m_selectedEntity, 0, m_terrainGrassPathBuf, m_device, m_context, true);
+                    sceneManager.SetObjectTexture(m_selectedEntity, 1, m_terrainDirtPathBuf, m_device, m_context, true);
+                    sceneManager.SetObjectTexture(m_selectedEntity, 2, m_terrainMaskPathBuf, m_device, m_context, false);
+                    sceneManager.SetObjectTexture(m_selectedEntity, 3, m_terrainGrassNormalPathBuf, m_device, m_context, false);
+                    sceneManager.SetObjectTexture(m_selectedEntity, 4, m_terrainDirtNormalPathBuf, m_device, m_context, false);
+
+                    sceneManager.SetObjectTexture(m_selectedEntity, 5, m_terrainGrassVariationPathBuf, m_device, m_context, true);
+                    sceneManager.SetObjectTexture(m_selectedEntity, 6, m_terrainGrassVariationNormalPathBuf, m_device, m_context, false);
+
+                    if (auto* mesh = sceneManager.GetECSRegistry().GetComponent<MeshRendererComponent>(m_selectedEntity))
+                    {
+                        if (mesh->material)
+                        {
+                            mesh->material->SetTerrainTileScale(m_terrainTileScale);
+                            mesh->material->SetTerrainNormalStrength(m_terrainNormalStrength);
+                            mesh->material->SetTerrainVariationScale(m_terrainVariationScale);
+                            mesh->material->SetTerrainVariationStrength(m_terrainVariationStrength);
+                            mesh->material->SetTerrainBrightness(m_terrainBrightness);
+                            mesh->material->SetTerrainAmbientBoost(m_terrainAmbientBoost);
+                            mesh->material->SetTerrainBounds(
+                                DirectX::XMFLOAT2(m_terrainMinXZ[0], m_terrainMinXZ[1]),
+                                DirectX::XMFLOAT2(m_terrainSizeXZ[0], m_terrainSizeXZ[1]));
+                        }
+                    }
+                }
+                ImGui::PopStyleColor(2);
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+            }
             // Проверяем — есть ли у модели вшитые (embedded) текстуры из GLB
             auto* mesh = sceneManager.GetECSRegistry().GetComponent<MeshRendererComponent>(m_selectedEntity);
             const bool hasEmbedded = mesh && mesh->model && mesh->model->IsEmbeddedFormat();
@@ -2810,6 +3144,7 @@ void EditorUI::RenderPhysicsDebugPanel()
     ImGui::Checkbox("Planes", &m_debugSettings.showPlanes);
     ImGui::Checkbox("Convex Hulls", &m_debugSettings.showConvexHulls);
     ImGui::Checkbox("Triangle Meshes", &m_debugSettings.showTriangleMeshes);
+    ImGui::Checkbox("GImpact Meshes", &m_debugSettings.showGImpactMeshes);
 
     ImGui::Columns(1);
     ImGui::EndDisabled();
@@ -2830,6 +3165,7 @@ void EditorUI::RenderPhysicsDebugPanel()
         ImGui::ColorEdit4("Static Bodies##CS", &m_debugSettings.colorStatic.x);
         ImGui::ColorEdit4("Kinematic Bodies##CK", &m_debugSettings.colorKinematic.x);
         ImGui::ColorEdit4("Sleeping Bodies##CSL", &m_debugSettings.colorSleeping.x);
+        ImGui::ColorEdit4("Characters##CCH", &m_debugSettings.colorCharacter.x);
 
         ImGui::Spacing();
         ImGui::TextColored(COL_TEXT_DIM, " Debug Elements:");
@@ -2845,6 +3181,7 @@ void EditorUI::RenderPhysicsDebugPanel()
             m_debugSettings.colorStatic = { 0.8f, 0.2f, 0.2f, 0.6f };
             m_debugSettings.colorKinematic = { 0.2f, 0.5f, 0.9f, 0.6f };
             m_debugSettings.colorSleeping = { 0.5f, 0.5f, 0.5f, 0.4f };
+            m_debugSettings.colorCharacter = { 0.9f, 0.3f, 1.0f, 0.9f };
             m_debugSettings.colorContact = { 1.0f, 1.0f, 0.0f, 1.0f };
             m_debugSettings.colorAABB = { 0.9f, 0.6f, 0.1f, 0.3f };
         }
@@ -2863,6 +3200,8 @@ void EditorUI::RenderPhysicsDebugPanel()
         ImGui::SliderFloat("Line Thickness", &m_debugSettings.lineThickness, 0.5f, 5.0f);
         ImGui::SliderFloat("Contact Marker Size", &m_debugSettings.contactMarkerSize, 0.05f, 0.5f);
         ImGui::SliderFloat("Velocity Scale", &m_debugSettings.velocityScale, 0.1f, 2.0f);
+        ImGui::Checkbox("Detailed Mesh Wireframes", &m_debugSettings.showComplexMeshWireframes);
+        ImGui::SliderInt("Max Mesh Triangles", &m_debugSettings.maxMeshTriangles, 100, 20000);
     }
 
     ImGui::Spacing();
@@ -2879,6 +3218,7 @@ void EditorUI::RenderPhysicsDebugPanel()
         m_debugSettings.showBoxes = m_debugSettings.showSpheres = m_debugSettings.showCapsules = true;
         m_debugSettings.showCylinders = m_debugSettings.showPlanes = true;
         m_debugSettings.showConvexHulls = m_debugSettings.showTriangleMeshes = true;
+        m_debugSettings.showGImpactMeshes = true;
     }
 
     if (ImGui::Button("Disable All##PD", ImVec2(-1, 0)))
@@ -2886,6 +3226,7 @@ void EditorUI::RenderPhysicsDebugPanel()
         m_debugSettings.showBoxes = m_debugSettings.showSpheres = m_debugSettings.showCapsules = false;
         m_debugSettings.showCylinders = m_debugSettings.showPlanes = false;
         m_debugSettings.showConvexHulls = m_debugSettings.showTriangleMeshes = false;
+        m_debugSettings.showGImpactMeshes = false;
     }
 
     if (ImGui::Button("Primitives Only##PD", ImVec2(-1, 0)))
@@ -2893,6 +3234,7 @@ void EditorUI::RenderPhysicsDebugPanel()
         m_debugSettings.showBoxes = m_debugSettings.showSpheres = m_debugSettings.showCapsules = true;
         m_debugSettings.showCylinders = true;
         m_debugSettings.showConvexHulls = m_debugSettings.showTriangleMeshes = false;
+        m_debugSettings.showGImpactMeshes = false;
     }
 
     ImGui::Spacing();
@@ -3279,4 +3621,33 @@ void EditorUI::DrawSubmarineCollisionSetup(ECSRegistry& registry, Entity entity)
     if (ImGui::Button("Default 0.95")) scs->interiorShrinkFactor = 0.95f;
     ImGui::SameLine();
     if (ImGui::Button("Slight -5%")) scs->interiorShrinkFactor = std::min(0.995f, scs->interiorShrinkFactor * 0.95f);
+}
+void EditorUI::RenderWorldAreaSpawner(SceneManager& sceneManager)
+{
+    ImGui::SeparatorText("World Areas");
+
+    if (ImGui::Button("Add Grass Area"))
+    {
+        Entity entity =
+            sceneManager.CreateWorldArea(WorldAreaType::Grass);
+
+        m_selectedType = SelectedType::Object;
+        m_selectedEntity = entity;
+    }
+
+    if (ImGui::Button("Rebuild Grass"))
+    {
+        m_rebuildGrassRequested = true;
+    }
+
+    ImGui::SameLine();
+
+    if (ImGui::Button("Add No Grass Area"))
+    {
+        Entity entity =
+            sceneManager.CreateWorldArea(WorldAreaType::NoGrass);
+
+        m_selectedType = SelectedType::Object;
+        m_selectedEntity = entity;
+    }
 }

@@ -21,23 +21,19 @@ bool MaterialClass::Initialize(ID3D11Device* device, const std::wstring& name)
     m_name = name;
     m_shader = nullptr;
     m_textures.resize(2, nullptr);  // ← было 1, теперь 2: слот t0 и t1 всегда готовы
+    m_texturePaths.resize(2);
     m_diffuseColor = XMFLOAT3(1.0f, 1.0f, 1.0f);
     m_specularPower = 20.0f;
     return true;
 }
 void MaterialClass::Shutdown()
 {
-    // ⚠️ НЕ освобождаем m_shader и m_textures!
-    // Они управляются ResourceManager / SceneManager
+    // Material only references shaders/textures. Ownership stays with ShaderManager,
+    // TextureClass owners, AssimpModelClass, or the application-level defaults.
     m_shader = nullptr;
     m_textures.clear();
-    for (auto& t : m_textures)
-    {
-		t->GetTexture()->Release(); 
-        t = nullptr;
-    }
+    m_texturePaths.clear();
 }
-
 void MaterialClass::Bind(ID3D11DeviceContext* context)
 {
     if (!m_shader) return;
@@ -76,5 +72,21 @@ void MaterialClass::SetTexture(size_t index, TextureClass* texture)
 {
     if (index >= m_textures.size())
         m_textures.resize(index + 1, nullptr);
+    if (index >= m_texturePaths.size())
+        m_texturePaths.resize(index + 1);
     m_textures[index] = texture;
+}
+
+void MaterialClass::SetTexturePath(size_t index, const std::string& path)
+{
+    if (index >= m_texturePaths.size())
+        m_texturePaths.resize(index + 1);
+    m_texturePaths[index] = path;
+}
+
+std::string MaterialClass::GetTexturePath(size_t index) const
+{
+    if (index >= m_texturePaths.size())
+        return "";
+    return m_texturePaths[index];
 }

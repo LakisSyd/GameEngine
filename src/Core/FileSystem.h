@@ -12,14 +12,7 @@ namespace fs = std::filesystem;
 // HELPER: Конвертация пути в std::string (C++17 vs C++20 совместимость)
 // ============================================================================
 inline std::string ToString(const fs::path& path) {
-#ifdef __cpp_char8_t
-    // C++20: u8string() возвращает std::u8string, нужна конвертация
-    std::u8string u8str = path.u8string();
-    return std::string(u8str.begin(), u8str.end());
-#else
-    // C++17: u8string() возвращает std::string
-    return path.u8string();
-#endif
+    return path.string();
 }
 
 // ============================================================================

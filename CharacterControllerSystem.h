@@ -6,6 +6,7 @@ class CharacterControllerSystem
 public:
     static void Update(ECSRegistry& registry, float dt)
     {
+        (void)dt;
         registry.ForEach<CharacterController>(
             [&](Entity entity, CharacterController& controller)
             {
@@ -13,10 +14,11 @@ public:
                 if (!movement || !controller.controller)
                     return;
 
+                constexpr float fixedPhysicsStep = 1.0f / 60.0f;
                 btVector3 walk(
-                    movement->walkDirection.x * movement->currentSpeed * dt,
-                    movement->walkDirection.y * movement->currentSpeed * dt,
-                    movement->walkDirection.z * movement->currentSpeed * dt
+                    movement->walkDirection.x * movement->currentSpeed * fixedPhysicsStep,
+                    movement->walkDirection.y * movement->currentSpeed * fixedPhysicsStep,
+                    movement->walkDirection.z * movement->currentSpeed * fixedPhysicsStep
                 );
 
                 controller.controller->setWalkDirection(walk);

@@ -55,6 +55,7 @@ private:
     ID3D11Buffer* m_lightColorBuffer;
     ID3D11Buffer* m_selectedBuffer;
     ID3D11SamplerState* m_shadowSampler;
+    ID3D11ShaderResourceView* m_shadowMapSRV = nullptr; // external, owned by ShadowMap
 
 	// 🔥 НОВОЕ: Структура для одного направленного света (слот b3 в пиксельном шейдере)
 

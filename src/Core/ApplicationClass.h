@@ -34,6 +34,7 @@
 #include "GlassShaderClass.h"
 #include "ProjectionShaderClass.h"
 #include "PBRShaderClass.h"
+#include "TerrainBlendShaderClass.h"
 #include "DebugPhysicsVisualizer.h"
 #include "ShadowMap.h"
 #include "ShadowShaderClass.h"
@@ -41,8 +42,12 @@
 #include "../../DragDropSystem.h"
 #include "../../GameplayController.h"
 #include "../../JobSystem.h"
+#include "../../AssetsLoadSystem.h"
+#include "../../AreaDebugRenderer.h"
+
 class Renderer;
 class SkyShaderClass;
+class GrassRenderer;
 
 const bool  FULL_SCREEN = false;
 const bool  VSYNC_ENABLED = true;
@@ -58,7 +63,10 @@ class ApplicationClass
 public:
     bool ReloadSkyBox(std::string newSkyboxPath);
     ID3D11ShaderResourceView* LoadSkyboxFromWorldSettings(ID3D11Device* device, ID3D11DeviceContext* context);
-    ApplicationClass();
+   ApplicationClass()
+        : m_assetLoadSystem(m_jobSystem)
+    {
+    }
     ~ApplicationClass() = default;
 
     bool Initialize(int screenWidth, int screenHeight, HWND hwnd);
@@ -165,6 +173,7 @@ private:
     ReflectionShaderClass* m_reflectionShader = nullptr;
     projectionShaderClass* m_projectionShader = nullptr;
     PBRShaderClass* m_pbrShader = nullptr;
+    TerrainBlendShaderClass* m_terrainBlendShader = nullptr;
     SkyShaderClass* m_SkyShader = nullptr;
 
     // ── Размеры экрана ───────────────────────────────────────────────────────
@@ -227,6 +236,15 @@ private:
     bool m_wasF1Down = false;
 
     JobSystem m_jobSystem;
+
+    AssetLoadSystem m_assetLoadSystem;
+    GrassRenderer* m_grassRenderer = nullptr;
+
+ //  FontShaderClass* m_fontShader;
+	//FontClass* m_font;
+ //   TextClass* m_textHello = nullptr;   // <-- НОВОЕ
+
+	AreaDebugRenderer m_areaDebugRenderer;
 };
 
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);

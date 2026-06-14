@@ -4,6 +4,12 @@
 
 class CharacterSpawnSystem {
 public:
+
+    static void Destroy(
+        ECSRegistry& registry,
+        Entity entity
+    );
+
     static void Spawn(ECSRegistry& registry, Entity entity, const XMFLOAT3& startPosition)
     {
         auto* controller = registry.GetComponent<CharacterController>(entity);
@@ -14,7 +20,10 @@ public:
         }
 
         // ── 1. Капсула ─────────────────────────────────────────────────────
-        controller->capsuleShape = new btCapsuleShape(0.4f, 1.4f);
+        controller->capsuleRadius = 0.4f;
+        controller->capsuleHeight = 1.4f;
+        controller->capsuleCenterOffsetY = controller->capsuleHeight * 0.5f + controller->capsuleRadius;
+        controller->capsuleShape = new btCapsuleShape(controller->capsuleRadius, controller->capsuleHeight);
         controller->capsuleShape->setMargin(0.04f);
 
         // ── 2. Ghost object ────────────────────────────────────────────────
@@ -41,21 +50,26 @@ public:
        
 
         controller->controller->setGravity(btVector3(0, -controller->gravity, 0));
-        controller->controller->setMaxSlope(controller->maxSlope);
+        controller->controller->setMaxSlope(controller->maxSlope * 0.01745329252f);
         controller->controller->setJumpSpeed(controller->jumpSpeed);
-        controller->controller->setUseGhostSweepTest(true);
+        controller->controller->setUseGhostSweepTest(false);
+        controller->controller->setMaxPenetrationDepth(0.08f);
 
        
         startTransform.setIdentity();
 
-        // 🔥 Сдвиг на 3 метра вверх — персонаж должен спавниться НАД полом
+        // Bullet хранит центр капсулы, а Transform игрока считается визуальной точкой у ног.
         startTransform.setOrigin(btVector3(
             startPosition.x,
-            startPosition.y + 3.0f,  // ← КРИТИЧНО!
+            startPosition.y + controller->capsuleCenterOffsetY,
             startPosition.z
         ));
 
         controller->ghostObj->setWorldTransform(startTransform);
+        if (controller->controller)
+            controller->controller->warp(startTransform.getOrigin());
+        controller->lastSyncedPosition = startPosition;
+        controller->lastSyncedRotation = tf->rotation;
 
         
         // ── 5. Регистрация в мире ──────────────────────────────────────────
@@ -64,7 +78,9 @@ public:
         world->addCollisionObject(
             controller->ghostObj,
             btBroadphaseProxy::CharacterFilter,
-            btBroadphaseProxy::AllFilter  // 🔥 Коллизирует со ВСЕМ (только для тестов!)
+            btBroadphaseProxy::DefaultFilter |
+            btBroadphaseProxy::StaticFilter |
+            btBroadphaseProxy::KinematicFilter
         );
 
 

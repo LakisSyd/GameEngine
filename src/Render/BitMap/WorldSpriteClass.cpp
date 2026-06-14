@@ -10,6 +10,9 @@ WorldSpriteClass::WorldSpriteClass()
     m_indexCount = 0;
     m_width = 1.0f;
     m_height = 1.0f;
+    m_rotation = 0.0f;
+    m_color = XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+    m_cachedWorldMatrix = XMMatrixIdentity();
 }
 
 WorldSpriteClass::~WorldSpriteClass()
@@ -49,24 +52,17 @@ void WorldSpriteClass::Shutdown()
 
 bool WorldSpriteClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceContext,const char* textureFilename, float width, float height)
 {
-    bool result;
     m_width = width;
     m_height = height;
 
     m_Texture = new TextureClass;
 
-   result = m_Texture->Initialize(device, deviceContext, textureFilename);
-
-
-
-   if (!m_Texture->GetTexture())
+   bool result = m_Texture->Initialize(device, deviceContext, textureFilename);
+   if (!result || !m_Texture->GetTexture())
    {
        OutputDebugStringA("ERROR: Texture not loaded!\n");
-       return false;
-   }
-
-   if (!result)
-   {
+       delete m_Texture;
+       m_Texture = nullptr;
        return false;
    }
    result = InitializeBuffers(device, m_width, m_height);
@@ -102,10 +98,7 @@ bool WorldSpriteClass::Render(
         worldMatrix = *customWorldMatrix;
     }
     else {
-        // 🔵 Нет кастомной матрицы — строим дефолтную из внутренних данных
-        XMMATRIX scaleMatrix = XMMatrixScaling(m_width, m_height, 1.0f);
-        XMMATRIX transMatrix = XMMatrixTranslation(m_position.x, m_position.y, m_position.z);
-        worldMatrix = scaleMatrix * transMatrix; // Порядок: Scale → Translate
+        worldMatrix = BuildWorldMatrix();
     }
 
     // ==========================================
@@ -137,39 +130,47 @@ bool WorldSpriteClass::InitializeBuffers(ID3D11Device* device, float width, floa
     vertices = new VertexType[m_vertexCount];
     if (!vertices) return false;
 
-    float halfW = width / 2.0f;
-    float halfH = height / 2.0f;
+    float halfW = 0.5f;
+    float halfH = 0.5f;
 
-    halfW *= 10.0f;
-    halfH *= 10.0f;
+    int glyphIndex = 16;
+
+    int columns = 16;
+    int rows = 4;
+
+    int col = glyphIndex % columns;
+    int row = glyphIndex / columns;
+
+    float cellW = 1.0f / columns;
+    float cellH = 1.0f / rows;
+
+    float texelU = 0.5f / static_cast<float>(m_Texture->GetWidth());
+    float texelV = 0.5f / static_cast<float>(m_Texture->GetHeight());
+
+    float u0 = col * cellW + texelU;
+    float v0 = row * cellH + texelV;
+    float u1 = (col + 1) * cellW - texelU;
+    float v1 = (row + 1) * cellH - texelV;
 
     // === Чёткая схема: каждый треугольник отдельно ===
-
-    // Треугольник 1 (левый нижний)
-    // Вершина 0: Top-Left
     vertices[0].position = XMFLOAT3(-halfW, halfH, 0.0f);
-    vertices[0].texture = XMFLOAT2(0.0f, 0.0f);
+    vertices[0].texture = XMFLOAT2(u0, v0);
 
-    // Вершина 1: Bottom-Right  
     vertices[1].position = XMFLOAT3(halfW, -halfH, 0.0f);
-    vertices[1].texture = XMFLOAT2(1.0f, 1.0f);
+    vertices[1].texture = XMFLOAT2(u1, v1);
 
-    // Вершина 2: Bottom-Left
+
     vertices[2].position = XMFLOAT3(-halfW, -halfH, 0.0f);
-    vertices[2].texture = XMFLOAT2(0.0f, 1.0f);
+    vertices[2].texture = XMFLOAT2(u0, v1);
 
-    // Треугольник 2 (правый верхний)
-    // Вершина 3: Top-Left (повтор)
     vertices[3].position = XMFLOAT3(-halfW, halfH, 0.0f);
-    vertices[3].texture = XMFLOAT2(0.0f, 0.0f);
+    vertices[3].texture = XMFLOAT2(u0, v0);
 
-    // Вершина 4: Top-Right
     vertices[4].position = XMFLOAT3(halfW, halfH, 0.0f);
-    vertices[4].texture = XMFLOAT2(1.0f, 0.0f);
+    vertices[4].texture = XMFLOAT2(u1, v0);
 
-    // Вершина 5: Bottom-Right (повтор)
     vertices[5].position = XMFLOAT3(halfW, -halfH, 0.0f);
-    vertices[5].texture = XMFLOAT2(1.0f, 1.0f);
+    vertices[5].texture = XMFLOAT2(u1, v1);
 
     // Создаём вершинный буфер
     vertexBufferDesc.Usage = D3D11_USAGE_DEFAULT;
@@ -313,4 +314,3 @@ XMMATRIX WorldSpriteClass::BuildWorldMatrix() const
 
     return m_cachedWorldMatrix;
 }
-

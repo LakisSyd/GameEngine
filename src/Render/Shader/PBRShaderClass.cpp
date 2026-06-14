@@ -28,7 +28,7 @@ namespace
     }
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
 {
     ID3D10Blob* vsBlob = nullptr;
@@ -63,7 +63,7 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
     if (!CreateInputLayout(device, layout, _countof(layout), vsBlob)) { vsBlob->Release(); psBlob->Release(); return false; }
     vsBlob->Release(); psBlob->Release();
 
-    // ── Constant buffers ──────────────────────────────────────────────────────
+    // -- Constant buffers ------------------------------------------------------
     if (!CreateConstantBuffer(device, sizeof(MatrixBuffer), &m_matrixBuffer))           return false;
     if (!CreateConstantBuffer(device, sizeof(LightPositionBuffer), &m_lightPosBuffer))         return false;
     if (!CreateConstantBuffer(device, sizeof(LightColorBuffer), &m_lightColorBuffer))       return false;
@@ -75,7 +75,7 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
     if (!CreateFogBuffer(device))        return false;
     if (!CreateDefaultSampler(device))   return false;
 
-    // ── Shadow sampler (s7) ───────────────────────────────────────────────────
+    // -- Shadow sampler (s7) ---------------------------------------------------
     D3D11_SAMPLER_DESC shadowSamplerDesc = {};
     shadowSamplerDesc.Filter = D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
     shadowSamplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_BORDER;
@@ -87,16 +87,16 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
     shadowSamplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
     if (FAILED(device->CreateSamplerState(&shadowSamplerDesc, &m_shadowSampler))) return false;
 
-    // ── Fallback текстуры ─────────────────────────────────────────────────────
+    // -- Fallback текстуры -----------------------------------------------------
     m_defaultNormalSRV = Create1x1SRV(device, 128, 128, 255, 255); // нейтральный нормал
     m_defaultMetalnessSRV = Create1x1SRV(device, 0, 0, 0, 255); // диэлектрик
-    m_defaultRoughnessSRV = Create1x1SRV(device, 50, 50, 50, 255); // умеренный блеск для PBR без roughness map
+    m_defaultRoughnessSRV = Create1x1SRV(device, 220, 220, 220, 255); // умеренный блеск для PBR без roughness map
     m_defaultCrackSRV = Create1x1SRV(device, 0, 0, 0, 255); // нет трещин (чёрный)
 
     return true;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 void PBRShaderClass::Shutdown()
 {
     auto release = [](auto*& ptr) { if (ptr) { ptr->Release(); ptr = nullptr; } };
@@ -109,18 +109,19 @@ void PBRShaderClass::Shutdown()
     release(m_directionalLightBuffer);
     release(m_shadowBuffer);
     release(m_shadowSampler);
-    release(m_damageBuffer);         // ← буфер трещин
+    release(m_damageBuffer);         // < буфер трещин
     release(m_defaultNormalSRV);
     release(m_defaultMetalnessSRV);
     release(m_defaultRoughnessSRV);
-    release(m_defaultCrackSRV);      // ← fallback трещин
+    release(m_defaultCrackSRV);      // < fallback трещин
 
     // m_crackTextureSRV и m_environmentMapSRV НЕ освобождаем — владеет ApplicationClass
     m_environmentMapSRV = nullptr;
+    m_shadowMapSRV = nullptr;
     ShaderBaseClass::Shutdown();
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 void PBRShaderClass::SetMatrixBuffers(
     ID3D11DeviceContext* context,
     XMMATRIX world,
@@ -136,7 +137,7 @@ void PBRShaderClass::SetMatrixBuffers(
     UpdateConstantBuffer(context, m_matrixBuffer, mb, 0, true);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 bool PBRShaderClass::Render(
     ID3D11DeviceContext* context,
     int                  indexCount,
@@ -155,12 +156,12 @@ bool PBRShaderClass::Render(
 {
     if (!context) return false;
 
-    // ── Fallback если текстура не назначена ───────────────────────────────────
+    // -- Fallback если текстура не назначена -----------------------------------
     if (!normalMap)  normalMap = m_defaultNormalSRV;
     if (!metalness)  metalness = m_defaultMetalnessSRV;
     if (!roughness)  roughness = m_defaultRoughnessSRV;
 
-    // ── Constant buffers ──────────────────────────────────────────────────────
+    // -- Constant buffers ------------------------------------------------------
     MatrixBuffer mb;
     mb.world = XMMatrixTranspose(world);
     mb.view = XMMatrixTranspose(view);
@@ -186,16 +187,24 @@ bool PBRShaderClass::Render(
     sb.padding = { 0, 0, 0 };
     UpdateConstantBuffer(context, m_selectedBuffer, sb, 3, false);
 
-    // ── Биндим шейдеры и семплер ──────────────────────────────────────────────
+    // -- Биндим шейдеры и семплер ----------------------------------------------
     BindShader(context);
     if (m_sampleState)
         context->PSSetSamplers(0, 1, &m_sampleState);
+    if (m_directionalLightBuffer)
+        context->PSSetConstantBuffers(4, 1, &m_directionalLightBuffer);
+    if (m_shadowBuffer)
+        context->PSSetConstantBuffers(5, 1, &m_shadowBuffer);
+    if (m_shadowMapSRV)
+        context->PSSetShaderResources(7, 1, &m_shadowMapSRV);
+    if (m_shadowSampler)
+        context->PSSetSamplers(7, 1, &m_shadowSampler);
 
-    // ── SRV слоты t0-t3 (PBR текстуры) ───────────────────────────────────────
+    // -- SRV слоты t0-t3 (PBR текстуры) ---------------------------------------
     ID3D11ShaderResourceView* srvs[4] = { albedo, normalMap, metalness, roughness };
     context->PSSetShaderResources(0, 4, srvs);
 
-    // ── SRV слот t6 (crack маска) — ПЕРЕД DrawIndexed ─────────────────────────
+    // -- SRV слот t6 (crack маска) — ПЕРЕД DrawIndexed -------------------------
     // Используем внешнюю текстуру если загружена, иначе чёрный fallback (нет трещин)
     ID3D11ShaderResourceView* crackSRV = m_crackTextureSRV ? m_crackTextureSRV : m_defaultCrackSRV;
     context->PSSetShaderResources(6, 1, &crackSRV);
@@ -203,16 +212,16 @@ bool PBRShaderClass::Render(
     DamageBufferType emptyDamage{};
     UpdateConstantBuffer(context, m_damageBuffer, emptyDamage, 7, false);
 
-    // ── SRV слот t8 (environment cubemap) ──────────────────────────────────────
+    // -- SRV слот t8 (environment cubemap) --------------------------------------
     // Это не полноценный IBL/prefiltered BRDF, а лёгкий skybox reflection,
     // чтобы PBR-материалы не выглядели плоско при отсутствии HDRI.
     ID3D11ShaderResourceView* environmentSRV = m_environmentMapSRV;
     context->PSSetShaderResources(8, 1, &environmentSRV);
 
-    // ── Draw ──────────────────────────────────────────────────────────────────
+    // -- Draw ------------------------------------------------------------------
     context->DrawIndexed(indexCount, 0, 0);
 
-    // ── Очистка слотов ────────────────────────────────────────────────────────
+    // -- Очистка слотов --------------------------------------------------------
     ID3D11ShaderResourceView* nullSRVs[9] = {};
     context->PSSetShaderResources(0, 9, nullSRVs);
 
@@ -225,7 +234,7 @@ bool PBRShaderClass::Render(
     return true;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 bool PBRShaderClass::SetDirectionalLight(
     ID3D11DeviceContext* context,
     const XMFLOAT3& direction,
@@ -249,7 +258,7 @@ bool PBRShaderClass::SetDirectionalLight(
     return true;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 bool PBRShaderClass::SetShadowMap(
     ID3D11DeviceContext* context,
     ID3D11ShaderResourceView* shadowMapSRV,
@@ -257,6 +266,7 @@ bool PBRShaderClass::SetShadowMap(
 {
     if (!context || !shadowMapSRV) return false;
 
+    m_shadowMapSRV = shadowMapSRV;
     context->PSSetShaderResources(7, 1, &shadowMapSRV);
     if (m_shadowSampler) context->PSSetSamplers(7, 1, &m_shadowSampler);
 
@@ -270,7 +280,7 @@ bool PBRShaderClass::SetShadowMap(
     return true;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// ============================================================================
 bool PBRShaderClass::SetDamageDecals(
     ID3D11DeviceContext* context,
     const DamageDecalComponent* damage,
@@ -289,7 +299,7 @@ bool PBRShaderClass::SetDamageDecals(
         {
             const auto& crack = damage->cracks[i];
 
-            // Локальная позиция → мировая
+            // Локальная позиция > мировая
             XMVECTOR worldPos = XMVector3TransformCoord(
                 XMLoadFloat3(&crack.localPosition), worldMatrix);
             XMFLOAT3 wp;
@@ -299,7 +309,7 @@ bool PBRShaderClass::SetDamageDecals(
             data.crackParams[i] = { crack.intensity, crack.rotation, 0.f, 0.f };
         }
     }
-    // damage == nullptr → crackCount = 0 → шейдер пропускает цикл
+    // damage == nullptr > crackCount = 0 > шейдер пропускает цикл
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (FAILED(context->Map(m_damageBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))

@@ -10,6 +10,35 @@
 #include "ShaderManager.h"
 #include "PhysicsSystem.h"
 #include "../AnimationSystem.h"
+#include "../../AssetsLoadSystem.h"
+#include <algorithm>
+#include <cctype>
+#include "../../CharacterSpawnSystem.h"
+
+namespace
+{
+    bool CanUseAsyncMeshPath(const std::string& path)
+    {
+        if (path.empty())
+            return false;
+
+        std::string ext = fs::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        return ext != ".glb" && ext != ".gltf";
+    }
+
+    bool IsGltfMeshPath(const std::string& path)
+    {
+        std::string ext = fs::path(path).extension().string();
+        std::transform(ext.begin(), ext.end(), ext.begin(),
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+        return ext == ".glb" || ext == ".gltf";
+    }
+}
+
 // ============================================================================
 // Конструктор
 // ============================================================================
@@ -55,7 +84,24 @@ Entity SceneManager::SpawnObject(AssimpModelClass* model, float x, float y, floa
         m_registry.AddComponent<AnimationComponent>(e, AnimationComponent{});
     }
 
+    
+
     return e;
+}
+
+
+Entity SceneManager::CreateWorldArea(WorldAreaType type)
+{
+    Entity entity = m_registry.CreateEntity();
+
+    WorldAreaComponent area;
+    area.type = type;
+
+    m_registry.AddComponent<WorldAreaComponent>(entity, area);
+    m_registry.AddComponent<NameComponent>(entity, NameComponent{ "World Area" });
+    m_registry.AddComponent<ActiveComponent>(entity, {});
+
+    return entity;
 }
 
 // ============================================================================
@@ -64,7 +110,11 @@ Entity SceneManager::SpawnObject(AssimpModelClass* model, float x, float y, floa
 // ============================================================================
 bool SceneManager::RemoveObject(Entity entity)
 {
-    if (!m_registry.HasComponent<TransformComponent>(entity))
+    const bool isSceneObject =
+        m_registry.HasComponent<TransformComponent>(entity) ||
+        m_registry.HasComponent<WorldAreaComponent>(entity);
+
+    if (!isSceneObject)
         return false; // сущность не существует
 
     
@@ -76,6 +126,10 @@ bool SceneManager::RemoveObject(Entity entity)
             delete mesh->material;  // ?
             mesh->material = nullptr;
         }
+    }
+    if (m_registry.HasComponent<CharacterController>(entity))
+    {
+        CharacterSpawnSystem::Destroy(m_registry, entity);
     }
     m_registry.DestroyEntity(entity);
    
@@ -172,9 +226,20 @@ void SceneManager::RenderAllECS(
 
         auto* animComp = m_registry.GetComponent<AnimationComponent>(entity);
 
-        RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
-            mat, lightColors, lightPositions, fog,
-            entity == selectedEntity, cameraPos, deltaTime, animComp);
+        bool renderedAsync = false;
+        if (mesh.useAsyncMesh && m_assetLoadSystem && !mesh.asyncModelPath.empty())
+        {
+            renderedAsync = m_assetLoadSystem->RenderMeshAsset(
+                context, mesh.asyncModelPath, world, viewMatrix, projectionMatrix,
+                mat, lightColors, lightPositions, entity == selectedEntity);
+        }
+
+        if (!renderedAsync)
+        {
+            RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
+                mat, lightColors, lightPositions, fog,
+                entity == selectedEntity, cameraPos, deltaTime, animComp);
+        }
     }
 
     // -- Проход 2: прозрачные объекты (стекло) — z-buffer на чтение ----------
@@ -201,9 +266,21 @@ void SceneManager::RenderAllECS(
         if (!isTransparentObj) continue;
 
         XMMATRIX world = transform->GetWorldMatrix();
-        RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
-            mat, lightColors, lightPositions, fog,
-            entity == selectedEntity, cameraPos, deltaTime);
+
+        bool renderedAsync = false;
+        if (mesh.useAsyncMesh && m_assetLoadSystem && !mesh.asyncModelPath.empty())
+        {
+            renderedAsync = m_assetLoadSystem->RenderMeshAsset(
+                context, mesh.asyncModelPath, world, viewMatrix, projectionMatrix,
+                mat, lightColors, lightPositions, entity == selectedEntity);
+        }
+
+        if (!renderedAsync)
+        {
+            RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
+                mat, lightColors, lightPositions, fog,
+                entity == selectedEntity, cameraPos, deltaTime);
+        }
     }
 }
 
@@ -250,8 +327,19 @@ void SceneManager::RenderAllECSExcluding(
         XMMATRIX world = transform->GetWorldMatrix();
         auto* animComp = m_registry.GetComponent<AnimationComponent>(entity);
 
-        RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
-            mat, lightColors, lightPositions, fog, false, XMFLOAT3(), deltaTime, animComp);
+        bool renderedAsync = false;
+        if (mesh.useAsyncMesh && m_assetLoadSystem && !mesh.asyncModelPath.empty())
+        {
+            renderedAsync = m_assetLoadSystem->RenderMeshAsset(
+                context, mesh.asyncModelPath, world, viewMatrix, projectionMatrix,
+                mat, lightColors, lightPositions, false);
+        }
+
+        if (!renderedAsync)
+        {
+            RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
+                mat, lightColors, lightPositions, fog, false, XMFLOAT3(), deltaTime, animComp);
+        }
     }
 }
 
@@ -365,6 +453,17 @@ bool SceneManager::SaveScene(const std::string& filename)
         scene["objects"].push_back(SerializeObject(entity, id++));
     }
 
+    // -- Сохраняем standalone-коллизии без меша -------------------------------
+    auto& rbPool = m_registry.GetComponents<RigidBodyComponent>();
+    for (auto& [entity, rb] : rbPool)
+    {
+        if (m_registry.HasComponent<MeshRendererComponent>(entity)) continue;
+        if (m_registry.HasComponent<CompartmentComponent>(entity)) continue;
+        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
+
+        scene["objects"].push_back(SerializeObject(entity, id++));
+    }
+
     std::ofstream file(filename);
     if (!file.is_open()) return false;
     file << scene.dump(4);
@@ -383,18 +482,29 @@ json SceneManager::SerializeObject(Entity entity, int id)
     objJson["entity_id"] = static_cast<uint32_t>(entity); // < сохраняем оригинальный Entity ID
 
     // -- Model / Texture paths -------------------------------------------------
-    std::string modelPath = "assets/model/sphere.obj";
+    const bool hasMeshRenderer = m_registry.HasComponent<MeshRendererComponent>(entity);
+    std::string modelPath = hasMeshRenderer ? "assets/model/sphere.obj" : "";
     std::string texturePath = "assets/texture/stone.tga";
 
     if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
     {
-        for (auto& [path, cachedModel] : m_modelCache)
+        if (mesh->useAsyncMesh && !mesh->asyncModelPath.empty())
         {
-            if (cachedModel == mesh->model) { modelPath = path; break; }
+            modelPath = mesh->asyncModelPath;
+        }
+        else
+        {
+            for (auto& [path, cachedModel] : m_modelCache)
+            {
+                if (cachedModel == mesh->model) { modelPath = path; break; }
+            }
         }
     }
     objJson["model_path"] = modelPath;
     objJson["texture_path"] = texturePath;
+
+    if (auto* name = m_registry.GetComponent<NameComponent>(entity))
+        objJson["object_name"] = name->name;
 
     // -- TransformComponent ----------------------------------------------------
     if (auto* t = m_registry.GetComponent<TransformComponent>(entity))
@@ -411,6 +521,31 @@ json SceneManager::SerializeObject(Entity entity, int id)
             objJson["shader_type"] = static_cast<int>(mesh->material->GetShader()->GetType());
     }
 
+    // -- TerrainBlend material ------------------------------------------------
+    if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
+    {
+        if (mesh->material && mesh->material->GetShader() &&
+            mesh->material->GetShader()->GetType() == ShaderType::TerrainBlend)
+        {
+            objJson["terrain_grass_texture"] = mesh->material->GetTexturePath(0);
+            objJson["terrain_dirt_texture"] = mesh->material->GetTexturePath(1);
+            objJson["terrain_mask_texture"] = mesh->material->GetTexturePath(2);
+            objJson["terrain_grass_normal"] = mesh->material->GetTexturePath(3);
+            objJson["terrain_dirt_normal"] = mesh->material->GetTexturePath(4);
+            objJson["terrain_grass_variation_texture"] = mesh->material->GetTexturePath(5);
+            objJson["terrain_grass_variation_normal"] = mesh->material->GetTexturePath(6);
+            objJson["terrain_tile_scale"] = mesh->material->GetTerrainTileScale();
+            objJson["terrain_normal_strength"] = mesh->material->GetTerrainNormalStrength();
+            objJson["terrain_variation_scale"] = mesh->material->GetTerrainVariationScale();
+            objJson["terrain_variation_strength"] = mesh->material->GetTerrainVariationStrength();
+            objJson["terrain_brightness"] = mesh->material->GetTerrainBrightness();
+            objJson["terrain_ambient_boost"] = mesh->material->GetTerrainAmbientBoost();
+            auto minXZ = mesh->material->GetTerrainMinXZ();
+            auto sizeXZ = mesh->material->GetTerrainSizeXZ();
+            objJson["terrain_min_xz"] = { minXZ.x, minXZ.y };
+            objJson["terrain_size_xz"] = { sizeXZ.x, sizeXZ.y };
+        }
+    }
     // -- LightComponent --------------------------------------------------------
     if (auto* light = m_registry.GetComponent<LightComponent>(entity))
     {
@@ -436,6 +571,8 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["rb_friction"] = rig->friction;
         objJson["rb_shape_type"] = static_cast<int>(rig->shapeType);
         objJson["rb_shape_radius"] = rig->shapeRadius;
+        objJson["rb_use_separate_collision_mesh"] = rig->useSeparateCollisionMesh;
+        objJson["rb_collision_model_path"] = rig->collisionModelPath;
         objJson["rb_use_manual_size"] = rig->useManualSize;
         objJson["rb_shape_size"] = { rig->shapeSize.x(), rig->shapeSize.y(), rig->shapeSize.z() };
         objJson["rb_is_compound"] = rig->isCompound;
@@ -449,6 +586,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
             e["size"] = elem.size;
             e["radius"] = elem.radius;
             e["height"] = elem.height;
+            e["ramp_size"] = { elem.rampSize.x, elem.rampSize.y, elem.rampSize.z };
             e["box_offset_min"] = { elem.boxOffsetMin.x, elem.boxOffsetMin.y, elem.boxOffsetMin.z };
             e["box_offset_max"] = { elem.boxOffsetMax.x, elem.boxOffsetMax.y, elem.boxOffsetMax.z };
             e["local_position"] = { elem.localPosition.x, elem.localPosition.y, elem.localPosition.z };
@@ -633,9 +771,14 @@ Entity SceneManager::DeserializeObject(const json& j,
 {
     std::string modelPath = j.value("model_path", "");
     std::string texturePath = j.value("texture_path", "assets/texture/stone.tga");
+    const bool isGltfMesh = IsGltfMeshPath(modelPath);
 
-    // Отсек без меша — только логическая сущность (Transform + Active)
-    const bool isLogicalOnly = j.value("has_compartment", false) && modelPath.empty();
+    // Сущность без меша — только логика/коллизия (Transform + Active + optional components)
+    const bool isLogicalOnly =
+        modelPath.empty() &&
+        (j.value("has_compartment", false) ||
+            j.value("has_rigidbody", false) ||
+            j.value("has_static_collider", false));
 
     Entity e = INVALID_ENTITY;
 
@@ -646,13 +789,28 @@ Entity SceneManager::DeserializeObject(const json& j,
         float y = j.contains("position") ? j["position"].value("y", 0.0f) : 0.0f;
         float z = j.contains("position") ? j["position"].value("z", 0.0f) : 0.0f;
         m_registry.AddComponent<TransformComponent>(e, TransformComponent{ {x, y, z}, {0,0,0}, {1,1,1} });
+        m_registry.AddComponent<NameComponent>(e, NameComponent{ j.value("object_name", "Entity") });
         m_registry.AddComponent<ActiveComponent>(e, {});
     }
     else
     {
-        AssimpModelClass* model = modelPath.empty()
-            ? m_mainModelFallback
-            : GetOrCreateModel(modelPath, device, deviceContext, texturePath);
+        const bool useAsyncMesh = m_assetLoadSystem && CanUseAsyncMeshPath(modelPath);
+        AssimpModelClass* model = nullptr;
+
+        if (modelPath.empty())
+        {
+            model = m_mainModelFallback;
+        }
+        else if (useAsyncMesh)
+        {
+            model = m_mainModelFallback;
+            m_assetLoadSystem->RequestMeshLoad(modelPath);
+        }
+        else
+        {
+            model = GetOrCreateModel(modelPath, device, deviceContext, texturePath);
+        }
+
         if (!model) model = m_mainModelFallback;
         if (!model) return INVALID_ENTITY;
 
@@ -660,9 +818,26 @@ Entity SceneManager::DeserializeObject(const json& j,
         float y = j.contains("position") ? j["position"].value("y", 0.0f) : 0.0f;
         float z = j.contains("position") ? j["position"].value("z", 0.0f) : 0.0f;
         e = SpawnObject(model, x, y, z);
+
+        if (useAsyncMesh)
+        {
+            if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(e))
+            {
+                mesh->asyncModelPath = modelPath;
+                mesh->useAsyncMesh = true;
+            }
+        }
     }
 
     if (e == INVALID_ENTITY) return INVALID_ENTITY;
+
+    if (j.contains("object_name"))
+    {
+        if (auto* name = m_registry.GetComponent<NameComponent>(e))
+            name->name = j.value("object_name", name->name);
+        else
+            m_registry.AddComponent<NameComponent>(e, NameComponent{ j.value("object_name", "Entity") });
+    }
 
     // -- TransformComponent ----------------------------------------------------
     if (auto* t = m_registry.GetComponent<TransformComponent>(e))
@@ -695,14 +870,79 @@ Entity SceneManager::DeserializeObject(const json& j,
                     delete mesh->material;
                 auto* newMat = new MaterialClass();
                 newMat->Initialize(device, L"RuntimeMaterial_Loaded");
-                if (m_defaultMaterial && m_defaultMaterial->GetMainTexture())
+                if (type != ShaderType::PBR &&
+                    m_defaultMaterial && m_defaultMaterial->GetMainTexture())
                     newMat->SetMainTexture(m_defaultMaterial->GetMainTexture());
                 newMat->SetShader(shader);
                 mesh->material = newMat;
             }
         }
     }
+    else if (isGltfMesh && device)
+    {
+        auto* shader = ShaderManager::Get().GetShaderType(ShaderType::PBR);
+        auto* mesh = m_registry.GetComponent<MeshRendererComponent>(e);
+        if (shader && mesh)
+        {
+            auto* newMat = new MaterialClass();
+            if (newMat->Initialize(device, L"RuntimeMaterial_Gltf"))
+            {
+                newMat->SetShader(shader);
+                mesh->material = newMat;
+            }
+            else
+            {
+                delete newMat;
+            }
+        }
+    }
 
+    // -- TerrainBlend material ------------------------------------------------
+    if (j.contains("terrain_tile_scale"))
+    {
+        auto* mesh = m_registry.GetComponent<MeshRendererComponent>(e);
+        if (mesh && mesh->material)
+        {
+            const std::string grass = j.value("terrain_grass_texture", "");
+            const std::string dirt = j.value("terrain_dirt_texture", "");
+            const std::string mask = j.value("terrain_mask_texture", "");
+            const std::string grassNormal = j.value("terrain_grass_normal", "");
+            const std::string dirtNormal = j.value("terrain_dirt_normal", "");
+            const std::string grassVariation = j.value("terrain_grass_variation_texture", "");
+            const std::string grassVariationNormal = j.value("terrain_grass_variation_normal", "");
+            if (!grass.empty()) SetObjectTexture(e, 0, grass, device, deviceContext, true);
+            if (!dirt.empty())  SetObjectTexture(e, 1, dirt, device, deviceContext, true);
+            if (!mask.empty())  SetObjectTexture(e, 2, mask, device, deviceContext, false);
+            if (!grassNormal.empty()) SetObjectTexture(e, 3, grassNormal, device, deviceContext, false);
+            if (!dirtNormal.empty())  SetObjectTexture(e, 4, dirtNormal, device, deviceContext, false);
+            if (!grassVariation.empty()) SetObjectTexture(e, 5, grassVariation, device, deviceContext, true);
+            if (!grassVariationNormal.empty()) SetObjectTexture(e, 6, grassVariationNormal, device, deviceContext, false);
+
+            mesh = m_registry.GetComponent<MeshRendererComponent>(e);
+            if (mesh && mesh->material)
+            {
+                mesh->material->SetTerrainTileScale(j.value("terrain_tile_scale", 2.0f));
+                mesh->material->SetTerrainNormalStrength(j.value("terrain_normal_strength", 1.0f));
+                mesh->material->SetTerrainVariationScale(j.value("terrain_variation_scale", 0.08f));
+                mesh->material->SetTerrainVariationStrength(j.value("terrain_variation_strength", 1.0f));
+                mesh->material->SetTerrainBrightness(j.value("terrain_brightness", 1.0f));
+                mesh->material->SetTerrainAmbientBoost(j.value("terrain_ambient_boost", 1.0f));
+                DirectX::XMFLOAT2 minXZ(-50.0f, -50.0f);
+                DirectX::XMFLOAT2 sizeXZ(100.0f, 100.0f);
+                if (j.contains("terrain_min_xz"))
+                {
+                    auto& v = j["terrain_min_xz"];
+                    minXZ = { v[0], v[1] };
+                }
+                if (j.contains("terrain_size_xz"))
+                {
+                    auto& v = j["terrain_size_xz"];
+                    sizeXZ = { v[0], v[1] };
+                }
+                mesh->material->SetTerrainBounds(minXZ, sizeXZ);
+            }
+        }
+    }
     // -- LightComponent --------------------------------------------------------
     if (j.value("is_light", false))
     {
@@ -738,6 +978,14 @@ Entity SceneManager::DeserializeObject(const json& j,
         rig.friction = j.value("rb_friction", 0.0f);
         rig.shapeType = static_cast<RigidBodyComponent::ShapeType>(j.value("rb_shape_type", 0));
         rig.shapeRadius = j.value("rb_shape_radius", 0.5f);
+        rig.useSeparateCollisionMesh = j.value("rb_use_separate_collision_mesh", false);
+        rig.collisionModelPath = j.value("rb_collision_model_path", std::string());
+        if (rig.useSeparateCollisionMesh && !rig.collisionModelPath.empty())
+        {
+            rig.collisionModel = GetOrCreateModel(rig.collisionModelPath, device, deviceContext, "", false);
+            if (!rig.collisionModel)
+                rig.useSeparateCollisionMesh = false;
+        }
         rig.useManualSize = j.value("rb_use_manual_size", false);
         rig.isCompound = j.value("rb_is_compound", false);
         if (j.contains("rb_shape_size"))
@@ -754,6 +1002,7 @@ Entity SceneManager::DeserializeObject(const json& j,
                 elem.size = ejson.value("size", 1.0f);
                 elem.radius = ejson.value("radius", 0.5f);
                 elem.height = ejson.value("height", 1.0f);
+                if (ejson.contains("ramp_size")) { auto& rs = ejson["ramp_size"]; elem.rampSize = { rs[0], rs[1], rs[2] }; }
                 if (ejson.contains("box_offset_min")) { auto& m = ejson["box_offset_min"]; elem.boxOffsetMin = { m[0], m[1], m[2] }; }
                 if (ejson.contains("box_offset_max")) { auto& m = ejson["box_offset_max"]; elem.boxOffsetMax = { m[0], m[1], m[2] }; }
                 if (ejson.contains("local_position")) { auto& p = ejson["local_position"]; elem.localPosition = { p[0], p[1], p[2] }; }
@@ -907,9 +1156,10 @@ json SceneManager::SerializeMaterial(const MaterialClass* mat) { return json(); 
 AssimpModelClass* SceneManager::GetOrCreateModel(
     const std::string& path,
     ID3D11Device* device, ID3D11DeviceContext* deviceContext,
-    const std::string& texturePath)
+    const std::string& texturePath,
+    bool allowFallback)
 {
-    if (path.empty()) return m_mainModelFallback;
+    if (path.empty()) return allowFallback ? m_mainModelFallback : nullptr;
 
     auto it = m_modelCache.find(path);
     if (it != m_modelCache.end() && it->second) return it->second;
@@ -920,7 +1170,7 @@ AssimpModelClass* SceneManager::GetOrCreateModel(
     {
         OutputDebugStringA(("GetOrCreateModel: not found: " + path + "\n").c_str());
         delete model;
-        return m_mainModelFallback;
+        return allowFallback ? m_mainModelFallback : nullptr;
     }
 
     // Для GLB texturePath будет пустым — передаём nullptr,
@@ -936,7 +1186,7 @@ AssimpModelClass* SceneManager::GetOrCreateModel(
     }
 
     delete model;
-    return m_mainModelFallback;
+    return allowFallback ? m_mainModelFallback : nullptr;
 }
 
 
@@ -946,7 +1196,7 @@ void SceneManager::SetObjectShader(Entity entity, ShaderBaseClass* shader, ID3D1
     if (!mesh) return;
 
     // ?? FIX: Если объект использует общий defaultMaterial — создаём ему личный копию
-    if (mesh->material == m_defaultMaterial)
+    if (!mesh->material || mesh->material == m_defaultMaterial)
     {
         if (!device) return;
 
@@ -982,7 +1232,8 @@ void SceneManager::SetObjectShader(Entity entity, ShaderBaseClass* shader, ID3D1
 void SceneManager::SetObjectTexture(Entity entity, int slot,
     const std::string& path,
     ID3D11Device* device,
-    ID3D11DeviceContext* context)
+    ID3D11DeviceContext* context,
+    bool forceSRGB)
 {
     auto* mesh = m_registry.GetComponents<MeshRendererComponent>().Get(entity);
     if (!mesh) return;
@@ -1002,6 +1253,7 @@ void SceneManager::SetObjectTexture(Entity entity, int slot,
     if (path.empty())
     {
         mesh->material->SetTexture(slot, nullptr);
+        mesh->material->SetTexturePath(slot, "");
         return;
     }
 
@@ -1014,7 +1266,7 @@ void SceneManager::SetObjectTexture(Entity entity, int slot,
 
     // 2. Загружаем текстуру (используем TextureClass, как в SpawnObjectFromRequest)
     TextureClass* loadedTexture = new TextureClass();
-    if (!loadedTexture->Initialize(device, context, path.c_str()))
+    if (!loadedTexture->Initialize(device, context, path.c_str(), forceSRGB))
     {
         OutputDebugStringA(("SetObjectTexture: TextureClass::Initialize FAILED for: " + path + "\n").c_str());
         delete loadedTexture;
@@ -1023,6 +1275,7 @@ void SceneManager::SetObjectTexture(Entity entity, int slot,
 
     // 3. Назначаем текстуру в нужный слот материала
     mesh->material->SetTexture(slot, loadedTexture);
+    mesh->material->SetTexturePath(slot, path);
 
     // 4. Если это главная текстура (slot 0) и шейдер ещё не назначен — можно подтянуть дефолтный шейдер
     if (slot == 0 && !mesh->material->GetShader() && m_defaultMaterial)
@@ -1096,20 +1349,27 @@ void SceneManager::SetLightColor(Entity entity, const XMFLOAT4& color)
 
 bool SceneManager::SetObjectActive(Entity entity, bool active)
 {
-    if (!m_registry.HasComponent<TransformComponent>(entity))
+    const bool isSceneObject =
+        m_registry.HasComponent<TransformComponent>(entity) ||
+        m_registry.HasComponent<WorldAreaComponent>(entity);
+
+    if (!isSceneObject)
     {
         return false;
     }
-    bool IsActive = m_registry.HasComponent < ActiveComponent>(entity);
 
-    if (active && IsActive)
+    bool isActive = m_registry.HasComponent<ActiveComponent>(entity);
+
+    if (active && !isActive)
     {
         m_registry.AddComponent<ActiveComponent>(entity, ActiveComponent{});
     }
-    else if(!active && IsActive)
+    else if (!active && isActive)
     {
         m_registry.RemoveComponent<ActiveComponent>(entity);
     }
+
+    return true;
 }
 
 void SceneManager::SetLightPosition(Entity entity, const XMFLOAT3& position)

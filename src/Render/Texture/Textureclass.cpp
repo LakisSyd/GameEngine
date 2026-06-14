@@ -1,4 +1,4 @@
-﻿#define STB_IMAGE_IMPLEMENTATION
+﻿#define STB_IMAGE_IMPLEMENTATION 
 #include "textureclass.h"
 #include "stb_image.h"
 

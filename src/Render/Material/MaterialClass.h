@@ -41,6 +41,8 @@ public:
         return m_textures[index];
     }
     void SetTexture(size_t index, TextureClass* texture);
+    void SetTexturePath(size_t index, const std::string& path);
+    std::string GetTexturePath(size_t index) const;
 
     void SetDiffuseColor(const XMFLOAT3& color) { m_diffuseColor = color; }
     XMFLOAT3 GetDiffuseColor() const { return m_diffuseColor; }
@@ -106,12 +108,34 @@ public:
     bool  IsGlass()        const { return m_isGlass; }
     float GetGlassOpacity() const { return m_glassOpacity; }
 
+    void SetTerrainTileScale(float scale) { m_terrainTileScale = scale; }
+    float GetTerrainTileScale() const { return m_terrainTileScale; }
+    void SetTerrainNormalStrength(float strength) { m_terrainNormalStrength = strength; }
+    float GetTerrainNormalStrength() const { return m_terrainNormalStrength; }
+    void SetTerrainVariationScale(float scale) { m_terrainVariationScale = scale; }
+    float GetTerrainVariationScale() const { return m_terrainVariationScale; }
+    void SetTerrainVariationStrength(float strength) { m_terrainVariationStrength = strength; }
+    float GetTerrainVariationStrength() const { return m_terrainVariationStrength; }
+    void SetTerrainBrightness(float brightness) { m_terrainBrightness = brightness; }
+    float GetTerrainBrightness() const { return m_terrainBrightness; }
+    void SetTerrainAmbientBoost(float boost) { m_terrainAmbientBoost = boost; }
+    float GetTerrainAmbientBoost() const { return m_terrainAmbientBoost; }
+
+    void SetTerrainBounds(const XMFLOAT2& minXZ, const XMFLOAT2& sizeXZ)
+    {
+        m_terrainMinXZ = minXZ;
+        m_terrainSizeXZ = sizeXZ;
+    }
+    XMFLOAT2 GetTerrainMinXZ() const { return m_terrainMinXZ; }
+    XMFLOAT2 GetTerrainSizeXZ() const { return m_terrainSizeXZ; }
+
 private:
 
     XMMATRIX m_projectorProjection = XMMatrixIdentity(); // новое поле
     std::wstring     m_name;
     ShaderBaseClass* m_shader = nullptr;
     std::vector<TextureClass*> m_textures;
+    std::vector<std::string> m_texturePaths;
 
     XMFLOAT3 m_diffuseColor = { 1, 1, 1 };
     float    m_specularPower = 16.0f;
@@ -137,4 +161,13 @@ private:
     // ── Glass ────────────────────────────────────────────────────────────────
     bool  m_isGlass      = false;
     float m_glassOpacity = 0.15f;  // базовая прозрачность стекла (0=невидимое, 1=непрозрачное)
+
+    float m_terrainTileScale = 2.0f;
+    float m_terrainNormalStrength = 1.0f;
+    float m_terrainVariationScale = 0.08f;
+    float m_terrainVariationStrength = 1.0f;
+    float m_terrainBrightness = 1.0f;
+    float m_terrainAmbientBoost = 1.0f;
+    XMFLOAT2 m_terrainMinXZ = { -50.0f, -50.0f };
+    XMFLOAT2 m_terrainSizeXZ = { 100.0f, 100.0f };
 };

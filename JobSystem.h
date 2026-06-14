@@ -12,32 +12,7 @@
 
 using namespace DirectX;
 
-struct VertexType
-{
-	XMFLOAT3 position;
-	XMFLOAT2 texture;
-	XMFLOAT3 normal;
-	XMFLOAT3 tangent;
-	XMFLOAT3 binormal;
 
-	// НОВОЕ: Для скелетной анимации
-	int boneIDs[4];        // или XMFLOAT4/int4
-	float boneWeights[4];  // или XMFLOAT4
-};
-
-struct MeshCpuData
-{
-	std::vector<VertexType> vertices;
-	std::vector<uint32_t> indices;
-};
-
-struct MeshLoadResult
-    // Добавьте определение структуры Vertex перед использованием в MeshCpuData
-{
-	bool success = false;
-	std::string error;
-	MeshCpuData mesh;
-};
 
 class JobSystem
 {

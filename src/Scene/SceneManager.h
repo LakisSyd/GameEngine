@@ -1,4 +1,4 @@
-п»ї#pragma once
+#pragma once
 #include <vector>
 #include <array>
 #include <memory>
@@ -6,11 +6,11 @@
 #include <DirectXMath.h>
 
 // ============================================================================
-// РќР•Р”Р•Р›РЇ 4: gameobject.h РЅСѓР¶РµРЅ С‚РѕР»СЊРєРѕ РґР»СЏ light-СЃС„РµСЂ (SetupLightSpheres).
-// GetObject(int) СѓРґР°Р»С‘РЅ вЂ” EditorUI Рё PickingSystem РїРµСЂРµС€Р»Рё РЅР° Entity.
-// m_legacyObjects СѓРґР°Р»С‘РЅ.
+// НЕДЕЛЯ 4: gameobject.h нужен только для light-сфер (SetupLightSpheres).
+// GetObject(int) удалён — EditorUI и PickingSystem перешли на Entity.
+// m_legacyObjects удалён.
 // ============================================================================
-#include "gameobject.h"       // С‚РѕР»СЊРєРѕ РґР»СЏ light-СЃС„РµСЂ (SetupLightSpheres / RenderLightSpheres)
+#include "gameobject.h"       // только для light-сфер (SetupLightSpheres / RenderLightSpheres)
 #include "assimpmodelclass.h"
 #include "lightshaderclass.h"
 #include "WorldSpriteClass.h"
@@ -23,6 +23,8 @@
 
 using namespace DirectX;
 using json = nlohmann::json;
+
+class AssetLoadSystem;
 
 
 struct WorldSettings
@@ -61,15 +63,16 @@ public:
    
 
     // =========================================================================
-    // РЈРїСЂР°РІР»РµРЅРёРµ РѕР±СЉРµРєС‚Р°РјРё
+    // Управление объектами
     // =========================================================================
     Entity SpawnObject(AssimpModelClass* model, float x, float y, float z);
+    Entity CreateWorldArea(WorldAreaType type);
     bool   RemoveObject(Entity entity);
     void   Clear();
 
     void SetRefractionSRV(ID3D11ShaderResourceView* srv) { m_refractionSRV = srv; }
 
-    // в”Ђв”Ђ ECS-РґРѕСЃС‚СѓРї в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+    // -- ECS-доступ ------------------------------------------------------------
     TransformComponent* GetObjectTransform(Entity entity)
     {
         return m_registry.GetComponent<TransformComponent>(entity);
@@ -98,7 +101,7 @@ public:
         return m_registry.HasComponent<ActiveComponent>(entity);
     }
 
-    // РљРѕР»РёС‡РµСЃС‚РІРѕ РѕР±СЉРµРєС‚РѕРІ (MeshRenderer + Active)
+    // Количество объектов (MeshRenderer + Active)
     size_t GetObjectCount() const
     {
         return const_cast<ECSRegistry&>(m_registry)
@@ -106,14 +109,14 @@ public:
     }
 
     // =========================================================================
-    // РЎРѕС…СЂР°РЅРµРЅРёРµ / Р—Р°РіСЂСѓР·РєР°
+    // Сохранение / Загрузка
     // =========================================================================
     bool SaveScene(const std::string& filename);
     bool LoadScene(const std::string& filename,
         ID3D11Device* device, ID3D11DeviceContext* deviceContext);
 
     // =========================================================================
-    // РЎРІРµС‚
+    // Свет
     // =========================================================================
 
     void UpdateLights();
@@ -126,7 +129,7 @@ public:
 
 
     // =========================================================================
-    // РЎРїСЂР°Р№С‚С‹
+    // Спрайты
     // =========================================================================
     int               SpawnSprite(ID3D11Device* device, ID3D11DeviceContext* deviceContext,
         const char* textureName,
@@ -139,25 +142,29 @@ public:
         TextureShaderClass* shader);
 
     // =========================================================================
-    // РљСЌС€ РјРѕРґРµР»РµР№
+    // Кэш моделей
     // =========================================================================
     AssimpModelClass* GetOrCreateModel(
         const std::string& path,
         ID3D11Device* device, ID3D11DeviceContext* deviceContext,
         const std::string& texturePath =
-        "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\texture\\stone.tga");
+        "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\texture\\stone.tga",
+        bool allowFallback = true);
 
     // Set shader on an object's material.
     // device is required to create a material if the object doesn't have one yet.
     void SetObjectShader(Entity entity, ShaderBaseClass* shader, ID3D11Device* device = nullptr);
 
-    void SetObjectTexture(Entity entity, int slot, const std::string& path, ID3D11Device* device, ID3D11DeviceContext* context);
+    void SetObjectTexture(Entity entity, int slot, const std::string& path,
+        ID3D11Device* device, ID3D11DeviceContext* context, bool forceSRGB = false);
 
-    void SetLightModel(AssimpModelClass* model) { m_lightModel = model; }        // вњ… РќРћР’РћР•
+    void SetLightModel(AssimpModelClass* model) { m_lightModel = model; }        // ? НОВОЕ
     AssimpModelClass* GetLightModel() const { return m_lightModel; }
+    void SetAssetLoadSystem(AssetLoadSystem* system) { m_assetLoadSystem = system; }
+    AssetLoadSystem* GetAssetLoadSystem() const { return m_assetLoadSystem; }
 
     // =========================================================================
-    // РћР±РЅРѕРІР»РµРЅРёРµ Рё СЂРµРЅРґРµСЂ
+    // Обновление и рендер
     // =========================================================================
     void UpdateAll(float deltaTime);
 
@@ -182,12 +189,12 @@ public:
         Entity excludeEntity = INVALID_ENTITY, float deltaTime = 0.0f);
 
     // =========================================================================
-    // Light-СЃС„РµСЂС‹ (С‚РѕР»СЊРєРѕ РґР»СЏ СЂРµРґР°РєС‚РѕСЂР°, РЅРµ С‡Р°СЃС‚СЊ ECS)
+    // Light-сферы (только для редактора, не часть ECS)
     // =========================================================================
     void SetupLightSpheres(std::vector<GameObject>& spheres, AssimpModelClass* model);
     
     // =========================================================================
-    // РќР°СЃС‚СЂРѕР№РєРё
+    // Настройки
     // =========================================================================
     void SetDefaultMaterial(MaterialClass* mat) { m_defaultMaterial = mat; }
     MaterialClass* GetDefaultMaterial() const { return m_defaultMaterial; }
@@ -227,7 +234,7 @@ public:
     void DetachLight(Entity lightEntity);
     void SetLightColor(Entity entity, const XMFLOAT4& color);
 
-    // Р”Р»СЏ СЂРµРЅРґРµСЂР°: СЃРѕР±РёСЂР°РµРј РґР°РЅРЅС‹Рµ Рѕ СЃРІРµС‚Р°С… РІ РјР°СЃСЃРёРІС‹ РґР»СЏ С€РµР№РґРµСЂР°
+    // Для рендера: собираем данные о светах в массивы для шейдера
     void GatherLightsForShader(XMFLOAT4 outColors[], XMFLOAT4 outPositions[], int maxLights = NUM_LIGHTS);
 
 
@@ -244,6 +251,7 @@ private:
 
     AssimpModelClass* m_mainModelFallback = nullptr;
     MaterialClass* m_defaultMaterial = nullptr;
+    AssetLoadSystem* m_assetLoadSystem = nullptr;
     json   SerializeObject(Entity entity, int id);
     Entity DeserializeObject(const json& j, ID3D11Device* device,
         ID3D11DeviceContext* deviceContext);
@@ -256,7 +264,7 @@ private:
 
 
     //WATER 
-    float m_waterLevel = 0.0f;  // рџЊЉ РЈСЂРѕРІРµРЅСЊ РїРѕРІРµСЂС…РЅРѕСЃС‚Рё РІРѕРґС‹
+    float m_waterLevel = 0.0f;  // ?? Уровень поверхности воды
 
 public:
     float GetWaterLevel() const { return m_waterLevel; }

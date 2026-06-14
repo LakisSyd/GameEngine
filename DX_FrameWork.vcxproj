@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AnimationSystem.h" />
+    <ClCompile Include="CharacterSpawnSystem.cpp" />
     <ClCompile Include="DragDropSystem.cpp" />
     <ClCompile Include="FileName.h" />
     <ClCompile Include="GameplayController.cpp" />
@@ -54,6 +55,7 @@
     <ClCompile Include="src\Render\Camera\cameraclass.cpp" />
     <ClCompile Include="src\Render\Camera\ViewPointClass.cpp" />
     <ClCompile Include="src\Render\D3DClass.cpp" />
+    <ClCompile Include="src\Render\Grass\GrassRenderer.cpp" />
     <ClCompile Include="src\Render\Material\MaterialClass.cpp" />
     <ClCompile Include="src\Render\Model\assimpmodelclass.cpp" />
     <ClCompile Include="src\Render\Model\modelclass.cpp" />
@@ -72,6 +74,7 @@
     <ClCompile Include="src\Render\Shader\ReflectionShaderClass.cpp" />
     <ClCompile Include="src\Render\Shader\ShadowMap.cpp" />
     <ClCompile Include="src\Render\Shader\ShadowShaderClass.cpp" />
+    <ClCompile Include="src\Render\Shader\TerrainBlendShaderClass.cpp" />
     <ClCompile Include="src\Render\Shader\Textureshaderclass.cpp" />
     <ClCompile Include="src\Render\Shader\WaterShaderClass.cpp" />
     <ClCompile Include="src\Render\Texture\RenderTextureClass.cpp" />
@@ -84,6 +87,8 @@
   <ItemGroup>
     <ClInclude Include="AnimationComponent.h" />
     <ClInclude Include="AnimationController.h" />
+    <ClInclude Include="AreaDebugRenderer.h" />
+    <ClInclude Include="AssetsLoadSystem.h" />
     <ClInclude Include="CharacterControllerSystem.h" />
     <ClInclude Include="CharacterFacingSystem.h" />
     <ClInclude Include="CharacterSpawnSystem.h" />
@@ -132,9 +137,11 @@
     <ClInclude Include="src\Render\Camera\cameraclass.h" />
     <ClInclude Include="src\Render\Camera\ViewPointClass.h" />
     <ClInclude Include="src\Render\D3DClass.h" />
+    <ClInclude Include="src\Render\Grass\GrassRenderer.h" />
     <ClInclude Include="src\Render\Material\MaterialClass.h" />
     <ClInclude Include="src\Render\Model\assimpmodelclass.h" />
     <ClInclude Include="src\Render\Model\modelclass.h" />
+    <ClInclude Include="src\Render\Model\ModelScaleUtils.h" />
     <ClInclude Include="src\Render\Model\ModelManager.h" />
     <ClInclude Include="src\Render\Model\tiny_gltf_v3.h" />
     <ClInclude Include="src\Render\Shader\BaseShader.h" />
@@ -152,6 +159,7 @@
     <ClInclude Include="src\Render\Shader\ShaderManager.h" />
     <ClInclude Include="src\Render\Shader\ShadowMap.h" />
     <ClInclude Include="src\Render\Shader\ShadowShaderClass.h" />
+    <ClInclude Include="src\Render\Shader\TerrainBlendShaderClass.h" />
     <ClInclude Include="src\Render\Shader\Textureshaderclass.h" />
     <ClInclude Include="src\Render\Shader\WaterShaderClass.h" />
     <ClInclude Include="src\Render\Texture\RenderTextureClass.h" />
@@ -163,6 +171,7 @@
     <ClInclude Include="SubmarineSystem.h" />
     <ClInclude Include="TimeManager.h" />
     <ClInclude Include="TinyGltfModelClass.h" />
+    <ClInclude Include="WorldAreaComponent.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
@@ -171,6 +180,8 @@
     <None Include="SkyShader.ps" />
     <None Include="SkyShader.vs" />
     <None Include="src\Render\Shader\fog_common.hlsli" />
+    <None Include="src\Render\Grass\grass_instanced.ps" />
+    <None Include="src\Render\Grass\grass_instanced.vs" />
     <None Include="src\Render\Shader\Ps\color.ps" />
     <None Include="src\Render\Shader\Ps\fog.ps" />
     <None Include="src\Render\Shader\Ps\light.ps" />
@@ -179,6 +190,7 @@
     <None Include="src\Render\Shader\Ps\pbr.ps" />
     <None Include="src\Render\Shader\Ps\projection.ps" />
     <None Include="src\Render\Shader\Ps\SkyShader.ps" />
+    <None Include="src\Render\Shader\Ps\TerrainBlend.ps" />
     <None Include="src\Render\Shader\texture.ps" />
     <None Include="src\Render\Shader\texture.vs" />
     <None Include="src\Render\Shader\Vs\color.vs" />
@@ -189,6 +201,7 @@
     <None Include="src\Render\Shader\Vs\pbr.vs" />
     <None Include="src\Render\Shader\Vs\projection.vs" />
     <None Include="src\Render\Shader\Vs\SkyShader.vs" />
+    <None Include="src\Render\Shader\Vs\TerrainBlend.vs" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

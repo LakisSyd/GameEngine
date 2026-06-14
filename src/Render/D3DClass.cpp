@@ -358,26 +358,15 @@ bool D3DClass::Initialize(
 void D3DClass::Shutdown()
 {
     // Before shutting down set to windowed mode or when you release the swap chain it will throw an exception.
-   
+
+    if (m_deviceContext)
+    {
+        m_deviceContext->ClearState();
+        m_deviceContext->Flush();
+    }
+
     if (m_renderTargetView) { m_renderTargetView->Release(); m_renderTargetView = nullptr; }
     if (m_depthStencilView) { m_depthStencilView->Release(); m_depthStencilView = nullptr; }
-    if (m_swapChain) { m_swapChain->SetFullscreenState(FALSE, nullptr); m_swapChain->Release(); m_swapChain = nullptr; }
-
-    // 2. Затем контекст и устройство
-    if (m_deviceContext) { m_deviceContext->ClearState(); m_deviceContext->Release(); m_deviceContext = nullptr; }
-    if (m_device) {
-#ifdef _DEBUG
-        // Проверка утечек перед удалением
-        ID3D11Debug* debug = nullptr;
-        if (SUCCEEDED(m_device->QueryInterface(__uuidof(ID3D11Debug), (void**)&debug)))
-        {
-            debug->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
-            debug->Release();
-        }
-#endif
-        m_device->Release();
-        m_device = nullptr;
-    }
 
     if (m_rasterState)
     {
@@ -412,22 +401,31 @@ void D3DClass::Shutdown()
         m_alphaBlendState = nullptr;
     }
 
+    if (m_swapChain)
+    {
+        m_swapChain->SetFullscreenState(FALSE, nullptr);
+        m_swapChain->Release();
+        m_swapChain = nullptr;
+    }
+
     if (m_deviceContext)
     {
         m_deviceContext->Release();
-        m_deviceContext = 0;
+        m_deviceContext = nullptr;
     }
 
     if (m_device)
     {
+#ifdef _DEBUG
+        ID3D11Debug* debug = nullptr;
+        if (SUCCEEDED(m_device->QueryInterface(__uuidof(ID3D11Debug), (void**)&debug)))
+        {
+            debug->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+            debug->Release();
+        }
+#endif
         m_device->Release();
-        m_device = 0;
-    }
-
-    if (m_swapChain)
-    {
-        m_swapChain->Release();
-        m_swapChain = 0;
+        m_device = nullptr;
     }
 
     return;

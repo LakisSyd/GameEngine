@@ -1,5 +1,6 @@
-#include "applicationclass.h"
+п»ї#include "applicationclass.h"
 #include <algorithm>
+#include <cctype>
 #include <array>
 #include <cmath>
 #include "FileSystem.h"
@@ -21,9 +22,11 @@
 #include "../../CharacterControllerSystem.h"
 #include "../../AnimationController.h"
 #include "../../CharacterFacingSystem.h"
+#include "../Render/Grass/GrassRenderer.h"
+#include "../../WorldAreaComponent.h"
 
 // ============================================================================
-// Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
+// РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ вЂ” РІСЃРµ РїРѕР»СЏ РёРЅРёС†РёР°Р»РёР·РёСЂСѓСЋС‚СЃСЏ РІ Р·Р°РіРѕР»РѕРІРєРµ (= nullptr / = 0)
 // ============================================================================
 
 
@@ -34,7 +37,7 @@ ID3D11ShaderResourceView* LoadEquirectangularHDR(
 {
     int width = 0, height = 0, channels = 0;
 
-    // stb_image загружает HDR в float формате (32-bit per channel)
+    // stb_image Р·Р°РіСЂСѓР¶Р°РµС‚ HDR РІ float С„РѕСЂРјР°С‚Рµ (32-bit per channel)
     float* hdrData = stbi_loadf(path.c_str(), &width, &height, &channels, 3);
     if (!hdrData)
     {
@@ -51,7 +54,7 @@ ID3D11ShaderResourceView* LoadEquirectangularHDR(
         rgba[i * 4 + 3] = 1.0f;
     }
 
-    // Создаём 2D HDR texture. R32G32B32A32 is broadly supported by D3D11 SRVs.
+    // РЎРѕР·РґР°С‘Рј 2D HDR texture. R32G32B32A32 is broadly supported by D3D11 SRVs.
     D3D11_TEXTURE2D_DESC desc = {};
     desc.Width = width;
     desc.Height = height;
@@ -74,7 +77,7 @@ ID3D11ShaderResourceView* LoadEquirectangularHDR(
         return nullptr;
     }
 
-    // Создаём SRV
+    // РЎРѕР·РґР°С‘Рј SRV
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
     srvDesc.Format = desc.Format;
     srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
@@ -144,7 +147,7 @@ ID3D11ShaderResourceView* ApplicationClass::LoadSkyboxFromWorldSettings(
     return nullptr;
 }
 
-ApplicationClass::ApplicationClass() = default;
+
 
 // ============================================================================
 // Initialize
@@ -169,20 +172,20 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 
     {
         D3D11_RASTERIZER_DESC rsDesc = {};
-        rsDesc.FillMode = D3D11_FILL_WIREFRAME;  // < КЛЮЧЕВОЙ ПАРАМЕТР
-        rsDesc.CullMode = D3D11_CULL_NONE;        // Не отсекать грани (видно изнутри)
+        rsDesc.FillMode = D3D11_FILL_WIREFRAME;  // < РљР›Р®Р§Р•Р’РћР™ РџРђР РђРњР•РўР 
+        rsDesc.CullMode = D3D11_CULL_NONE;        // РќРµ РѕС‚СЃРµРєР°С‚СЊ РіСЂР°РЅРё (РІРёРґРЅРѕ РёР·РЅСѓС‚СЂРё)
         rsDesc.FrontCounterClockwise = FALSE;
         rsDesc.DepthBias = 0;
         rsDesc.SlopeScaledDepthBias = 0.0f;
         rsDesc.DepthClipEnable = TRUE;
         rsDesc.ScissorEnable = FALSE;
         rsDesc.MultisampleEnable = FALSE;
-        rsDesc.AntialiasedLineEnable = TRUE;      // Сглаживание линий (опционально)
+        rsDesc.AntialiasedLineEnable = TRUE;      // РЎРіР»Р°Р¶РёРІР°РЅРёРµ Р»РёРЅРёР№ (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ)
 
         DX_CHECK(m_direct3D->GetDevice()->CreateRasterizerState(&rsDesc, &m_wireframeRS));
     }
 
-    // -- Файловая система -----------------------------------------------------
+    // -- Р¤Р°Р№Р»РѕРІР°СЏ СЃРёСЃС‚РµРјР° -----------------------------------------------------
     m_gameFs = std::make_unique<FileSystem>(fs::current_path() / "assets");
     m_gameFs->ScanFileSystem();
 
@@ -190,7 +193,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     if (!m_editorUI.Initialize(hwnd, m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), m_gameFs.get()))
         return false;
 
-    // -- Камера ---------------------------------------------------------------
+    // -- РљР°РјРµСЂР° ---------------------------------------------------------------
     m_camera = std::make_unique<CameraClass>();
     if (!m_camera) return false;
     m_camera->SetPosition(0.0f, 2.0f, -10.0f);
@@ -198,10 +201,9 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_cameraController.SetCamera(m_camera.get());
     m_cameraController.SetInput(&m_inputManager, m_input, m_hwnd);
 
-    // -- Fallback модель (для SpawnObject без указания модели) -----------------
+    // -- Fallback РјРѕРґРµР»СЊ (РґР»СЏ SpawnObject Р±РµР· СѓРєР°Р·Р°РЅРёСЏ РјРѕРґРµР»Рё) -----------------
  
-    m_sceneManager.SetLightModel(m_lightSphereModel);   // ? НОВОЕ
-    // -- Модель для сфер-индикаторов света ------------------------------------
+    // -- РњРѕРґРµР»СЊ РґР»СЏ СЃС„РµСЂ-РёРЅРґРёРєР°С‚РѕСЂРѕРІ СЃРІРµС‚Р° ------------------------------------
     m_lightSphereModel = new AssimpModelClass;
     if (!m_lightSphereModel->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
         "assets/model/sphere.obj", "assets/texture/stone.tga"))
@@ -209,10 +211,14 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         MessageBox(hwnd, L"Failed to load light sphere model", L"Error", MB_OK);
         return false;
     }
+
+    m_sceneManager.SetLightModel(m_lightSphereModel);
+    m_sceneManager.SetFallbackModel(m_lightSphereModel);
+    m_sceneManager.SetAssetLoadSystem(&m_assetLoadSystem);
   
 
 
-    // -- Загрузка всех шейдеров -----------------------------------------------
+    // -- Р—Р°РіСЂСѓР·РєР° РІСЃРµС… С€РµР№РґРµСЂРѕРІ -----------------------------------------------
     auto& sm = ShaderManager::Get();
     m_textureShader = sm.Load<TextureShaderClass>("texture", m_direct3D->GetDevice(), hwnd);
 
@@ -228,7 +234,9 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_projectionShader = sm.Load<projectionShaderClass>("projection", m_direct3D->GetDevice(), hwnd);
     m_lightShader = sm.Load<LightShaderClass>("light", m_direct3D->GetDevice(), hwnd);
     m_pbrShader = sm.Load<PBRShaderClass>("pbr", m_direct3D->GetDevice(), hwnd);
+    m_terrainBlendShader = sm.Load<TerrainBlendShaderClass>("terrain_blend", m_direct3D->GetDevice(), hwnd);
     m_SkyShader = sm.Load<SkyShaderClass>("sky",m_direct3D->GetDevice(), hwnd);
+  // m_fontShader = sm.Load<FontShaderClass>("font", m_direct3D->GetDevice(), hwnd);
     
 
     m_physicsDebugRenderer = new PhysicsDebugRenderer();
@@ -249,8 +257,18 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 
     m_colorShader = new ColorShaderClass();
 
-    m_colorShader->Initialize(m_direct3D->GetDevice(), hwnd);
-    // Инициализируем физику
+    if (!m_colorShader->Initialize(m_direct3D->GetDevice(), hwnd))
+    {
+        MessageBox(hwnd, L"Failed to initialize ColorShader", L"Error", MB_OK);
+        return false;
+    }
+
+    if (!m_areaDebugRenderer.Initialize(m_direct3D->GetDevice()))
+    {
+        MessageBox(hwnd, L"Failed to initialize AreaDebugRenderer", L"Error", MB_OK);
+        return false;
+    }
+    // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј С„РёР·РёРєСѓ
     if (!PhysicsSystem::InitializeWorld())
     {
         MessageBox(hwnd, L"Failed to initialize Bullet Physics", L"Error", MB_OK);
@@ -281,29 +299,29 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 
     XMMATRIX lightView = XMMatrixLookAtLH(lightPos, lightTarget, up);
 
-    // ?? FIX: Расширяем ортогональную проекцию (была 30x30, теперь 50x50)
-    // Это позволит охватить все объекты
+    // ?? FIX: Р Р°СЃС€РёСЂСЏРµРј РѕСЂС‚РѕРіРѕРЅР°Р»СЊРЅСѓСЋ РїСЂРѕРµРєС†РёСЋ (Р±С‹Р»Р° 30x30, С‚РµРїРµСЂСЊ 50x50)
+    // Р­С‚Рѕ РїРѕР·РІРѕР»РёС‚ РѕС…РІР°С‚РёС‚СЊ РІСЃРµ РѕР±СЉРµРєС‚С‹
     XMMATRIX lightProj = XMMatrixOrthographicLH(100, 100, 0.5f, 200.0f);
 
     m_shadowMap->SetLightViewProjection(lightView, lightProj);
 
     m_shadowMap->SetLightViewProjection(lightView, lightProj);
-    // Создаём тестовую физическую сцену
+    // РЎРѕР·РґР°С‘Рј С‚РµСЃС‚РѕРІСѓСЋ С„РёР·РёС‡РµСЃРєСѓСЋ СЃС†РµРЅСѓ
    // CreatePhysicsTestScene();
 
 
 
-    // Создаём визуализатор отладочных контактов
+    // РЎРѕР·РґР°С‘Рј РІРёР·СѓР°Р»РёР·Р°С‚РѕСЂ РѕС‚Р»Р°РґРѕС‡РЅС‹С… РєРѕРЅС‚Р°РєС‚РѕРІ
     m_debugVisualizer = new DebugPhysicsVisualizer();
 
 
-    if (!m_textureShader || !m_lightShader || !m_pbrShader ||
+    if (!m_textureShader || !m_lightShader || !m_pbrShader || !m_terrainBlendShader ||
         !m_multiTextureShader || !m_lightMapShader || !m_normalMapShader)
     {
         OutputDebugStringA("One or more critical shaders failed to load. Initialize() abort.\n");
         return false;
     }
-    // -- Render-to-texture для отражения и преломления -------------------------
+    // -- Render-to-texture РґР»СЏ РѕС‚СЂР°Р¶РµРЅРёСЏ Рё РїСЂРµР»РѕРјР»РµРЅРёСЏ -------------------------
     m_reflectionTexture = new RenderTextureClass;
     if (!m_reflectionTexture->Initialize(m_direct3D->GetDevice(), 512, 512, SCREEN_DEPTH, SCREEN_NEAR, 1))
     {
@@ -331,16 +349,16 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 
     m_editorUI.RefreshShaderList();
 
-    // -- Сферы-индикаторы для источников света --------------------------------
+    // -- РЎС„РµСЂС‹-РёРЅРґРёРєР°С‚РѕСЂС‹ РґР»СЏ РёСЃС‚РѕС‡РЅРёРєРѕРІ СЃРІРµС‚Р° --------------------------------
     m_sceneManager.SetupLightSpheres(m_lightSpheres, m_lightSphereModel);
 
-    // -- Один источник света по умолчанию -------------------------------------
+    // -- РћРґРёРЅ РёСЃС‚РѕС‡РЅРёРє СЃРІРµС‚Р° РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ -------------------------------------
 
 
-    // -- Default material для всех объектов без ручного назначения ---------
-    // Раньше было: создавали Material, но не инициализировали/не назначали.
-    // Из-за этого у объектов shader оставался nullptr, и модель "не видна",
-    // пока не сменишь shader в UI (SetObjectShader создаёт material).
+    // -- Default material РґР»СЏ РІСЃРµС… РѕР±СЉРµРєС‚РѕРІ Р±РµР· СЂСѓС‡РЅРѕРіРѕ РЅР°Р·РЅР°С‡РµРЅРёСЏ ---------
+    // Р Р°РЅСЊС€Рµ Р±С‹Р»Рѕ: СЃРѕР·РґР°РІР°Р»Рё Material, РЅРѕ РЅРµ РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°Р»Рё/РЅРµ РЅР°Р·РЅР°С‡Р°Р»Рё.
+    // РР·-Р·Р° СЌС‚РѕРіРѕ Сѓ РѕР±СЉРµРєС‚РѕРІ shader РѕСЃС‚Р°РІР°Р»СЃСЏ nullptr, Рё РјРѕРґРµР»СЊ "РЅРµ РІРёРґРЅР°",
+    // РїРѕРєР° РЅРµ СЃРјРµРЅРёС€СЊ shader РІ UI (SetObjectShader СЃРѕР·РґР°С‘С‚ material).
     m_defaultMaterial = new MaterialClass();
     if (!m_defaultMaterial->Initialize(m_direct3D->GetDevice(), L"DefaultMaterial"))
     {
@@ -348,11 +366,11 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
-    // Т.к. для .glb текстуры embedded, ShaderType::Texture тоже будет брать fallback
-    // из model->GetMeshParts() (см. RenderMesh.h).
-    m_defaultMaterial->SetShader(m_textureShader);
+    // World geometry should react to the sun and receive shadows by default.
+    // TextureShader stays available as an explicit unlit mode.
+    m_defaultMaterial->SetShader(m_lightShader);
 
-    // Базовая текстура-заглушка (если у модели нет embedded albedo).
+    // Р‘Р°Р·РѕРІР°СЏ С‚РµРєСЃС‚СѓСЂР°-Р·Р°РіР»СѓС€РєР° (РµСЃР»Рё Сѓ РјРѕРґРµР»Рё РЅРµС‚ embedded albedo).
     {
         m_defaultTexture = new TextureClass();
         if (m_defaultTexture->Initialize(
@@ -374,15 +392,15 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 
     m_boxModel = new AssimpModelClass;
     if (!m_boxModel->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
-        "assets/model/sphere.obj", "assets/texture/stone.tga")) // или используй stone.tga
+        "assets/model/sphere.obj", "assets/texture/stone.tga")) // РёР»Рё РёСЃРїРѕР»СЊР·СѓР№ stone.tga
     {
-        // Если куба нет — можно временно использовать сферу, но будет неточно
+        // Р•СЃР»Рё РєСѓР±Р° РЅРµС‚ вЂ” РјРѕР¶РЅРѕ РІСЂРµРјРµРЅРЅРѕ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ СЃС„РµСЂСѓ, РЅРѕ Р±СѓРґРµС‚ РЅРµС‚РѕС‡РЅРѕ
         OutputDebugStringA("Warning: Failed to load cube.obj for debug visualizer\n");
         delete m_boxModel;
-        m_boxModel = m_mainModel; // fallback на сферу
+        m_boxModel = m_mainModel; // fallback РЅР° СЃС„РµСЂСѓ
     }
 
-    // -- Модель для капсул (опционально) -----------------------------
+    // -- РњРѕРґРµР»СЊ РґР»СЏ РєР°РїСЃСѓР» (РѕРїС†РёРѕРЅР°Р»СЊРЅРѕ) -----------------------------
     m_capsuleModel = new AssimpModelClass;
     if (!m_capsuleModel->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(),
         "assets/model/capsule.obj", "assets/texture/wireframe.tga"))
@@ -392,7 +410,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         m_capsuleModel = nullptr;
     }
 
-    // -- Render-to-texture для Scene Preview ----------------------------------
+    // -- Render-to-texture РґР»СЏ Scene Preview ----------------------------------
     m_renderTexture = new RenderTextureClass;
     if (!m_renderTexture->Initialize(m_direct3D->GetDevice(), 512, 512, SCREEN_DEPTH, SCREEN_NEAR, 1))
     {
@@ -413,7 +431,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     mat->Initialize(m_direct3D->GetDevice(), L"ProjectorMat");
     mat->SetShader(m_projectionShader);
 
-    // Устанавливаем основную текстуру (слот 0)
+    // РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј РѕСЃРЅРѕРІРЅСѓСЋ С‚РµРєСЃС‚СѓСЂСѓ (СЃР»РѕС‚ 0)
     TextureClass* colorTex = new TextureClass();
     colorTex->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/stone.tga");
     mat->SetTexture(0, colorTex);
@@ -427,7 +445,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         m_shadowMap                 // ShadowMap*
     );
 
-    // Теперь можно безопасно настраивать шейдеры:
+    // РўРµРїРµСЂСЊ РјРѕР¶РЅРѕ Р±РµР·РѕРїР°СЃРЅРѕ РЅР°СЃС‚СЂР°РёРІР°С‚СЊ С€РµР№РґРµСЂС‹:
     m_renderer->SetLightShader(m_lightShader);
     m_renderer->SetPBRShader(m_pbrShader);
     m_renderer->SetSkyShader(m_SkyShader);
@@ -436,16 +454,30 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_renderer->SetColorShader(m_colorShader);
     m_renderer->SetShadowShader(m_shadowShader);
 
-    // Настройка рендер-текстур:
+    // РќР°СЃС‚СЂРѕР№РєР° СЂРµРЅРґРµСЂ-С‚РµРєСЃС‚СѓСЂ:
     m_renderer->SetRenderTextures(
         m_reflectionTexture,
         m_refractionTexture,
         m_renderTexture);
 
-    // Отладочные рендереры:
+    // РћС‚Р»Р°РґРѕС‡РЅС‹Рµ СЂРµРЅРґРµСЂРµСЂС‹:
     m_renderer->SetPhysicsDebugRenderer(m_physicsDebugRenderer);
     m_renderer->SetCompartmentRenderer(m_compartmentRenderer);
     m_renderer->SetWireframeRS(m_wireframeRS);
+
+    m_grassRenderer = new GrassRenderer();
+    if (m_grassRenderer->Initialize(
+        m_direct3D->GetDevice(),
+        m_direct3D->GetDeviceContext()))
+    {
+        m_renderer->SetGrassRenderer(m_grassRenderer);
+    }
+    else
+    {
+        OutputDebugStringA("Warning: GrassRenderer prototype failed to initialize\n");
+        delete m_grassRenderer;
+        m_grassRenderer = nullptr;
+    }
 
    
     m_dragDropSystem = std::make_unique<DragDropSystem>(
@@ -458,25 +490,52 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     if (!m_skySRV)
     {
         OutputDebugStringA("?? Warning: Failed to load skybox, using fallback\n");
-        // Можно создать заглушку или продолжить без неба
+        // РњРѕР¶РЅРѕ СЃРѕР·РґР°С‚СЊ Р·Р°РіР»СѓС€РєСѓ РёР»Рё РїСЂРѕРґРѕР»Р¶РёС‚СЊ Р±РµР· РЅРµР±Р°
     }
     else
     {
     }
 
-    // Передаём в рендерер
+    // РџРµСЂРµРґР°С‘Рј РІ СЂРµРЅРґРµСЂРµСЂ
     if (m_renderer && m_SkyShader)
     {
         m_renderer->SetSkyShader(m_SkyShader);
-        m_SkyShader->SetSkyTexture(m_skySRV);  // < Новый метод в шейдере
+        m_SkyShader->SetSkyTexture(m_skySRV);  // < РќРѕРІС‹Р№ РјРµС‚РѕРґ РІ С€РµР№РґРµСЂРµ
     }
 
-	
+   
 
-	m_jobSystem.Initialize(4); // Инициализируем с 4 рабочими потоками (можно по количеству ядер)
+  
+ 
+
+    // в”Ђв”Ђ РўРµРєСЃС‚ "Hello" в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+  /*  char helloText[32] = "Hello";
+
+    m_textHello = new TextClass();
+    if (!m_textHello->Initialize(
+        m_direct3D->GetDevice(),
+        m_direct3D->GetDeviceContext(),
+       m_screenWidth,
+       m_screenHeight, 10, m_font))
+       
+    {
+        MessageBox(hwnd, L"Failed to initialize TextClass 'Hello'", L"Error", MB_OK);
+        return false;
+    }*/
+   
+   // m_textHello->UpdateText(helloText, 960, 540, 0, 0, 0);
+
+	m_jobSystem.Initialize(4); // РРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј СЃ 4 СЂР°Р±РѕС‡РёРјРё РїРѕС‚РѕРєР°РјРё (РјРѕР¶РЅРѕ РїРѕ РєРѕР»РёС‡РµСЃС‚РІСѓ СЏРґРµСЂ)
+
+
+	m_sceneManager.SpawnSprite(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/sprite_test.png", 0, 0, 0, 1, 1);
+
 
     return true;
 }
+
+
+
 
 
 
@@ -488,6 +547,29 @@ void ApplicationClass::Shutdown()
     m_jobSystem.Shutdown();
     m_jobSystem.ExecuteMainThreadJobs();
 
+    m_areaDebugRenderer.Shutdown();
+
+    if (m_renderer)
+        m_renderer->SetGrassRenderer(nullptr);
+
+    if (m_grassRenderer)
+    {
+        m_grassRenderer->Shutdown();
+        delete m_grassRenderer;
+        m_grassRenderer = nullptr;
+    }
+
+    if (m_direct3D && m_direct3D->GetDeviceContext())
+    {
+        m_direct3D->GetDeviceContext()->ClearState();
+        m_direct3D->GetDeviceContext()->Flush();
+    }
+
+    // Bullet keeps non-owning pointers to ECS physics components. Detach those
+    // registrations before clearing the registry and deleting the components.
+    PhysicsWorld::Get().Shutdown();
+    m_sceneManager.Clear();
+
     if (m_lightSphereModel)
     {
         m_lightSphereModel->Shutdown();
@@ -496,6 +578,8 @@ void ApplicationClass::Shutdown()
     }
 
     ShaderManager::Get().Shutdown();
+
+    m_assetLoadSystem.Shutdown();
 
     if (m_defaultMaterial)
     {
@@ -580,17 +664,30 @@ void ApplicationClass::Shutdown()
         m_shadowMap = nullptr;
     }
 
-    if (m_renderer)  // Проверка перед удалением
+    if (m_renderer)  // РџСЂРѕРІРµСЂРєР° РїРµСЂРµРґ СѓРґР°Р»РµРЅРёРµРј
     {
       
         delete m_renderer;
-        m_renderer = nullptr;  // Обязательно обнуляем!
+        m_renderer = nullptr;  // РћР±СЏР·Р°С‚РµР»СЊРЅРѕ РѕР±РЅСѓР»СЏРµРј!
+    }
+
+    m_editorUI.Shutdown();
+
+    if (m_skySRV)
+    {
+        m_skySRV->Release();
+        m_skySRV = nullptr;
+    }
+
+    if (m_wireframeRS)
+    {
+        m_wireframeRS->Release();
+        m_wireframeRS = nullptr;
     }
 
     if (m_direct3D)
         m_direct3D->Shutdown();
-    PhysicsWorld::Get().Shutdown();
-    m_editorUI.Shutdown();
+
 }
 
 bool ApplicationClass::Frame(float dt)
@@ -636,6 +733,8 @@ bool ApplicationClass::Frame(float dt)
     const bool isPlayMode = m_engineMode == EngineMode::Play;
 
     m_jobSystem.ExecuteMainThreadJobs();
+
+    m_assetLoadSystem.Update(m_direct3D->GetDevice());
 
     // =====================================================
     // 2. Editor input / camera
@@ -762,7 +861,6 @@ bool ApplicationClass::Frame(float dt)
                 });
         }
     }
-
     // =====================================================
     // 8. Render 3D scene
     // =====================================================
@@ -781,6 +879,24 @@ bool ApplicationClass::Frame(float dt)
         selectedEntity,
         m_physicsDebugSettings
     );
+
+    auto& areas =
+        m_sceneManager.GetECSRegistry()
+        .GetComponents<WorldAreaComponent>();
+
+    for (auto& [entity, area] : areas)
+    {
+        if (!area.enabled || !m_sceneManager.IsObjectActive(entity))
+            continue;
+
+        m_areaDebugRenderer.Render(
+            m_direct3D->GetDeviceContext(),
+            area,
+            m_viewMatrix,
+            m_projMatrix,
+            m_colorShader);
+    }
+
 
     // =====================================================
     // 9. Editor UI
@@ -815,6 +931,29 @@ bool ApplicationClass::Frame(float dt)
         m_editorUI.Render();
     }
 
+
+    {
+        XMMATRIX worldMatrix, viewMatrix, orthoMatrix;
+
+        worldMatrix = XMMatrixIdentity();
+        viewMatrix = XMMatrixIdentity();
+        orthoMatrix = XMMatrixOrthographicLH(
+            static_cast<float>(m_screenWidth),
+            static_cast<float>(m_screenHeight),
+            0.0f,
+            1.0f);
+
+        // РћС‚РєР»СЋС‡Р°РµРј Z-Р±СѓС„РµСЂ Рё РІРєР»СЋС‡Р°РµРј Р°Р»СЊС„Р°-СЃРјРµС€РёРІР°РЅРёРµ РґР»СЏ 2D-С‚РµРєСЃС‚Р°
+        m_direct3D->TurnZBufferOff();
+        m_direct3D->TurnAlphaBlendingOn();
+
+       
+
+        // Р’РѕР·РІСЂР°С‰Р°РµРј СЃРѕСЃС‚РѕСЏРЅРёРµ РґР»СЏ 3D
+        m_direct3D->TurnZBufferOn();
+        m_direct3D->TurnAlphaBlendingOff();
+    }
+
     // =====================================================
     // 10. Present
     // =====================================================
@@ -824,7 +963,7 @@ bool ApplicationClass::Frame(float dt)
 }
 
 // ============================================================================
-// SyncCompartmentPositions — синхронизация позиций отсеков с подлодкой
+// SyncCompartmentPositions вЂ” СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёСЏ РїРѕР·РёС†РёР№ РѕС‚СЃРµРєРѕРІ СЃ РїРѕРґР»РѕРґРєРѕР№
 // ============================================================================
 void ApplicationClass::SyncCompartmentPositions()
 {
@@ -837,13 +976,13 @@ void ApplicationClass::SyncCompartmentPositions()
     {
         auto* subLink = subPool.Get(entity);
         if (!subLink || subLink->submarineRoot == INVALID_ENTITY) continue;
-        if (entity == subLink->submarineRoot) continue;  // Пропускаем корень
+        if (entity == subLink->submarineRoot) continue;  // РџСЂРѕРїСѓСЃРєР°РµРј РєРѕСЂРµРЅСЊ
 
         auto* rootTransform = transformPool.Get(subLink->submarineRoot);
         auto* compartmentTransform = transformPool.Get(entity);
         if (!rootTransform || !compartmentTransform) continue;
 
-        // Поворачиваем локальное смещение на угол подлодки
+        // РџРѕРІРѕСЂР°С‡РёРІР°РµРј Р»РѕРєР°Р»СЊРЅРѕРµ СЃРјРµС‰РµРЅРёРµ РЅР° СѓРіРѕР» РїРѕРґР»РѕРґРєРё
         XMMATRIX rootRotation = XMMatrixRotationRollPitchYaw(
             rootTransform->rotation.x,
             rootTransform->rotation.y,
@@ -852,11 +991,11 @@ void ApplicationClass::SyncCompartmentPositions()
         XMVECTOR localOffset = XMLoadFloat3(&comp.localCenter);
         XMVECTOR rotatedOffset = XMVector3TransformCoord(localOffset, rootRotation);
 
-        // Мировая позиция = позиция подлодки + повёрнутое смещение
+        // РњРёСЂРѕРІР°СЏ РїРѕР·РёС†РёСЏ = РїРѕР·РёС†РёСЏ РїРѕРґР»РѕРґРєРё + РїРѕРІС‘СЂРЅСѓС‚РѕРµ СЃРјРµС‰РµРЅРёРµ
         XMVECTOR rootPos = XMLoadFloat3(&rootTransform->position);
         XMVECTOR worldPos = XMVectorAdd(rootPos, rotatedOffset);
 
-        // Обновляем трансформ отсека
+        // РћР±РЅРѕРІР»СЏРµРј С‚СЂР°РЅСЃС„РѕСЂРј РѕС‚СЃРµРєР°
         XMFLOAT3 newPos;
         XMStoreFloat3(&newPos, worldPos);
         compartmentTransform->position = newPos;
@@ -865,7 +1004,7 @@ void ApplicationClass::SyncCompartmentPositions()
 }
 
 // ============================================================================
-// UpdatePhysics — все системы физики в правильном порядке
+// UpdatePhysics вЂ” РІСЃРµ СЃРёСЃС‚РµРјС‹ С„РёР·РёРєРё РІ РїСЂР°РІРёР»СЊРЅРѕРј РїРѕСЂСЏРґРєРµ
 // ============================================================================
 void ApplicationClass::UpdatePhysics(float dt)
 {   
@@ -873,32 +1012,32 @@ void ApplicationClass::UpdatePhysics(float dt)
 
     auto& registry = m_sceneManager.GetECSRegistry();
   
-    // 1. Затопление отсеков
+    // 1. Р—Р°С‚РѕРїР»РµРЅРёРµ РѕС‚СЃРµРєРѕРІ
     FloodingSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
 
-    // 2. Создание джойнтов из редактора (ДО физики!)
+    // 2. РЎРѕР·РґР°РЅРёРµ РґР¶РѕР№РЅС‚РѕРІ РёР· СЂРµРґР°РєС‚РѕСЂР° (Р”Рћ С„РёР·РёРєРё!)
     JointConnectionSystem::Update(registry);
 
-    // 3. Обновление подлодок
+    // 3. РћР±РЅРѕРІР»РµРЅРёРµ РїРѕРґР»РѕРґРѕРє
     auto& subPool = registry.GetComponents<SubmarineComponent>();
     for (auto& [entity, subComp] : subPool)
     {
-        if (subComp.submarineRoot == entity)  // Только корневые
+        if (subComp.submarineRoot == entity)  // РўРѕР»СЊРєРѕ РєРѕСЂРЅРµРІС‹Рµ
             SubmarineSystem::UpdateSubmarine(registry, entity);
     }
 
-    // 4. Физика
+    // 4. Р¤РёР·РёРєР°
     PhysicsSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
 
-    // 5. Обнаружение сломанных джойнтов (ПОСЛЕ физики!)
+    // 5. РћР±РЅР°СЂСѓР¶РµРЅРёРµ СЃР»РѕРјР°РЅРЅС‹С… РґР¶РѕР№РЅС‚РѕРІ (РџРћРЎР›Р• С„РёР·РёРєРё!)
     SubmarineJointSystem::Update(registry, dt);
 
-    // 6. Давление и ремонт
+    // 6. Р”Р°РІР»РµРЅРёРµ Рё СЂРµРјРѕРЅС‚
     PressureSystem::Update(registry, dt, m_sceneManager.GetWaterLevel());
 }
 
 // ============================================================================
-// UpdateWaterAnimation — анимация воды (UV смещение)
+// UpdateWaterAnimation вЂ” Р°РЅРёРјР°С†РёСЏ РІРѕРґС‹ (UV СЃРјРµС‰РµРЅРёРµ)
 // ============================================================================
 void ApplicationClass::UpdateWaterAnimation(float dt)
 {
@@ -917,7 +1056,7 @@ void ApplicationClass::UpdateWaterAnimation(float dt)
 }
 
 // ============================================================================
-// HandleCompartmentGizmo — ImGuizmo для редактирования отсеков
+// HandleCompartmentGizmo вЂ” ImGuizmo РґР»СЏ СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёСЏ РѕС‚СЃРµРєРѕРІ
 // ============================================================================
 void ApplicationClass::HandleCompartmentGizmo()
 {
@@ -930,7 +1069,7 @@ void ApplicationClass::HandleCompartmentGizmo()
 
     if (!comp || !m_camera) return;
 
-    // -- Находим мировую матрицу корневой подлодки -----------------------------
+    // -- РќР°С…РѕРґРёРј РјРёСЂРѕРІСѓСЋ РјР°С‚СЂРёС†Сѓ РєРѕСЂРЅРµРІРѕР№ РїРѕРґР»РѕРґРєРё -----------------------------
     XMMATRIX worldMatrix = XMMatrixIdentity();
     {
         auto& subPool = registry.GetComponents<SubmarineComponent>();
@@ -956,7 +1095,7 @@ void ApplicationClass::HandleCompartmentGizmo()
     m_camera->GetViewMatrix(view);
     m_direct3D->GetProjectionMatrix(proj);
 
-    // Текущая трансформация отсека (центр + размер как масштаб)
+    // РўРµРєСѓС‰Р°СЏ С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёСЏ РѕС‚СЃРµРєР° (С†РµРЅС‚СЂ + СЂР°Р·РјРµСЂ РєР°Рє РјР°СЃС€С‚Р°Р±)
     XMMATRIX compartmentTransform =
         XMMatrixScaling(m_editorUI.GetCompartmentSize().x,
             m_editorUI.GetCompartmentSize().y,
@@ -972,7 +1111,7 @@ void ApplicationClass::HandleCompartmentGizmo()
         ? ImGuizmo::TRANSLATE
         : ImGuizmo::SCALE;
 
-    // Рисуем гизмо
+    // Р РёСЃСѓРµРј РіРёР·РјРѕ
     if (ImGuizmo::Manipulate(
         reinterpret_cast<const float*>(&view),
         reinterpret_cast<const float*>(&proj),
@@ -980,7 +1119,7 @@ void ApplicationClass::HandleCompartmentGizmo()
         ImGuizmo::LOCAL,
         matrix))
     {
-        // Пересчитываем из матрицы обратно в позицию/размер
+        // РџРµСЂРµСЃС‡РёС‚С‹РІР°РµРј РёР· РјР°С‚СЂРёС†С‹ РѕР±СЂР°С‚РЅРѕ РІ РїРѕР·РёС†РёСЋ/СЂР°Р·РјРµСЂ
         XMFLOAT4X4 floatMat;
         memcpy(&floatMat, matrix, sizeof(XMFLOAT4X4));
         XMMATRIX newTransform = XMLoadFloat4x4(&floatMat);
@@ -996,7 +1135,7 @@ void ApplicationClass::HandleCompartmentGizmo()
 }
 
 // ============================================================================
-// ProcessEditorRequests — обработка save/load/spawn запросов от EditorUI
+// ProcessEditorRequests вЂ” РѕР±СЂР°Р±РѕС‚РєР° save/load/spawn Р·Р°РїСЂРѕСЃРѕРІ РѕС‚ EditorUI
 // ============================================================================
 void ApplicationClass::ProcessEditorRequests()
 {
@@ -1013,9 +1152,26 @@ void ApplicationClass::ProcessEditorRequests()
         if (req.pending)
         {
             if (m_sceneManager.SaveScene(req.path))
+            {
+                m_sceneManager.SaveScene("Level.json");
+            }
             else
+            {
                 OutputDebugStringA(("Failed to save scene to " + req.path + "\n").c_str());
+            }
+
         }
+    }
+
+    if (m_editorUI.ConsumeRebuildGrassRequest() && m_grassRenderer)
+    {
+        auto& areas = m_sceneManager
+            .GetECSRegistry()
+            .GetComponents<WorldAreaComponent>();
+
+        m_grassRenderer->GenerateAreas(
+            m_direct3D->GetDevice(),
+            areas);
     }
 
     // Load request
@@ -1039,33 +1195,67 @@ void ApplicationClass::SpawnObjectFromRequest(const EditorUI::SpawnRequest& req)
     ID3D11Device* device = m_direct3D->GetDevice();
     ID3D11DeviceContext* context = m_direct3D->GetDeviceContext();
 
-    AssimpModelClass* model = m_sceneManager.GetOrCreateModel(
-        req.modelPath, device, context, req.texturePath);
+    std::string modelPathLower = req.modelPath;
+    std::transform(modelPathLower.begin(), modelPathLower.end(),
+        modelPathLower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+
+    const bool isGlb = modelPathLower.ends_with(".glb") || modelPathLower.ends_with(".gltf");
+    const bool useAsyncMesh = !isGlb && !req.modelPath.empty();
+
+    AssimpModelClass* model = nullptr;
+    if (useAsyncMesh)
+    {
+        model = m_sceneManager.GetLightModel();
+        if (!model)
+            model = m_lightSphereModel;
+
+        m_assetLoadSystem.RequestMeshLoad(req.modelPath);
+    }
+    else
+    {
+
+        model = m_sceneManager.GetOrCreateModel(
+            req.modelPath, device, context, req.texturePath);
+    }
 
     if (!model)
     {
         OutputDebugStringA("SpawnObjectFromRequest: model FAILED\n");
         return;
     }
+    AssimpModelClass* collisionModel = nullptr;
+
+    if (req.useSeparateCollisionMesh)
+    {
+        collisionModel = m_sceneManager.GetOrCreateModel(
+            req.collisionModelPath,
+            device,
+            context,
+            "", // Р¤РёР·РёС‡РµСЃРєРѕРјСѓ РјРµС€Сѓ С‚РµРєСЃС‚СѓСЂР° РЅРµ РЅСѓР¶РЅР°
+            false
+        );
+
+        if (!collisionModel)
+        {
+            OutputDebugStringA(
+                ("Collision mesh not found: " +
+                    req.collisionModelPath + "\n").c_str()
+            );
+
+            return;
+        }
+    }
 
     auto* mat = new MaterialClass();
-    mat->Initialize(device, L"SpawnedMaterial");
-
-    std::string modelPathLower = req.modelPath;
-    std::transform(modelPathLower.begin(), modelPathLower.end(),
-        modelPathLower.begin(), ::tolower);
-
-    ShaderBaseClass* initShader = nullptr;
-
-    if (modelPathLower.ends_with(".glb") || modelPathLower.ends_with(".gltf"))
+    if (!mat->Initialize(device, L"SpawnedMaterial"))
     {
-        initShader = m_pbrShader;
-    }
-    else
-    {
-        initShader = m_lightShader;
+        delete mat;
+        return;
     }
 
+    ShaderBaseClass* initShader = isGlb
+        ? static_cast<ShaderBaseClass*>(m_pbrShader)
+        : static_cast<ShaderBaseClass*>(m_lightShader);
     if (!initShader)
     {
         OutputDebugStringA("SpawnObjectFromRequest: initial shader is NULL!\n");
@@ -1085,19 +1275,51 @@ void ApplicationClass::SpawnObjectFromRequest(const EditorUI::SpawnRequest& req)
         else
         {
             delete tex;
-            if (m_defaultTexture)
-            {
+            if (!isGlb && m_defaultTexture)
                 mat->SetMainTexture(m_defaultTexture);
-            }
         }
+    }
+    else if (!isGlb && m_defaultTexture)
+    {
+        mat->SetMainTexture(m_defaultTexture);
     }
 
     Entity newEntity = m_sceneManager.SpawnObject(model, req.posX, req.posY, req.posZ);
+
+    if (req.useSeparateCollisionMesh)
+    {
+        auto& registry = m_sceneManager.GetECSRegistry();
+
+        RigidBodyComponent rb;
+        rb.collisionModel = collisionModel;
+        rb.collisionModelPath = req.collisionModelPath;
+        rb.useSeparateCollisionMesh = true;
+
+        // Р”Р»СЏ С‚РµСЂСЂР°Р№РЅР°:
+        rb.shapeType = RigidBodyComponent::TriangleMesh;
+        rb.mass = 0.0f;
+        rb.isDynamic = false;
+
+        registry.AddComponent<RigidBodyComponent>(
+            newEntity,
+            std::move(rb)
+        );
+
+        PhysicsSystem::CreateRigidBody(registry, newEntity);
+    }
     m_sceneManager.SetObjectMaterial(newEntity, mat);
+
+    if (useAsyncMesh)
+    {
+        if (auto* mesh = m_sceneManager.GetObjectMesh(newEntity))
+        {
+            mesh->asyncModelPath = req.modelPath;
+            mesh->useAsyncMesh = true;
+        }
+    }
 
     m_editorUI.SetSelection(EditorUI::SelectedType::Object, newEntity);
 }
-
 
 
 
@@ -1299,7 +1521,7 @@ XMMATRIX ApplicationClass::BuildReflectionMatrix(CameraClass* camera, float refl
 
 
 
-// В ApplicationClass::CreateTestSubmarine()
+// Р’ ApplicationClass::CreateTestSubmarine()
 
 void ApplicationClass::CreateTestSubmarine()
 {
@@ -1320,56 +1542,59 @@ void ApplicationClass::CreateTestSubmarine()
     if (m_pbrShader) subMat->SetShader(m_pbrShader);
     else if (m_lightShader) subMat->SetShader(m_lightShader);
     else { delete subMat; return; }
-    if (m_defaultTexture) subMat->SetMainTexture(m_defaultTexture);
+    if (!m_pbrShader && m_defaultTexture) subMat->SetMainTexture(m_defaultTexture);
 
     registry.AddComponent<MeshRendererComponent>(subRoot,
-        MeshRendererComponent{ subModel, subMat });
+        MeshRendererComponent{
+            .model = subModel,
+            .material = subMat
+        });
     registry.AddComponent<SubmarineComponent>(subRoot, SubmarineComponent{ subRoot });
     registry.AddComponent<ActiveComponent>(subRoot, ActiveComponent{});
 
     // ==================================================================
-    // КОЛЛИЗИЯ ПОДЛОДКИ: Compound из 3 частей (нос + тело + корма)
-    // Каждая часть — capsule/cylinder, вместе дают форму "пули"
+    // РљРћР›Р›РР—РРЇ РџРћР”Р›РћР”РљР: Compound РёР· 3 С‡Р°СЃС‚РµР№ (РЅРѕСЃ + С‚РµР»Рѕ + РєРѕСЂРјР°)
+    // РљР°Р¶РґР°СЏ С‡Р°СЃС‚СЊ вЂ” capsule/cylinder, РІРјРµСЃС‚Рµ РґР°СЋС‚ С„РѕСЂРјСѓ "РїСѓР»Рё"
     // ==================================================================
     RigidBodyComponent subRB{};
     subRB.mass = 5000.0f;
     subRB.isCompound = true;
 
-    // Часть 1: Центральный цилиндр (основной корпус)
+    // Р§Р°СЃС‚СЊ 1: Р¦РµРЅС‚СЂР°Р»СЊРЅС‹Р№ С†РёР»РёРЅРґСЂ (РѕСЃРЅРѕРІРЅРѕР№ РєРѕСЂРїСѓСЃ)
     {
         RigidBodyComponent::CompoundElement body;
         body.type = RigidBodyComponent::CompoundElement::Cylinder;
         body.radius = 1.8f;
         body.height = 8.0f;
         body.localPosition = { 0.0f, 0.0f, 0.0f };
-        // Поворот цилиндра вдоль оси Z (Bullet-цилиндр по умолчанию вдоль Y)
-        // Поворачиваем на 90° вокруг Z чтобы он лёг горизонтально
+        // РџРѕРІРѕСЂРѕС‚ С†РёР»РёРЅРґСЂР° РІРґРѕР»СЊ РѕСЃРё Z (Bullet-С†РёР»РёРЅРґСЂ РїРѕ СѓРјРѕР»С‡Р°РЅРёСЋ РІРґРѕР»СЊ Y)
+        // РџРѕРІРѕСЂР°С‡РёРІР°РµРј РЅР° 90В° РІРѕРєСЂСѓРі Z С‡С‚РѕР±С‹ РѕРЅ Р»С‘Рі РіРѕСЂРёР·РѕРЅС‚Р°Р»СЊРЅРѕ
         XMVECTOR qRot = XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0),
             XM_PIDIV2);
         XMStoreFloat4(&body.localRotation, qRot);
         subRB.compoundElements.push_back(body);
     }
 
-    // Часть 2: Носовая капсула (сужение спереди)
+    // Р§Р°СЃС‚СЊ 2: РќРѕСЃРѕРІР°СЏ РєР°РїСЃСѓР»Р° (СЃСѓР¶РµРЅРёРµ СЃРїРµСЂРµРґРё)
     {
         RigidBodyComponent::CompoundElement nose;
         nose.type = RigidBodyComponent::CompoundElement::Capsule;
         nose.radius = 1.4f;
         nose.height = 2.0f;
-        nose.localPosition = { 5.0f, 0.0f, 0.0f }; // сдвиг вперёд по X
+        nose.localPosition = { 5.0f, 0.0f, 0.0f }; // СЃРґРІРёРі РІРїРµСЂС‘Рґ РїРѕ X
         XMVECTOR qRot = XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0),
             XM_PIDIV2);
         XMStoreFloat4(&nose.localRotation, qRot);
         subRB.compoundElements.push_back(nose);
     }
 
-    // Часть 3: Кормовая часть (срез сзади — чуть шире)
+    // Р§Р°СЃС‚СЊ 3: РљРѕСЂРјРѕРІР°СЏ С‡Р°СЃС‚СЊ (СЃСЂРµР· СЃР·Р°РґРё вЂ” С‡СѓС‚СЊ С€РёСЂРµ)
     {
         RigidBodyComponent::CompoundElement stern;
         stern.type = RigidBodyComponent::CompoundElement::Capsule;
         stern.radius = 1.6f;
         stern.height = 2.0f;
-        stern.localPosition = { -5.0f, 0.0f, 0.0f }; // сдвиг назад по X
+        stern.localPosition = { -5.0f, 0.0f, 0.0f }; // СЃРґРІРёРі РЅР°Р·Р°Рґ РїРѕ X
         XMVECTOR qRot = XMQuaternionRotationAxis(XMVectorSet(0, 0, 1, 0),
             XM_PIDIV2);
         XMStoreFloat4(&stern.localRotation, qRot);
@@ -1385,7 +1610,7 @@ void ApplicationClass::CreateTestSubmarine()
     PhysicsSystem::CreateRigidBody(registry, subRoot);
 
     // ==================================================================
-    // ОТСЕКИ: только логика + СТЕНЫ для персонажей
+    // РћРўРЎР•РљР: С‚РѕР»СЊРєРѕ Р»РѕРіРёРєР° + РЎРўР•РќР« РґР»СЏ РїРµСЂСЃРѕРЅР°Р¶РµР№
     // ==================================================================
     struct CompartmentDesc {
         const char* name;
@@ -1458,21 +1683,21 @@ void ApplicationClass::Render3DObjectsToShadowMap(
 
         XMMATRIX world = transform->GetWorldMatrix();
 
-        // ВАЖНО: Устанавливаем vertex/index buffer для текущей модели!
+        // Р’РђР–РќРћ: РЈСЃС‚Р°РЅР°РІР»РёРІР°РµРј vertex/index buffer РґР»СЏ С‚РµРєСѓС‰РµР№ РјРѕРґРµР»Рё!
         mesh.model->Render(context);
 
         m_shadowShader->Render(context,
             mesh.model->GetIndexCount(), world, lightViewProj);
 
-        // DEBUG: Логируем каждый объект
+        // DEBUG: Р›РѕРіРёСЂСѓРµРј РєР°Р¶РґС‹Р№ РѕР±СЉРµРєС‚
 
 
         renderedCount++;
     }
 
-    // ВАЖНЫЙ ЛОГ
+    // Р’РђР–РќР«Р™ Р›РћР“
 
-    // Очищаем состояние
+    // РћС‡РёС‰Р°РµРј СЃРѕСЃС‚РѕСЏРЅРёРµ
     {
         ID3D11Buffer* nullBuffers[6] = {};
         context->VSSetConstantBuffers(0, 6, nullBuffers);
@@ -1485,8 +1710,8 @@ void ApplicationClass::Render3DObjectsToShadowMap(
 
 
 // ============================================================================
-// RenderCompartmentCornerHandles — 8 угловых ручек для AABB отсека
-// Вызывать ПОСЛЕ m_editorUI.Update() (ImGui уже начат), но ДО Render().
+// RenderCompartmentCornerHandles вЂ” 8 СѓРіР»РѕРІС‹С… СЂСѓС‡РµРє РґР»СЏ AABB РѕС‚СЃРµРєР°
+// Р’С‹Р·С‹РІР°С‚СЊ РџРћРЎР›Р• m_editorUI.Update() (ImGui СѓР¶Рµ РЅР°С‡Р°С‚), РЅРѕ Р”Рћ Render().
 // ============================================================================
 void ApplicationClass::RenderCompartmentCornerHandles()
 {
@@ -1497,7 +1722,7 @@ void ApplicationClass::RenderCompartmentCornerHandles()
     auto* comp = registry.GetComponent<CompartmentComponent>(compEnt);
     if (!comp) return;
 
-    // -- Находим мировую матрицу корневой подлодки -----------------------------
+    // -- РќР°С…РѕРґРёРј РјРёСЂРѕРІСѓСЋ РјР°С‚СЂРёС†Сѓ РєРѕСЂРЅРµРІРѕР№ РїРѕРґР»РѕРґРєРё -----------------------------
     XMMATRIX rootWorld = XMMatrixIdentity();
     {
         auto* subLink = registry.GetComponent<SubmarineComponent>(compEnt);
@@ -1523,8 +1748,8 @@ void ApplicationClass::RenderCompartmentCornerHandles()
     const float W = io.DisplaySize.x;
     const float H = io.DisplaySize.y;
 
-    // -- 8 углов AABB ----------------------------------------------------------
-    // Биты индекса: бит0=X(0>min,1>max), бит1=Y, бит2=Z
+    // -- 8 СѓРіР»РѕРІ AABB ----------------------------------------------------------
+    // Р‘РёС‚С‹ РёРЅРґРµРєСЃР°: Р±РёС‚0=X(0>min,1>max), Р±РёС‚1=Y, Р±РёС‚2=Z
     auto getCornerLocal = [&](int idx) -> XMFLOAT3 {
         return {
             (idx & 1) ? comp->localMax.x : comp->localMin.x,
@@ -1533,7 +1758,7 @@ void ApplicationClass::RenderCompartmentCornerHandles()
         };
         };
 
-    // Проецирует локальную точку отсека > пиксели экрана
+    // РџСЂРѕРµС†РёСЂСѓРµС‚ Р»РѕРєР°Р»СЊРЅСѓСЋ С‚РѕС‡РєСѓ РѕС‚СЃРµРєР° > РїРёРєСЃРµР»Рё СЌРєСЂР°РЅР°
     auto projectPoint = [&](const XMFLOAT3& localPt) -> ImVec2 {
         XMVECTOR v = XMLoadFloat3(&localPt);
         XMVECTOR w = XMVector3TransformCoord(v, rootWorld);
@@ -1544,11 +1769,11 @@ void ApplicationClass::RenderCompartmentCornerHandles()
             (1.0f - (ndc.y * 0.5f + 0.5f)) * H);
         };
 
-    // -- Рисуем рёбра AABB (12 линий) -----------------------------------------
+    // -- Р РёСЃСѓРµРј СЂС‘Р±СЂР° AABB (12 Р»РёРЅРёР№) -----------------------------------------
     static const int edges[12][2] = {
-        {0,1},{2,3},{4,5},{6,7},   // по X
-        {0,2},{1,3},{4,6},{5,7},   // по Y
-        {0,4},{1,5},{2,6},{3,7}    // по Z
+        {0,1},{2,3},{4,5},{6,7},   // РїРѕ X
+        {0,2},{1,3},{4,6},{5,7},   // РїРѕ Y
+        {0,4},{1,5},{2,6},{3,7}    // РїРѕ Z
     };
     for (auto& [a, b] : edges)
     {
@@ -1557,40 +1782,40 @@ void ApplicationClass::RenderCompartmentCornerHandles()
         dl->AddLine(pa, pb, IM_COL32(80, 200, 120, 160), 1.2f);
     }
 
-    // -- Ручки углов -----------------------------------------------------------
-    const float HANDLE_R = 7.0f;   // радиус ручки (px)
-    const float HANDLE_HIT = 10.0f;  // радиус hit-zone
+    // -- Р СѓС‡РєРё СѓРіР»РѕРІ -----------------------------------------------------------
+    const float HANDLE_R = 7.0f;   // СЂР°РґРёСѓСЃ СЂСѓС‡РєРё (px)
+    const float HANDLE_HIT = 10.0f;  // СЂР°РґРёСѓСЃ hit-zone
     ImVec2 mouse = io.MousePos;
 
-    // Завершаем drag по отпусканию ЛКМ
+    // Р—Р°РІРµСЂС€Р°РµРј drag РїРѕ РѕС‚РїСѓСЃРєР°РЅРёСЋ Р›РљРњ
     if (m_editorUI.m_cornerDragActive && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
     {
         m_editorUI.m_cornerDragActive = false;
         m_editorUI.m_dragCornerIndex = -1;
     }
 
-    // Обновляем drag
+    // РћР±РЅРѕРІР»СЏРµРј drag
     if (m_editorUI.m_cornerDragActive && m_editorUI.m_dragCornerIndex >= 0)
     {
         int idx = m_editorUI.m_dragCornerIndex;
 
-        // Нужно перевести перемещение мыши обратно в локальное пространство.
-        // Используем простой подход: находим ближайшую точку луча к исходному углу.
+        // РќСѓР¶РЅРѕ РїРµСЂРµРІРµСЃС‚Рё РїРµСЂРµРјРµС‰РµРЅРёРµ РјС‹С€Рё РѕР±СЂР°С‚РЅРѕ РІ Р»РѕРєР°Р»СЊРЅРѕРµ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ.
+        // РСЃРїРѕР»СЊР·СѓРµРј РїСЂРѕСЃС‚РѕР№ РїРѕРґС…РѕРґ: РЅР°С…РѕРґРёРј Р±Р»РёР¶Р°Р№С€СѓСЋ С‚РѕС‡РєСѓ Р»СѓС‡Р° Рє РёСЃС…РѕРґРЅРѕРјСѓ СѓРіР»Сѓ.
         CameraClass::Ray ray = m_camera->CreatePickingRay(
             (int)mouse.x, (int)mouse.y,
             (int)W, (int)H, view, proj);
 
-        // Исходный угол в мировых координатах
+        // РСЃС…РѕРґРЅС‹Р№ СѓРіРѕР» РІ РјРёСЂРѕРІС‹С… РєРѕРѕСЂРґРёРЅР°С‚Р°С…
         XMFLOAT3 origLocal = getCornerLocal(idx);
         XMVECTOR origWorld = XMVector3TransformCoord(XMLoadFloat3(&origLocal), rootWorld);
         XMFLOAT3 origWorldF;
         XMStoreFloat3(&origWorldF, origWorld);
 
-        // Проецируем луч на плоскость, параллельную экрану, проходящую через угол
+        // РџСЂРѕРµС†РёСЂСѓРµРј Р»СѓС‡ РЅР° РїР»РѕСЃРєРѕСЃС‚СЊ, РїР°СЂР°Р»Р»РµР»СЊРЅСѓСЋ СЌРєСЂР°РЅСѓ, РїСЂРѕС…РѕРґСЏС‰СѓСЋ С‡РµСЂРµР· СѓРіРѕР»
         XMVECTOR rayO = XMLoadFloat3(&ray.origin);
         XMVECTOR rayD = XMLoadFloat3(&ray.direction);
 
-        // Нормаль плоскости = направление к камере (плоскость "экранная")
+        // РќРѕСЂРјР°Р»СЊ РїР»РѕСЃРєРѕСЃС‚Рё = РЅР°РїСЂР°РІР»РµРЅРёРµ Рє РєР°РјРµСЂРµ (РїР»РѕСЃРєРѕСЃС‚СЊ "СЌРєСЂР°РЅРЅР°СЏ")
         XMFLOAT3 camPos = m_camera->GetPosition();
         XMVECTOR camFwd = XMVector3Normalize(
             XMVectorSubtract(origWorld, XMLoadFloat3(&camPos)));
@@ -1603,18 +1828,18 @@ void ApplicationClass::RenderCompartmentCornerHandles()
                 XMVectorSubtract(origWorld, rayO), camFwd)) / denom;
             XMVECTOR hitWorld = XMVectorAdd(rayO, XMVectorScale(rayD, t));
 
-            // Переводим в локальное пространство отсека
+            // РџРµСЂРµРІРѕРґРёРј РІ Р»РѕРєР°Р»СЊРЅРѕРµ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРѕ РѕС‚СЃРµРєР°
             XMMATRIX rootWorldInv = XMMatrixInverse(nullptr, rootWorld);
             XMVECTOR hitLocal = XMVector3TransformCoord(hitWorld, rootWorldInv);
             XMFLOAT3 hitLocalF;
             XMStoreFloat3(&hitLocalF, hitLocal);
 
-            // Обновляем только соответствующую грань (по битам индекса)
+            // РћР±РЅРѕРІР»СЏРµРј С‚РѕР»СЊРєРѕ СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰СѓСЋ РіСЂР°РЅСЊ (РїРѕ Р±РёС‚Р°Рј РёРЅРґРµРєСЃР°)
             XMFLOAT3 newMin = m_editorUI.m_dragCornerStartMin;
             XMFLOAT3 newMax = m_editorUI.m_dragCornerStartMax;
 
             auto clampFace = [](float val, float other, bool isMax) -> float {
-                // Не даём граням пересекаться (мин. размер 0.2)
+                // РќРµ РґР°С‘Рј РіСЂР°РЅСЏРј РїРµСЂРµСЃРµРєР°С‚СЊСЃСЏ (РјРёРЅ. СЂР°Р·РјРµСЂ 0.2)
                 if (isMax) return fmaxf(val, other + 0.2f);
                 else       return fminf(val, other - 0.2f);
                 };
@@ -1632,12 +1857,12 @@ void ApplicationClass::RenderCompartmentCornerHandles()
             comp->localMax = newMax;
             comp->RecalculateVolume();
 
-            // Синхронизируем кэш EditorUI
+            // РЎРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј РєСЌС€ EditorUI
             m_editorUI.UpdateCacheFromCompartment_Public(comp);
         }
     }
 
-    // Рисуем 8 ручек + начинаем drag
+    // Р РёСЃСѓРµРј 8 СЂСѓС‡РµРє + РЅР°С‡РёРЅР°РµРј drag
     for (int i = 0; i < 8; ++i)
     {
         ImVec2 screenPt = projectPoint(getCornerLocal(i));
@@ -1649,7 +1874,7 @@ void ApplicationClass::RenderCompartmentCornerHandles()
         bool hovered = (dist < HANDLE_HIT) && !m_editorUI.m_cornerDragActive;
         bool active = (m_editorUI.m_dragCornerIndex == i && m_editorUI.m_cornerDragActive);
 
-        // Начало drag
+        // РќР°С‡Р°Р»Рѕ drag
         if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left))
         {
             m_editorUI.m_cornerDragActive = true;
@@ -1658,7 +1883,7 @@ void ApplicationClass::RenderCompartmentCornerHandles()
             m_editorUI.m_dragCornerStartMax = comp->localMax;
         }
 
-        // Цвет: белый=обычный, жёлтый=hover, оранжевый=active
+        // Р¦РІРµС‚: Р±РµР»С‹Р№=РѕР±С‹С‡РЅС‹Р№, Р¶С‘Р»С‚С‹Р№=hover, РѕСЂР°РЅР¶РµРІС‹Р№=active
         ImU32 col = active ? IM_COL32(255, 140, 0, 255) :
             hovered ? IM_COL32(255, 240, 80, 255) :
             IM_COL32(220, 220, 220, 210);
@@ -1666,7 +1891,7 @@ void ApplicationClass::RenderCompartmentCornerHandles()
         dl->AddCircleFilled(screenPt, HANDLE_R, col);
         dl->AddCircle(screenPt, HANDLE_R + 1.0f, IM_COL32(0, 0, 0, 180), 0, 1.5f);
 
-        // Подсказка при наведении
+        // РџРѕРґСЃРєР°Р·РєР° РїСЂРё РЅР°РІРµРґРµРЅРёРё
         if (hovered)
         {
             const char* axisLabels[8] = {
@@ -1714,7 +1939,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
     const float H = io.DisplaySize.y;
     ImVec2      mouse = io.MousePos;
 
-    // -- Текущие границы бокса -------------------------------------------------
+    // -- РўРµРєСѓС‰РёРµ РіСЂР°РЅРёС†С‹ Р±РѕРєСЃР° -------------------------------------------------
     XMFLOAT3 bMin = {
         elem.localPosition.x + elem.boxOffsetMin.x,
         elem.localPosition.y + elem.boxOffsetMin.y,
@@ -1740,7 +1965,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
             (ndc.y * -0.5f + 0.5f) * H);
         };
 
-    // -- 8 угловых точек -------------------------------------------------------
+    // -- 8 СѓРіР»РѕРІС‹С… С‚РѕС‡РµРє -------------------------------------------------------
     auto getCorner = [&](int idx) -> XMFLOAT3 {
         return {
             (idx & 1) ? bMax.x : bMin.x,
@@ -1749,20 +1974,20 @@ void ApplicationClass::RenderCompoundCornerHandles()
         };
         };
 
-    // -- 6 граневых точек (центр каждой грани) — двигают ТОЛЬКО одну ось -------
-    // Индексы 8..13: 8=-X, 9=+X, 10=-Y, 11=+Y, 12=-Z, 13=+Z
+    // -- 6 РіСЂР°РЅРµРІС‹С… С‚РѕС‡РµРє (С†РµРЅС‚СЂ РєР°Р¶РґРѕР№ РіСЂР°РЅРё) вЂ” РґРІРёРіР°СЋС‚ РўРћР›Р¬РљРћ РѕРґРЅСѓ РѕСЃСЊ -------
+    // РРЅРґРµРєСЃС‹ 8..13: 8=-X, 9=+X, 10=-Y, 11=+Y, 12=-Z, 13=+Z
     auto getFacePoint = [&](int faceIdx) -> XMFLOAT3 {
         switch (faceIdx) {
-        case  8: return { bMin.x, bCen.y, bCen.z }; // -X грань
-        case  9: return { bMax.x, bCen.y, bCen.z }; // +X грань
-        case 10: return { bCen.x, bMin.y, bCen.z }; // -Y грань
-        case 11: return { bCen.x, bMax.y, bCen.z }; // +Y грань
-        case 12: return { bCen.x, bCen.y, bMin.z }; // -Z грань
-        default: return { bCen.x, bCen.y, bMax.z }; // +Z грань
+        case  8: return { bMin.x, bCen.y, bCen.z }; // -X РіСЂР°РЅСЊ
+        case  9: return { bMax.x, bCen.y, bCen.z }; // +X РіСЂР°РЅСЊ
+        case 10: return { bCen.x, bMin.y, bCen.z }; // -Y РіСЂР°РЅСЊ
+        case 11: return { bCen.x, bMax.y, bCen.z }; // +Y РіСЂР°РЅСЊ
+        case 12: return { bCen.x, bCen.y, bMin.z }; // -Z РіСЂР°РЅСЊ
+        default: return { bCen.x, bCen.y, bMax.z }; // +Z РіСЂР°РЅСЊ
         }
         };
 
-    // Для граневой точки: какую ось и направление менять
+    // Р”Р»СЏ РіСЂР°РЅРµРІРѕР№ С‚РѕС‡РєРё: РєР°РєСѓСЋ РѕСЃСЊ Рё РЅР°РїСЂР°РІР»РµРЅРёРµ РјРµРЅСЏС‚СЊ
     // returns {axisIndex (0=X,1=Y,2=Z), isMax}
     struct FaceInfo { int axis; bool isMax; };
     auto getFaceInfo = [](int faceIdx) -> FaceInfo {
@@ -1776,7 +2001,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
         }
         };
 
-    // -- Рёбра AABB ------------------------------------------------------------
+    // -- Р С‘Р±СЂР° AABB ------------------------------------------------------------
     static constexpr int edges[12][2] = {
         {0,1},{2,3},{4,5},{6,7},
         {0,2},{1,3},{4,6},{5,7},
@@ -1786,7 +2011,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
         dl->AddLine(projectPt(getCorner(a)), projectPt(getCorner(b)),
             IM_COL32(255, 160, 30, 180), 1.5f);
 
-    // -- Завершаем drag по отпусканию ЛКМ -------------------------------------
+    // -- Р—Р°РІРµСЂС€Р°РµРј drag РїРѕ РѕС‚РїСѓСЃРєР°РЅРёСЋ Р›РљРњ -------------------------------------
     if (m_editorUI.m_cornerDragActive && !ImGui::IsMouseDown(ImGuiMouseButton_Left))
     {
         m_editorUI.m_cornerDragActive = false;
@@ -1794,7 +2019,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
         RefreshRigidBodyExternal(registry, entity, rb);
     }
 
-    // -- Обновляем drag --------------------------------------------------------
+    // -- РћР±РЅРѕРІР»СЏРµРј drag --------------------------------------------------------
     if (m_editorUI.m_cornerDragActive && m_editorUI.m_cornerDragIndex >= 0)
     {
         int idx = m_editorUI.m_cornerDragIndex;
@@ -1802,7 +2027,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
         CameraClass::Ray ray = m_camera->CreatePickingRay(
             (int)mouse.x, (int)mouse.y, (int)W, (int)H, view, proj);
 
-        // Берём точку привязки: угол или центр грани
+        // Р‘РµСЂС‘Рј С‚РѕС‡РєСѓ РїСЂРёРІСЏР·РєРё: СѓРіРѕР» РёР»Рё С†РµРЅС‚СЂ РіСЂР°РЅРё
         XMFLOAT3 anchorLocal = (idx < 8) ? getCorner(idx) : getFacePoint(idx);
         XMVECTOR anchorWorld = XMVector3TransformCoord(XMLoadFloat3(&anchorLocal), worldMat);
 
@@ -1836,7 +2061,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
 
             if (idx < 8)
             {
-                // -- Угловая точка: меняем все 3 оси одновременно -------------
+                // -- РЈРіР»РѕРІР°СЏ С‚РѕС‡РєР°: РјРµРЅСЏРµРј РІСЃРµ 3 РѕСЃРё РѕРґРЅРѕРІСЂРµРјРµРЅРЅРѕ -------------
                 if (idx & 1) newMax.x = fmaxf(hitOffset.x, newMin.x + MIN_SIZE);
                 else         newMin.x = fminf(hitOffset.x, newMax.x - MIN_SIZE);
                 if (idx & 2) newMax.y = fmaxf(hitOffset.y, newMin.y + MIN_SIZE);
@@ -1846,7 +2071,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
             }
             else
             {
-                // -- Граневая точка: меняем ТОЛЬКО одну ось -------------------
+                // -- Р“СЂР°РЅРµРІР°СЏ С‚РѕС‡РєР°: РјРµРЅСЏРµРј РўРћР›Р¬РљРћ РѕРґРЅСѓ РѕСЃСЊ -------------------
                 auto [axis, isMax] = getFaceInfo(idx);
                 float* pMin = (axis == 0) ? &newMin.x : (axis == 1) ? &newMin.y : &newMin.z;
                 float* pMax = (axis == 0) ? &newMax.x : (axis == 1) ? &newMax.y : &newMax.z;
@@ -1861,7 +2086,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
         }
     }
 
-    // -- Рисуем ручки ---------------------------------------------------------
+    // -- Р РёСЃСѓРµРј СЂСѓС‡РєРё ---------------------------------------------------------
     static constexpr const char* cornerLabels[8] = {
         "-X-Y-Z","+X-Y-Z","-X+Y-Z","+X+Y-Z",
         "-X-Y+Z","+X-Y+Z","-X+Y+Z","+X+Y+Z"
@@ -1869,18 +2094,18 @@ void ApplicationClass::RenderCompoundCornerHandles()
     static constexpr const char* faceLabels[6] = {
         "-X", "+X", "-Y", "+Y", "-Z", "+Z"
     };
-    // Цвета граневых ручек по осям
+    // Р¦РІРµС‚Р° РіСЂР°РЅРµРІС‹С… СЂСѓС‡РµРє РїРѕ РѕСЃСЏРј
     static constexpr ImU32 axisColors[3] = {
-        IM_COL32(220, 60,  60,  220),   // X — красный
-        IM_COL32(60,  220, 60,  220),   // Y — зелёный
-        IM_COL32(60,  100, 220, 220),   // Z — синий
+        IM_COL32(220, 60,  60,  220),   // X вЂ” РєСЂР°СЃРЅС‹Р№
+        IM_COL32(60,  220, 60,  220),   // Y вЂ” Р·РµР»С‘РЅС‹Р№
+        IM_COL32(60,  100, 220, 220),   // Z вЂ” СЃРёРЅРёР№
     };
 
     const float CORNER_R = 6.0f;
     const float FACE_R = 8.0f;
     const float HIT_R = 11.0f;
 
-    // 8 угловых (белые/жёлтые/оранжевые)
+    // 8 СѓРіР»РѕРІС‹С… (Р±РµР»С‹Рµ/Р¶С‘Р»С‚С‹Рµ/РѕСЂР°РЅР¶РµРІС‹Рµ)
     for (int i = 0; i < 8; ++i)
     {
         ImVec2 sp = projectPt(getCorner(i));
@@ -1911,7 +2136,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
         }
     }
 
-    // 6 граневых (цветные по осям — двигают ТОЛЬКО одну грань)
+    // 6 РіСЂР°РЅРµРІС‹С… (С†РІРµС‚РЅС‹Рµ РїРѕ РѕСЃСЏРј вЂ” РґРІРёРіР°СЋС‚ РўРћР›Р¬РљРћ РѕРґРЅСѓ РіСЂР°РЅСЊ)
     for (int i = 8; i < 14; ++i)
     {
         ImVec2 sp = projectPt(getFacePoint(i));
@@ -1934,7 +2159,7 @@ void ApplicationClass::RenderCompoundCornerHandles()
             hovered ? IM_COL32(255, 255, 150, 255) :
             baseCol;
 
-        // Граневые точки — ромб, чтобы отличались от угловых
+        // Р“СЂР°РЅРµРІС‹Рµ С‚РѕС‡РєРё вЂ” СЂРѕРјР±, С‡С‚РѕР±С‹ РѕС‚Р»РёС‡Р°Р»РёСЃСЊ РѕС‚ СѓРіР»РѕРІС‹С…
         dl->AddCircleFilled(sp, FACE_R, col);
         dl->AddCircle(sp, FACE_R + 1.5f, IM_COL32(0, 0, 0, 180), 0, 2.0f);
 
@@ -1950,18 +2175,18 @@ void ApplicationClass::RefreshRigidBodyExternal(ECSRegistry& registry, Entity en
 {
     if (!rb || !rb->body) return;
 
-    // Удаляем старое тело из мира
+    // РЈРґР°Р»СЏРµРј СЃС‚Р°СЂРѕРµ С‚РµР»Рѕ РёР· РјРёСЂР°
     auto world = PhysicsWorld::Get().GetWorld();
     world->removeRigidBody(rb->body);
 
-    // Удаляем shape и motion state
+    // РЈРґР°Р»СЏРµРј shape Рё motion state
     delete rb->body->getMotionState();
     btCollisionShape* oldShape = rb->body->getCollisionShape();
     delete rb->body;
     rb->body = nullptr;
     if (oldShape) delete oldShape;
 
-    // Пересоздаём
+    // РџРµСЂРµСЃРѕР·РґР°С‘Рј
     PhysicsSystem::CreateRigidBody(registry, entity);
 }
 

@@ -22,7 +22,8 @@ enum class ShaderType : uint8_t
     Water = 10,
     Glass = 11,
     Projection = 12,
-    PBR = 13
+    PBR = 13,
+    TerrainBlend = 14
 };
 
 

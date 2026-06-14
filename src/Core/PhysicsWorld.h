@@ -83,28 +83,26 @@ public:
 
     void Shutdown()
     {
-
-        // Порядок важен! Обратный порядку создания:
-        if (m_dynamicsWorld) {
-            // 1. Сначала удалить все тела из мира (если ещё не удалены через ECS)
-            for (int i = m_dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; --i) {
-                btCollisionObject* obj = m_dynamicsWorld->getCollisionObjectArray()[i];
-                btRigidBody* body = btRigidBody::upcast(obj);
-                if (body && body->getMotionState()) {
-                    delete body->getMotionState();
-                }
-                m_dynamicsWorld->removeCollisionObject(obj);
-                delete obj;  // shape удалится автоматически, если не compound
+        if (m_dynamicsWorld)
+        {
+            // ECS components own constraints, bodies and collision shapes.
+            // The world only keeps non-owning registrations for them, so detach those before
+            // the registry destroys the actual resources.
+            for (int i = m_dynamicsWorld->getNumConstraints() - 1; i >= 0; --i)
+                m_dynamicsWorld->removeConstraint(m_dynamicsWorld->getConstraint(i));
+            for (int i = m_dynamicsWorld->getNumCollisionObjects() - 1; i >= 0; --i)
+            {
+                btCollisionObject* object = m_dynamicsWorld->getCollisionObjectArray()[i];
+                m_dynamicsWorld->removeCollisionObject(object);
             }
         }
-
-        m_dynamicsWorld.reset();  // ~btDiscreteDynamicsWorld
-        m_solver.reset();         // ~btSequentialImpulseConstraintSolver
-        m_broadphase.reset();     // ~btDbvtBroadphase
-        m_dispatcher.reset();     // ~btCollisionDispatcher
-        m_collisionConfig.reset(); // ~btDefaultCollisionConfiguration < освобождает пулы!
+        m_dynamicsWorld.reset();
+        m_ghostCallback.reset();
+        m_solver.reset();
+        m_broadphase.reset();
+        m_dispatcher.reset();
+        m_collisionConfig.reset();
     }
-
 private:
     PhysicsWorld() = default;
     ~PhysicsWorld() = default;
@@ -117,3 +115,5 @@ private:
 
     btActionInterface* action;
 };
+// Удалите или закомментируйте строку ниже, так как она не нужна и вызывает ошибку E0077
+// btActionInterface* action;

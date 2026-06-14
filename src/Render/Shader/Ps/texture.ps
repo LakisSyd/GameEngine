@@ -53,6 +53,7 @@ float4 TexturePixelShader(PixelInputType input) : SV_TARGET
     // —эмплируем (берем образец) цвета пиксел€ из текстуры, использу€ сэмплер 
     // в этом расположении координат текстуры.
     textureColor = shaderTexture.Sample(SampleType, input.tex);
+    clip(textureColor.a - 0.01f);
 
     return textureColor;
 }
