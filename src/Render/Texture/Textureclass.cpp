@@ -15,10 +15,13 @@ TextureClass::TextureClass(const TextureClass& other)
 
 TextureClass::~TextureClass()
 {
+    Shutdown();
 }
 
 bool TextureClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceContext, const char* filename, bool forceSRGB)
 {
+    Shutdown();
+
     D3D11_TEXTURE2D_DESC textureDesc{};
     HRESULT hResult;
     unsigned int rowPitch;
@@ -65,6 +68,7 @@ bool TextureClass::Initialize(ID3D11Device* device, ID3D11DeviceContext* deviceC
     hResult = device->CreateShaderResourceView(m_texture, &srvDesc, &m_textureView);
     if (FAILED(hResult)) {
         stbi_image_free(imageData);
+        Shutdown();
         return false;
     }
 

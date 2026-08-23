@@ -1,4 +1,6 @@
 ﻿#pragma once
+// Добавить перегрузку ForEach для двух компонент
+
 #include <typeindex>
 #include <unordered_map>
 #include <memory>
@@ -23,6 +25,21 @@ public:
     template<typename T>
     void AddComponent(Entity e, T&& comp) {
         GetOrCreatePool<T>().Add(e, std::forward<T>(comp));
+    }
+
+    template<typename T1, typename T2, typename Fn>
+    void ForEach(Fn&& fn)
+    {
+        auto& pool1 = GetComponents<T1>();
+        auto& pool2 = GetComponents<T2>();
+        for (auto& [entity, comp1] : pool1)
+        {
+            if (pool2.Has(entity))
+            {
+                auto& comp2 = *pool2.Get(entity);
+                fn(entity, comp1, comp2);
+            }
+        }
     }
 
     template<typename T>

@@ -45,38 +45,77 @@ void CameraController::UpdateFree(float dt, bool inputBlockedByUi)
     ApplyFreeMove(dt);
 }
 
+void CameraController::SetFirstPersonEyeHeight(float value)
+{
+    m_firstPersonEyeHeight = std::clamp(value, 0.1f, 3.0f);
+}
+
+void CameraController::SetFirstPersonForwardOffset(float value)
+{
+    m_firstPersonForwardOffset = std::clamp(value, -1.0f, 1.0f);
+}
+
+void CameraController::SetThirdPersonDistance(float value)
+{
+    m_followDistance = std::clamp(value, 1.0f, 30.0f);
+}
+
+void CameraController::SetFollowPitch(float value)
+{
+    m_followPitch = std::clamp(value, m_followMinPitch, m_followMaxPitch);
+}
+
+void CameraController::SetLookUpLimit(float degrees)
+{
+    m_followMinPitch = -std::clamp(degrees, 0.0f, 89.0f);
+    m_followPitch = std::clamp(m_followPitch, m_followMinPitch, m_followMaxPitch);
+}
+
+void CameraController::SetLookDownLimit(float degrees)
+{
+    m_followMaxPitch = std::clamp(degrees, 0.0f, 89.0f);
+    m_followPitch = std::clamp(m_followPitch, m_followMinPitch, m_followMaxPitch);
+}
+
 float CameraController::GetFollowYaw() const
 {
     return m_followYaw;
 }
 
-void CameraController::UpdateFollow(float dt, const TransformComponent* targetTransform)
+void CameraController::UpdateFollow(
+    float dt,
+    const TransformComponent* targetTransform,
+    bool inputBlockedByUi)
 {
     if (!m_camera || !targetTransform || !m_inputManager || !m_input)
         return;
 
     dt = std::min(dt, 0.05f);
 
-    // Â PlayMode ìûøü âñåãäà çàõâà÷åíà
-    if (!m_inputManager->IsMouseCaptured(m_input))
+    if (inputBlockedByUi)
     {
-        m_inputManager->SetMouseCapture(m_input, true);
+        // An open device panel owns the cursor instead of camera look.
+        ReleaseMouseCapture();
     }
+    else
+    {
+        if (!m_inputManager->IsMouseCaptured(m_input))
+            m_inputManager->SetMouseCapture(m_input, true);
 
-    m_input->UpdateCapturedMouseDelta(m_hwnd);
+        m_input->UpdateCapturedMouseDelta(m_hwnd);
 
-    int dx = 0;
-    int dy = 0;
-    m_input->GetMouseDelta(dx, dy);
-    m_inputManager->ResetMouseDelta(m_input);
+        int dx = 0;
+        int dy = 0;
+        m_input->GetMouseDelta(dx, dy);
+        m_inputManager->ResetMouseDelta(m_input);
 
-    dx = std::clamp(dx, -200, 200);
-    dy = std::clamp(dy, -200, 200);
+        dx = std::clamp(dx, -200, 200);
+        dy = std::clamp(dy, -200, 200);
 
-    const float sensitivity = Settings::CAMERA_SENSITIVITY;
-
-    m_followYaw += dx * sensitivity;
-    m_followPitch += dy * sensitivity;
+        const float sensitivity = Settings::CAMERA_SENSITIVITY;
+        m_followYaw += dx * sensitivity;
+        m_followPitch += dy * sensitivity;
+    }
 
     m_followPitch = std::clamp(
         m_followPitch,
@@ -93,13 +132,25 @@ void CameraController::UpdateFollow(float dt, const TransformComponent* targetTr
 
     XMFLOAT3 target = targetTransform->position;
 
-    // Íåáîëüøàÿ âûñîòà òî÷êè, â êîòîğóş ñìîòğèì
+    // ĞĞµĞ±Ğ¾Ğ»ÑŒÑˆĞ°Ñ Ğ²Ñ‹ÑĞ¾Ñ‚Ğ° Ñ‚Ğ¾Ñ‡ĞºĞ¸, Ğ² ĞºĞ¾Ñ‚Ğ¾Ñ€ÑƒÑ ÑĞ¼Ğ¾Ñ‚Ñ€Ğ¸Ğ¼
     target.y += 1.5f;
 
     const float cosPitch = cosf(pitchRad);
     const float sinPitch = sinf(pitchRad);
     const float sinYaw = sinf(yawRad);
     const float cosYaw = cosf(yawRad);
+
+    if (m_playViewMode == PlayViewMode::FirstPerson)
+    {
+        XMFLOAT3 eye = targetTransform->position;
+        eye.y += m_firstPersonEyeHeight;
+        eye.x += sinYaw * m_firstPersonForwardOffset;
+        eye.z += cosYaw * m_firstPersonForwardOffset;
+
+        m_camera->SetPosition(eye.x, eye.y, eye.z);
+        m_camera->SetRotation(m_followPitch, m_followYaw, 0.0f);
+        return;
+    }
 
     XMFLOAT3 desired =
     {
@@ -220,6 +271,8 @@ void CameraController::ApplyFreeMove(float dt)
 }
 void CameraController::EnterPlayMode()
 {
+    m_mode = Mode::FollowTarget;
+
     if (m_inputManager && m_input)
         m_inputManager->SetMouseCapture(m_input, true);
 }

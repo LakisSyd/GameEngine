@@ -60,12 +60,12 @@ struct XMF3Eq {
 
 
 
-inline btQuaternion EulerToQuaternion(const XMFLOAT3& eulerDegrees)
+inline btQuaternion EulerToQuaternion(const XMFLOAT3& eulerRadians)
 {
     XMVECTOR rad = XMVectorSet(
-        XMConvertToRadians(eulerDegrees.x),
-        XMConvertToRadians(eulerDegrees.y),
-        XMConvertToRadians(eulerDegrees.z),
+        eulerRadians.x,
+        eulerRadians.y,
+        eulerRadians.z,
         0.0f);
     XMVECTOR quat = XMQuaternionRotationRollPitchYawFromVector(rad);
     XMFLOAT4 q;
@@ -96,9 +96,9 @@ inline XMFLOAT3 QuaternionToEuler(const btQuaternion& q)
     double yaw = atan2(siny_cosp, cosy_cosp);
 
     return XMFLOAT3(
-        XMConvertToDegrees(static_cast<float>(roll)),
-        XMConvertToDegrees(static_cast<float>(pitch)),
-        XMConvertToDegrees(static_cast<float>(yaw))
+        static_cast<float>(roll),
+        static_cast<float>(pitch),
+        static_cast<float>(yaw)
     );
 }
 

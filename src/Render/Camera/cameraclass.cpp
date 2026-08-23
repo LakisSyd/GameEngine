@@ -10,6 +10,23 @@ CameraClass::CameraClass()
     m_rotationZ = 0.0f;
 }
 
+XMFLOAT3 CameraClass::GetForward() const
+{
+    float pitch = m_rotationX * 0.0174532925f;
+    float yaw = m_rotationY * 0.0174532925f;
+    float roll = m_rotationZ * 0.0174532925f;
+
+    XMMATRIX rotationMatrix = XMMatrixRotationRollPitchYaw(pitch, yaw, roll);
+
+    XMVECTOR forward = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+    forward = XMVector3TransformNormal(forward, rotationMatrix);
+    forward = XMVector3Normalize(forward);
+
+    XMFLOAT3 result;
+    XMStoreFloat3(&result, forward);
+    return result;
+}
+
 CameraClass::CameraClass(const CameraClass& other)
 {
 }

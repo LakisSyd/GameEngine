@@ -1,5 +1,5 @@
-﻿#pragma once
-
+#pragma once
+#include <dwrite.h>
 #include <windows.h>
 #include <vector>
 #include <memory>
@@ -39,18 +39,29 @@
 #include "ShadowMap.h"
 #include "ShadowShaderClass.h"
 #include "CompartmentDebugRenderer.h"
-#include "../../DragDropSystem.h"
-#include "../../GameplayController.h"
-#include "../../JobSystem.h"
-#include "../../AssetsLoadSystem.h"
-#include "../../AreaDebugRenderer.h"
-
+#include "DragDropSystem.h"
+#include "GameplayController.h"
+#include "JobSystem.h"
+#include "AssetsLoadSystem.h"
+#include "AreaDebugRenderer.h"
+#include "DWriteTextSystem.h"
+#include "InteractionSystem.h"
+#include "GameHud.h"
+#include "OxygenGeneratorHud.h"
+#include "GeneratorHud.h"
+#include "DamageSystem.h"
+#include "Gameplay/Repair/RepairSystem.h"
+#include <Gameplay/Effects/ParticleSystem.h>
+#include "DoorSystem.h"
+#include "../../NpcUtilitySystem.h"
+#include "../../GameTimer.h"
+#include "../../WorldEventLog.h"
 class Renderer;
 class SkyShaderClass;
 class GrassRenderer;
 
 const bool  FULL_SCREEN = false;
-const bool  VSYNC_ENABLED = true;
+const bool  VSYNC_ENABLED = false;
 const float SCREEN_DEPTH = 1000.0f;
 const float SCREEN_NEAR = 0.3f;
 
@@ -82,21 +93,21 @@ public:
     void SetInput(InputClass* input) { m_input = input; m_cameraController.SetInput(&m_inputManager, m_input, m_hwnd); }
 
 private:
-    // ── Методы рендеринга ────────────────────────────────────────────────────
+    // -- Методы рендеринга ----------------------------------------------------
     void Render3DObjects(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
     void RenderLightSources(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
     void RenderWorldSprites(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
 
-    // ── Вспомогательные методы ───────────────────────────────────────────────
+    // -- Вспомогательные методы -----------------------------------------------
   
 
-    // ── Обработка ввода ──────────────────────────────────────────────────────
+    // -- Обработка ввода ------------------------------------------------------
     void HandleDragDrop();
 
-    // ── Вспомогательные методы drag-and-drop ─────────────────────────────────
+    // -- Вспомогательные методы drag-and-drop ---------------------------------
   
     void StartDraggingSprite(int index, const CameraClass::Ray& pickRay, const XMFLOAT3& spritePos);
-    void StartDraggingObject(int index, const CameraClass::Ray& pickRay, const XMFLOAT3& objPos);
+    void StartDraggingObject(int index, const CameraClass::Ray& pickRay, const XMFLOAT3& objPos, const XMFLOAT3& hitPos);
     void UpdateDraggedPosition(const CameraClass::Ray& ray);
     void StopDragging();
 
@@ -127,19 +138,22 @@ private:
     void SpawnTestBot(ECSRegistry& registry, const XMFLOAT3& pos);
 
     void UpdateCameraControlMode();
+    void SetupTestRifleVisuals();
+    void RemoveTestRifleVisuals();
+    void UpdateTestRifleVisuals();
 
 
     ShadowMap* m_shadowMap;
-    ShadowShaderClass* m_shadowShader;  // ← НОВОЕ
+    ShadowShaderClass* m_shadowShader;  // < НОВОЕ
 
-    // ── Ядро Direct3D ────────────────────────────────────────────────────────
+    // -- Ядро Direct3D --------------------------------------------------------
     std::unique_ptr<D3DClass> m_direct3D;
 
-    // ── Камера и ввод ───────────────────────────────────────────────────────
+    // -- Камера и ввод -------------------------------------------------------
     std::unique_ptr<CameraClass> m_camera;
     InputClass* m_input = nullptr;
 
-    // ── Render-to-Texture ───────────────────────────────────────────────────
+    // -- Render-to-Texture ---------------------------------------------------
     RenderTextureClass* m_renderTexture = nullptr;
     RenderTextureClass* m_reflectionTexture = nullptr;
     RenderTextureClass* m_refractionTexture = nullptr;
@@ -149,17 +163,17 @@ private:
     //System
     std::unique_ptr<DragDropSystem> m_dragDropSystem;
     Renderer* m_renderer = nullptr;
-    // ── Базовые модели ─────────────────────────────────────────────────────
+    // -- Базовые модели -----------------------------------------------------
     AssimpModelClass* m_mainModel = nullptr;
     AssimpModelClass* m_lightSphereModel = nullptr;
 
 	AssimpModelClass* m_boxModel = nullptr;
 	AssimpModelClass* m_capsuleModel = nullptr;
-    // ── Сцена ────────────────────────────────────────────────────────────────
+    // -- Сцена ----------------------------------------------------------------
     SceneManager            m_sceneManager;
     std::vector<GameObject> m_lightSpheres;
 
-    // ── Шейдеры (указатели принадлежат ShaderManager) ───────────────────────
+    // -- Шейдеры (указатели принадлежат ShaderManager) -----------------------
     TextureShaderClass* m_textureShader = nullptr;
     LightShaderClass* m_lightShader = nullptr;
     MultiTextureShaderClass* m_multiTextureShader = nullptr;
@@ -176,15 +190,15 @@ private:
     TerrainBlendShaderClass* m_terrainBlendShader = nullptr;
     SkyShaderClass* m_SkyShader = nullptr;
 
-    // ── Размеры экрана ───────────────────────────────────────────────────────
+    // -- Размеры экрана -------------------------------------------------------
     int m_screenWidth = 0;
     int m_screenHeight = 0;
 
-    // ── Матрицы кадра ────────────────────────────────────────────────────────
+    // -- Матрицы кадра --------------------------------------------------------
     XMMATRIX m_viewMatrix;
     XMMATRIX m_projMatrix;
 
-    // ── Состояние активного перетаскивания ───────────────────────────────────
+    // -- Состояние активного перетаскивания -----------------------------------
     bool     m_isDragging = false;
     int      m_draggedObjectIndex = -1;
     int      m_draggedLightIndex = -1;
@@ -194,21 +208,22 @@ private:
 
     PickingSystem::PickResult m_pendingPickResult;
 
-    // ── Подсистемы ───────────────────────────────────────────────────────────
+    // -- Подсистемы -----------------------------------------------------------
     PickingSystem m_pickingSystem;
     InputManager  m_inputManager;
 
-    // ── Редактор ─────────────────────────────────────────────────────────────
+    // -- Редактор -------------------------------------------------------------
     EditorUI m_editorUI;
     ColorShaderClass* m_colorShader = nullptr;
-    // ── Материал по умолчанию ────────────────────────────────────────────────
+    // -- Материал по умолчанию ------------------------------------------------
     MaterialClass* m_defaultMaterial = nullptr;
 
     // Фоллбек-текстура для defaultMaterial (stone.tga)
     // MaterialClass не владеет текстурами, поэтому освобождаем отдельно.
     TextureClass* m_defaultTexture = nullptr;
+    TextureClass* m_crackDecalTexture = nullptr;
 
-    // ── Файловая система ─────────────────────────────────────────────────────
+    // -- Файловая система -----------------------------------------------------
     std::unique_ptr<FileSystem> m_gameFs;
 
     ECSRegistry m_registry;
@@ -229,22 +244,41 @@ private:
     EngineMode m_engineMode = EngineMode::Editor;
 
 	GamePlayController m_gameplayController;
+    GameHud m_gameHud;
+    OxygenGeneratorHud m_oxygenGeneratorHud;
+    GeneratorHud m_generatorHud;
   
-    ID3D11ShaderResourceView* m_skySRV = nullptr;  // 🔥 НОВОЕ
+    ID3D11ShaderResourceView* m_skySRV = nullptr;  // ?? НОВОЕ
 
     bool m_wasF5Down = false;
     bool m_wasF1Down = false;
+    bool m_wasF2Down = false;
+    bool m_wasF6Down = false;
+    bool m_wasDamageTestDown = false;
+    // F2 в Play Mode переключает владение мышью между камерой и ImGui.
+    bool m_playUiCursorActive = false;
+    Entity m_worldRifleVisual = INVALID_ENTITY;
+    Entity m_firstPersonRifleVisual = INVALID_ENTITY;
+    Entity m_firstPersonArms = INVALID_ENTITY;
 
     JobSystem m_jobSystem;
 
     AssetLoadSystem m_assetLoadSystem;
     GrassRenderer* m_grassRenderer = nullptr;
 
- //  FontShaderClass* m_fontShader;
-	//FontClass* m_font;
- //   TextClass* m_textHello = nullptr;   // <-- НОВОЕ
+    DWriteTextSystem dwrite_text;
+
+    EventQueue m_events;
+    InteractionSystem m_interactionSystem;
+    DoorSystem m_doorSystem;
+    DamageSystem m_damageSystem;
+    RepairSystem m_repairSystem;
+    ParticleSystem m_particleSystem;
+    NpcUtilitySystem m_npcUtilitySystem;
 
 	AreaDebugRenderer m_areaDebugRenderer;
+    GameTimer timer;
+    WorldEventLog m_worldEventLog;
 };
 
 bool RayIntersectsSphere(const CameraClass::Ray& ray, const XMFLOAT3& center, float radius);

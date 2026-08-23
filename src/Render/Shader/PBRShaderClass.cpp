@@ -1,4 +1,4 @@
-﻿#include "PBRShaderClass.h"
+#include "PBRShaderClass.h"
 
 namespace
 {
@@ -56,7 +56,7 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
         { "TANGENT",  0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 32, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // offset 32
         { "BINORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 44, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // offset 44
 
-        // НОВОЕ: Веса костей - ПРОВЕРЬТЕ OFFSET!
+        // пїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ - пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ OFFSET!
         { "TEXCOORD", 1, DXGI_FORMAT_R32G32B32A32_SINT,   0, 56, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // boneIDs - offset 56
         { "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT,  0, 72, D3D11_INPUT_PER_VERTEX_DATA, 0 }, // boneWeights - offset 72
     };
@@ -67,6 +67,7 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
     if (!CreateConstantBuffer(device, sizeof(MatrixBuffer), &m_matrixBuffer))           return false;
     if (!CreateConstantBuffer(device, sizeof(LightPositionBuffer), &m_lightPosBuffer))         return false;
     if (!CreateConstantBuffer(device, sizeof(LightColorBuffer), &m_lightColorBuffer))       return false;
+    if (!CreateConstantBuffer(device, sizeof(LightSpotBuffer), &m_lightSpotBuffer))         return false;
     if (!CreateConstantBuffer(device, sizeof(PBRParamsBuffer), &m_pbrParamsBuffer))        return false;
     if (!CreateConstantBuffer(device, sizeof(SelectedBuffer), &m_selectedBuffer))         return false;
     if (!CreateConstantBuffer(device, sizeof(DirectionalLightBuffer), &m_directionalLightBuffer)) return false;
@@ -87,11 +88,11 @@ bool PBRShaderClass::Initialize(ID3D11Device* device, HWND hwnd)
     shadowSamplerDesc.MaxLOD = D3D11_FLOAT32_MAX;
     if (FAILED(device->CreateSamplerState(&shadowSamplerDesc, &m_shadowSampler))) return false;
 
-    // -- Fallback текстуры -----------------------------------------------------
-    m_defaultNormalSRV = Create1x1SRV(device, 128, 128, 255, 255); // нейтральный нормал
-    m_defaultMetalnessSRV = Create1x1SRV(device, 0, 0, 0, 255); // диэлектрик
-    m_defaultRoughnessSRV = Create1x1SRV(device, 220, 220, 220, 255); // умеренный блеск для PBR без roughness map
-    m_defaultCrackSRV = Create1x1SRV(device, 0, 0, 0, 255); // нет трещин (чёрный)
+    // -- Fallback пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ -----------------------------------------------------
+    m_defaultNormalSRV = Create1x1SRV(device, 128, 128, 255, 255); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
+    m_defaultMetalnessSRV = Create1x1SRV(device, 0, 0, 0, 255); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+    m_defaultRoughnessSRV = Create1x1SRV(device, 220, 220, 220, 255); // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ PBR пїЅпїЅпїЅ roughness map
+    m_defaultCrackSRV = Create1x1SRV(device, 0, 0, 0, 255); // пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅ)
 
     return true;
 }
@@ -104,18 +105,19 @@ void PBRShaderClass::Shutdown()
     release(m_matrixBuffer);
     release(m_lightPosBuffer);
     release(m_lightColorBuffer);
+    release(m_lightSpotBuffer);
     release(m_pbrParamsBuffer);
     release(m_selectedBuffer);
     release(m_directionalLightBuffer);
     release(m_shadowBuffer);
     release(m_shadowSampler);
-    release(m_damageBuffer);         // < буфер трещин
+    release(m_damageBuffer);         // < пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     release(m_defaultNormalSRV);
     release(m_defaultMetalnessSRV);
     release(m_defaultRoughnessSRV);
-    release(m_defaultCrackSRV);      // < fallback трещин
+    release(m_defaultCrackSRV);      // < fallback пїЅпїЅпїЅпїЅпїЅпїЅ
 
-    // m_crackTextureSRV и m_environmentMapSRV НЕ освобождаем — владеет ApplicationClass
+    // m_crackTextureSRV пїЅ m_environmentMapSRV пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ ApplicationClass
     m_environmentMapSRV = nullptr;
     m_shadowMapSRV = nullptr;
     ShaderBaseClass::Shutdown();
@@ -150,13 +152,18 @@ bool PBRShaderClass::Render(
     ID3D11ShaderResourceView* roughness,
     XMFLOAT4  lightColors[NUM_LIGHTS],
     XMFLOAT4  lightPositions[NUM_LIGHTS],
+    const XMFLOAT4 lightDirectionsAndOuterCos[NUM_LIGHTS],
+    const XMFLOAT4 lightInnerCosAndFlags[NUM_LIGHTS],
     XMFLOAT3  cameraPos,
     float     selectedFactor,
-    float     glassOpacity)
+    float     glassOpacity,
+    float     environmentStrength,
+    XMFLOAT3  emissiveColor,
+    float     emissiveStrength)
 {
     if (!context) return false;
 
-    // -- Fallback если текстура не назначена -----------------------------------
+    // -- Fallback пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ -----------------------------------
     if (!normalMap)  normalMap = m_defaultNormalSRV;
     if (!metalness)  metalness = m_defaultMetalnessSRV;
     if (!roughness)  roughness = m_defaultRoughnessSRV;
@@ -177,9 +184,22 @@ bool PBRShaderClass::Render(
     for (int i = 0; i < NUM_LIGHTS; i++) lcb.diffuseColor[i] = lightColors[i];
     UpdateConstantBuffer(context, m_lightColorBuffer, lcb, 0, false);
 
+    LightSpotBuffer lsb{};
+    for (int i = 0; i < NUM_LIGHTS; ++i)
+    {
+        lsb.directionAndOuterCos[i] = lightDirectionsAndOuterCos[i];
+        lsb.innerCosAndFlags[i] = lightInnerCosAndFlags[i];
+    }
+    UpdateConstantBuffer(context, m_lightSpotBuffer, lsb, 9, false);
+
     PBRParamsBuffer ppb;
     ppb.cameraPos = cameraPos;
     ppb.glassOpacity = glassOpacity;
+    ppb.environmentStrength = std::clamp(environmentStrength, 0.0f, 1.0f);
+    ppb.emissiveStrength = (std::max)(emissiveStrength, 0.0f);
+    ppb.padding = { 0.0f, 0.0f };
+    ppb.emissiveColor = emissiveColor;
+    ppb.padding2 = 0.0f;
     UpdateConstantBuffer(context, m_pbrParamsBuffer, ppb, 6, false);
 
     SelectedBuffer sb;
@@ -187,12 +207,14 @@ bool PBRShaderClass::Render(
     sb.padding = { 0, 0, 0 };
     UpdateConstantBuffer(context, m_selectedBuffer, sb, 3, false);
 
-    // -- Биндим шейдеры и семплер ----------------------------------------------
+    // -- пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ ----------------------------------------------
     BindShader(context);
     if (m_sampleState)
         context->PSSetSamplers(0, 1, &m_sampleState);
     if (m_directionalLightBuffer)
         context->PSSetConstantBuffers(4, 1, &m_directionalLightBuffer);
+    if (m_lightSpotBuffer)
+        context->PSSetConstantBuffers(9, 1, &m_lightSpotBuffer);
     if (m_shadowBuffer)
         context->PSSetConstantBuffers(5, 1, &m_shadowBuffer);
     if (m_shadowMapSRV)
@@ -200,35 +222,32 @@ bool PBRShaderClass::Render(
     if (m_shadowSampler)
         context->PSSetSamplers(7, 1, &m_shadowSampler);
 
-    // -- SRV слоты t0-t3 (PBR текстуры) ---------------------------------------
+    // -- SRV пїЅпїЅпїЅпїЅпїЅ t0-t3 (PBR пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ) ---------------------------------------
     ID3D11ShaderResourceView* srvs[4] = { albedo, normalMap, metalness, roughness };
     context->PSSetShaderResources(0, 4, srvs);
 
-    // -- SRV слот t6 (crack маска) — ПЕРЕД DrawIndexed -------------------------
-    // Используем внешнюю текстуру если загружена, иначе чёрный fallback (нет трещин)
+    // -- SRV пїЅпїЅпїЅпїЅ t6 (crack пїЅпїЅпїЅпїЅпїЅ) пїЅ пїЅпїЅпїЅпїЅпїЅ DrawIndexed -------------------------
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ fallback (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ)
     ID3D11ShaderResourceView* crackSRV = m_crackTextureSRV ? m_crackTextureSRV : m_defaultCrackSRV;
     context->PSSetShaderResources(6, 1, &crackSRV);
 
-    DamageBufferType emptyDamage{};
-    UpdateConstantBuffer(context, m_damageBuffer, emptyDamage, 7, false);
-
-    // -- SRV слот t8 (environment cubemap) --------------------------------------
-    // Это не полноценный IBL/prefiltered BRDF, а лёгкий skybox reflection,
-    // чтобы PBR-материалы не выглядели плоско при отсутствии HDRI.
+    // -- SRV пїЅпїЅпїЅпїЅ t8 (environment cubemap) --------------------------------------
+    // пїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ IBL/prefiltered BRDF, пїЅ пїЅпїЅпїЅпїЅпїЅ skybox reflection,
+    // пїЅпїЅпїЅпїЅпїЅ PBR-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ HDRI.
     ID3D11ShaderResourceView* environmentSRV = m_environmentMapSRV;
     context->PSSetShaderResources(8, 1, &environmentSRV);
 
     // -- Draw ------------------------------------------------------------------
     context->DrawIndexed(indexCount, 0, 0);
 
-    // -- Очистка слотов --------------------------------------------------------
+    // -- пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ --------------------------------------------------------
     ID3D11ShaderResourceView* nullSRVs[9] = {};
     context->PSSetShaderResources(0, 9, nullSRVs);
 
     if (!albedo)
     {
         OutputDebugStringA("WARNING: Albedo texture is NULL!\n");
-        // Создайте белую текстуру-заглушку
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ-пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     }
 
     return true;
@@ -299,17 +318,25 @@ bool PBRShaderClass::SetDamageDecals(
         {
             const auto& crack = damage->cracks[i];
 
-            // Локальная позиция > мировая
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ > пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             XMVECTOR worldPos = XMVector3TransformCoord(
                 XMLoadFloat3(&crack.localPosition), worldMatrix);
             XMFLOAT3 wp;
             XMStoreFloat3(&wp, worldPos);
 
+            // Use inverse-transpose so decal normals survive non-uniform scale.
+            const XMMATRIX normalMatrix = XMMatrixTranspose(XMMatrixInverse(nullptr, worldMatrix));
+            XMVECTOR worldNormal = XMVector3Normalize(XMVector3TransformNormal(
+                XMLoadFloat3(&crack.localNormal), normalMatrix));
+            XMFLOAT3 wn;
+            XMStoreFloat3(&wn, worldNormal);
+
             data.crackPositions[i] = { wp.x, wp.y, wp.z, crack.radius };
+            data.crackNormals[i] = { wn.x, wn.y, wn.z, 0.0f };
             data.crackParams[i] = { crack.intensity, crack.rotation, 0.f, 0.f };
         }
     }
-    // damage == nullptr > crackCount = 0 > шейдер пропускает цикл
+    // damage == nullptr > crackCount = 0 > пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (FAILED(context->Map(m_damageBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped)))

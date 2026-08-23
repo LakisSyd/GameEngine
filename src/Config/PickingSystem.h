@@ -37,5 +37,18 @@ private:
         const XMFLOAT3& center,
         float radius) const;
 
+    bool RayIntersectsModelBounds(
+        const CameraClass::Ray& ray,
+        const XMMATRIX& world,
+        const XMFLOAT3& localMin,
+        const XMFLOAT3& localMax,
+        float& outDistance) const;
+
+    bool RayIntersectsModelTriangles(
+        const CameraClass::Ray& ray,
+        const XMMATRIX& world,
+        const AssimpModelClass& model,
+        float& outDistance) const;
+
     float CalculateSpriteRadius(const WorldSpriteClass* sprite) const;
 };

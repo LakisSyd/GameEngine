@@ -54,7 +54,11 @@ struct PixelInputType
     float3 tangent               : TANGENT;
     float3 binormal              : BINORMAL;
     float3 worldPos              : TEXCOORD5;
-    float3 lightVec[NUM_LIGHTS]  : TEXCOORD6;
+    // Явные каналы не вызывают ошибку интерполятора D3D11 на массивах.
+    float4 lightVectorAndDistance0 : TEXCOORD6;
+    float4 lightVectorAndDistance1 : TEXCOORD7;
+    float4 lightVectorAndDistance2 : TEXCOORD8;
+    float4 lightVectorAndDistance3 : TEXCOORD9;
     float  fogFactor             : FOG;
 };
 
@@ -125,8 +129,14 @@ PixelInputType PBRVertexShader(VertexInputType input)
     output.tangent  = SafeNormalize(mul(finalTangent, worldRot), float3(1.0f, 0.0f, 0.0f));
     output.binormal = SafeNormalize(mul(finalBinormal, worldRot), SafeNormalize(cross(output.normal, output.tangent), float3(0.0f, 0.0f, 1.0f)));
 
-    for (int i = 0; i < NUM_LIGHTS; i++)
-        output.lightVec[i] = SafeNormalize(lightPosition[i].xyz - worldPos.xyz, float3(0.0f, -1.0f, 0.0f));
+    const float3 lightDelta0 = lightPosition[0].xyz - worldPos.xyz;
+    const float3 lightDelta1 = lightPosition[1].xyz - worldPos.xyz;
+    const float3 lightDelta2 = lightPosition[2].xyz - worldPos.xyz;
+    const float3 lightDelta3 = lightPosition[3].xyz - worldPos.xyz;
+    output.lightVectorAndDistance0 = float4(SafeNormalize(lightDelta0, float3(0.0f, -1.0f, 0.0f)), length(lightDelta0));
+    output.lightVectorAndDistance1 = float4(SafeNormalize(lightDelta1, float3(0.0f, -1.0f, 0.0f)), length(lightDelta1));
+    output.lightVectorAndDistance2 = float4(SafeNormalize(lightDelta2, float3(0.0f, -1.0f, 0.0f)), length(lightDelta2));
+    output.lightVectorAndDistance3 = float4(SafeNormalize(lightDelta3, float3(0.0f, -1.0f, 0.0f)), length(lightDelta3));
 
     return output;
 }

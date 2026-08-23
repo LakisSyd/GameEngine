@@ -7,16 +7,26 @@ void InputManager::Update(InputClass * input)
 {
     if (!input) return;
 
+
+    for (unsigned int key = 0; key < 256; ++key)
+    {
+        const bool isDownNow = input->IsKeyDown(key);
+
+        m_pressedKeys[key] = isDownNow && !m_previousKeys[key];
+        m_previousKeys[key] = isDownNow;
+    }
+
     // Обновляем состояние мыши из InputClass
     m_isLeftDown = input->IsLeftButtonDown();
     m_isRightDown = input->IsRightButtonDown();
+    m_leftPressed = m_isLeftDown && !m_wasLeftDown;
 
     if (!input->IsMouseCaptured()) {
         input->GetMousePosition(m_mouseX, m_mouseY);
     }
 
     // === Логика клика / начала drag ===
-    if (m_isLeftDown && !m_wasLeftDown) {
+    if (m_leftPressed) {
         m_clickStartX = m_mouseX;
         m_clickStartY = m_mouseY;
         m_potentialDrag = true;
@@ -97,15 +107,25 @@ bool InputManager::IsKeyDown(InputClass* input, unsigned int key) const
     return input ? input->IsKeyDown(key) : false;
 }
 
+bool InputManager::IsKeyPressed(InputClass* input, unsigned int key) const
+{
+    (void)input; // оставляем параметр ради текущего API
+
+    return key < 256 && m_pressedKeys[key];
+}
+
 void InputManager::Reset()
 {
     m_isLeftDown = false;
     m_isRightDown = false;
     m_wasLeftDown = false;
+    m_leftPressed = false;
     m_isDragging = false;
     m_potentialDrag = false;
     m_mouseX = 0;
     m_mouseY = 0;
     m_clickStartX = 0;
     m_clickStartY = 0;
+    m_previousKeys.fill(false);
+    m_pressedKeys.fill(false);
 }

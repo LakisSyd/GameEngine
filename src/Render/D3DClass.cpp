@@ -169,7 +169,18 @@ bool D3DClass::Initialize(
     // ⭐ СОЗДАНИЕ УСТРОЙСТВА И SWAP CHAIN (ТОЛЬКО ПОСЛЕ НАСТРОЙКИ!)
     // ========================================================================
 
+
+   
+
+
+
     UINT createDeviceFlags = 0;
+#ifdef _DEBUG
+    createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
+
+    createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
 #ifdef _DEBUG
     createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
@@ -458,6 +469,15 @@ void D3DClass::BeginScene(float red, float green, float blue, float alpha)
     m_deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
     return;
+}
+
+void D3DClass::ClearDepthBuffer()
+{
+    if (m_deviceContext && m_depthStencilView)
+    {
+        m_deviceContext->ClearDepthStencilView(
+            m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+    }
 }
 
 void D3DClass::EndScene()

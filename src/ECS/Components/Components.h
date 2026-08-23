@@ -1,4 +1,5 @@
 #pragma once
+#include <algorithm>
 #include <DirectXMath.h>
 #include "assimpmodelclass.h"
 #include "MaterialClass.h"
@@ -8,9 +9,19 @@
 #include <string>
 #include <BulletCollision/CollisionDispatch/btGhostObject.h>        // btPairCachingGhostObject
 #include <BulletDynamics/Character/btKinematicCharacterController.h> // btKinematicCharacterController
-#include "../../../WorldAreaComponent.h"
+#include "WorldAreaComponent.h"
 #include "PhysicsWorld.h"
 using namespace DirectX;
+
+
+enum class PlayerLocomotionState
+{
+    Idle,
+    Walk,
+    Run,
+    Exhausted
+};
+
 
 struct TransformComponent {
     XMFLOAT3 position = { 0,0,0 };
@@ -27,6 +38,14 @@ struct TransformComponent {
         XMMATRIX translationMatrix = XMMatrixTranslation(position.x, position.y, position.z);
         return scaleMatrix * rotationMatrix * translationMatrix;
     }
+};
+
+
+struct InteractionComponent
+{
+    bool enabled = true;
+    float maxDistance = 3.0f;
+    std::string prompt = "Interact";
 };
 
 
@@ -49,13 +68,40 @@ struct LightComponent
 
 struct MeshRendererComponent {
     AssimpModelClass* model = nullptr;
-	AssimpModelClass* lowerLodModel = nullptr; // Новый указатель на модель с низким уровнем детализации
+	AssimpModelClass* lowerLodModel = nullptr; // РќРѕРІС‹Р№ СѓРєР°Р·Р°С‚РµР»СЊ РЅР° РјРѕРґРµР»СЊ СЃ РЅРёР·РєРёРј СѓСЂРѕРІРЅРµРј РґРµС‚Р°Р»РёР·Р°С†РёРё
     MaterialClass* material = nullptr;
     std::string asyncModelPath;
     bool useAsyncMesh = false;
+    bool castsShadow = true;
 };
 
+
+
+
 struct ActiveComponent {};
+
+// РљРѕСЂРЅРµРІР°СЏ СЃСѓС‰РЅРѕСЃС‚СЊ РёРјРїРѕСЂС‚РёСЂРѕРІР°РЅРЅРѕРіРѕ РєРѕСЂР°Р±Р»СЏ.
+// Р’С‹РґРµР»СЏРµРј Рё РґРІРёРіР°РµРј РёРјРµРЅРЅРѕ РµРµ, Р° РЅРµ РѕС‚РґРµР»СЊРЅС‹Рµ СЃС‚РµРЅС‹/РєРѕРјРЅР°С‚С‹.
+struct ShipRootComponent
+{
+    XMFLOAT3 lastSyncedPosition = { 0, 0, 0 };
+    std::string sourcePath;
+};
+
+// РњРµС‚РєР° РґРµС‚Р°Р»Рё РєРѕСЂР°Р±Р»СЏ: РєРѕРјРЅР°С‚Р°, РєРѕСЂРёРґРѕСЂ, РґРІРµСЂСЊ, РєРѕР»Р»РёР·РёСЏ Рё С‚.Рї.
+// root РЅСѓР¶РµРЅ, С‡С‚РѕР±С‹ СЂРµРґР°РєС‚РѕСЂ РјРѕРі РїРѕ РєР»РёРєСѓ РЅР° РґРµС‚Р°Р»СЊ РІС‹Р±СЂР°С‚СЊ РІРµСЃСЊ РєРѕСЂР°Р±Р»СЊ.
+struct ShipPartComponent
+{
+    Entity root = INVALID_ENTITY;
+};
+
+// РџСЂР°РІРёР»Р° РІС‹Р±РѕСЂР° РІ СЂРµРґР°РєС‚РѕСЂРµ. Р”РµС‚Р°Р»Рё РєРѕСЂР°Р±Р»СЏ Р±СѓРґСѓС‚ РїРµСЂРµРЅР°РїСЂР°РІР»СЏС‚СЊ РІС‹Р±РѕСЂ РЅР° root,
+// С‡С‚РѕР±С‹ СЃР»СѓС‡Р°Р№РЅРѕ РЅРµ СЃРґРІРёРЅСѓС‚СЊ РѕРґРЅСѓ РєРѕРјРЅР°С‚Сѓ РѕС‚РґРµР»СЊРЅРѕ РѕС‚ РІСЃРµРіРѕ РєРѕСЂР°Р±Р»СЏ.
+struct EditorSelectionComponent
+{
+    bool selectable = true;
+    Entity redirectTo = INVALID_ENTITY;
+};
 
 struct RigidBodyComponent
 {
@@ -75,9 +121,9 @@ struct RigidBodyComponent
     XMFLOAT3 lastSyncedRotation = { 0, 0, 0 };
     XMFLOAT3 lastSyncedScale = { 1, 1, 1 };
 
-	AssimpModelClass* collisionModel = nullptr; // Исходная модель для коллизии (для динамических мешей)
+	AssimpModelClass* collisionModel = nullptr; // РСЃС…РѕРґРЅР°СЏ РјРѕРґРµР»СЊ РґР»СЏ РєРѕР»Р»РёР·РёРё (РґР»СЏ РґРёРЅР°РјРёС‡РµСЃРєРёС… РјРµС€РµР№)
     std::string collisionModelPath;
-	bool useSeparateCollisionMesh = false; // Использовать ли отдельную модель для коллизии (для динамических мешей)
+	bool useSeparateCollisionMesh = false; // РСЃРїРѕР»СЊР·РѕРІР°С‚СЊ Р»Рё РѕС‚РґРµР»СЊРЅСѓСЋ РјРѕРґРµР»СЊ РґР»СЏ РєРѕР»Р»РёР·РёРё (РґР»СЏ РґРёРЅР°РјРёС‡РµСЃРєРёС… РјРµС€РµР№)
 
     enum ShapeType {
         Box,
@@ -88,7 +134,7 @@ struct RigidBodyComponent
         ConvexHull,
         TriangleMesh,
         GImpactMesh,
-        VHACD, // Dynamic concave mesh — allows objects inside (container collision)
+        VHACD, // Dynamic concave mesh вЂ” allows objects inside (container collision)
         StairRamp
     };
 
@@ -115,58 +161,58 @@ struct RigidBodyComponent
 
         ShapeType type = Box;
 
-        // Размеры
-        float size = 1.0f;   // Для Box (полная длина стороны)
+        // Р Р°Р·РјРµСЂС‹
+        float size = 1.0f;   // Р”Р»СЏ Box (РїРѕР»РЅР°СЏ РґР»РёРЅР° СЃС‚РѕСЂРѕРЅС‹)
         float radius = 0.5f;
         float height = 1.0f;
         XMFLOAT3 rampSize = { 2.0f, 1.0f, 3.0f };
-        // Для Box: сдвигают границы AABB относительно центра
+        // Р”Р»СЏ Box: СЃРґРІРёРіР°СЋС‚ РіСЂР°РЅРёС†С‹ AABB РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ С†РµРЅС‚СЂР°
         XMFLOAT3 boxOffsetMin = { 0,0,0 };
         XMFLOAT3 boxOffsetMax = { 0,0,0 };
-        // Трансформация ОТНОСИТЕЛЬНО центра подлодки
+        // РўСЂР°РЅСЃС„РѕСЂРјР°С†РёСЏ РћРўРќРћРЎРРўР•Р›Р¬РќРћ С†РµРЅС‚СЂР° РїРѕРґР»РѕРґРєРё
         XMFLOAT3 localPosition = { 0,0,0 };
-        XMFLOAT4 localRotation = { 0,0,0,1 }; // Кватернион (x,y,z,w)
+        XMFLOAT4 localRotation = { 0,0,0,1 }; // РљРІР°С‚РµСЂРЅРёРѕРЅ (x,y,z,w)
 
         float radiusOffset = 0.0f;
         float heightOffsetTop = 0.0f;
         float heightOffsetBottom = 0.0f;
 
         XMFLOAT3 editorEulerDegrees = { 0.0f, 0.0f, 0.0f };
-        bool editorEulerDirty = true; // true = нужно пересчитать из localRo
+        bool editorEulerDirty = true; // true = РЅСѓР¶РЅРѕ РїРµСЂРµСЃС‡РёС‚Р°С‚СЊ РёР· localRo
 
-        // Для отладки/веса (физический вес считает сам Bullet через инерцию, 
-        // но это поле может пригодиться для логики игры)
+        // Р”Р»СЏ РѕС‚Р»Р°РґРєРё/РІРµСЃР° (С„РёР·РёС‡РµСЃРєРёР№ РІРµСЃ СЃС‡РёС‚Р°РµС‚ СЃР°Рј Bullet С‡РµСЂРµР· РёРЅРµСЂС†РёСЋ, 
+        // РЅРѕ СЌС‚Рѕ РїРѕР»Рµ РјРѕР¶РµС‚ РїСЂРёРіРѕРґРёС‚СЊСЃСЏ РґР»СЏ Р»РѕРіРёРєРё РёРіСЂС‹)
         float debugWeight = 1.0f;
 
-        // ?? Для VHACD-элементов: ссылка на модель для декомпозиции
+        // ?? Р”Р»СЏ VHACD-СЌР»РµРјРµРЅС‚РѕРІ: СЃСЃС‹Р»РєР° РЅР° РјРѕРґРµР»СЊ РґР»СЏ РґРµРєРѕРјРїРѕР·РёС†РёРё
         AssimpModelClass* vhacdModel = nullptr;
-        // ?? Для VHACD-элементов: масштаб для коллизии
+        // ?? Р”Р»СЏ VHACD-СЌР»РµРјРµРЅС‚РѕРІ: РјР°СЃС€С‚Р°Р± РґР»СЏ РєРѕР»Р»РёР·РёРё
         XMFLOAT3 vhacdScale = { 1.0f, 1.0f, 1.0f };
 
 
 
-        // Параметры качества (можно вынести в отдельную структуру, если много)
-        uint32_t vhacdResolution = 800;          // детализация вокселей
-        uint32_t vhacdMaxHulls = 6;               // макс. количество выпуклых частей
-        uint32_t vhacdMaxVertsPerHull = 32;        // вершин на часть
-        float vhacdVolumeError = 0.05f;              // допустимая погрешность в %
+        // РџР°СЂР°РјРµС‚СЂС‹ РєР°С‡РµСЃС‚РІР° (РјРѕР¶РЅРѕ РІС‹РЅРµСЃС‚Рё РІ РѕС‚РґРµР»СЊРЅСѓСЋ СЃС‚СЂСѓРєС‚СѓСЂСѓ, РµСЃР»Рё РјРЅРѕРіРѕ)
+        uint32_t vhacdResolution = 800;          // РґРµС‚Р°Р»РёР·Р°С†РёСЏ РІРѕРєСЃРµР»РµР№
+        uint32_t vhacdMaxHulls = 6;               // РјР°РєСЃ. РєРѕР»РёС‡РµСЃС‚РІРѕ РІС‹РїСѓРєР»С‹С… С‡Р°СЃС‚РµР№
+        uint32_t vhacdMaxVertsPerHull = 32;        // РІРµСЂС€РёРЅ РЅР° С‡Р°СЃС‚СЊ
+        float vhacdVolumeError = 0.05f;              // РґРѕРїСѓСЃС‚РёРјР°СЏ РїРѕРіСЂРµС€РЅРѕСЃС‚СЊ РІ %
 
-        // Статус (для отображения в редакторе)
-        int vhacdLastHullCount = 0;                 // сколько халлов сгенерировано в последний раз
+        // РЎС‚Р°С‚СѓСЃ (РґР»СЏ РѕС‚РѕР±СЂР°Р¶РµРЅРёСЏ РІ СЂРµРґР°РєС‚РѕСЂРµ)
+        int vhacdLastHullCount = 0;                 // СЃРєРѕР»СЊРєРѕ С…Р°Р»Р»РѕРІ СЃРіРµРЅРµСЂРёСЂРѕРІР°РЅРѕ РІ РїРѕСЃР»РµРґРЅРёР№ СЂР°Р·
         bool vhacdGenerationPending = false;
 
     };
 
     std::vector<CompoundElement> compoundElements;
 
-    // -- Запрет копирования ----------------------------------------------------
+    // -- Р—Р°РїСЂРµС‚ РєРѕРїРёСЂРѕРІР°РЅРёСЏ ----------------------------------------------------
     RigidBodyComponent() = default;
     RigidBodyComponent(const RigidBodyComponent&) = delete;
     RigidBodyComponent& operator=(const RigidBodyComponent&) = delete;
     btRigidBody* interiorBody = nullptr;
     btCollisionShape* interiorShape = nullptr;
 
-    // -- Move-семантика --------------------------------------------------------
+    // -- Move-СЃРµРјР°РЅС‚РёРєР° --------------------------------------------------------
     RigidBodyComponent(RigidBodyComponent&& other) noexcept
         : body(other.body)
         , mass(other.mass)
@@ -195,7 +241,7 @@ struct RigidBodyComponent
         , interiorBody(other.interiorBody)
         , interiorShape(other.interiorShape)
     {
-        // Обнуляем указатели у источника — деструктор источника НЕ удалит ресурсы
+        // РћР±РЅСѓР»СЏРµРј СѓРєР°Р·Р°С‚РµР»Рё Сѓ РёСЃС‚РѕС‡РЅРёРєР° вЂ” РґРµСЃС‚СЂСѓРєС‚РѕСЂ РёСЃС‚РѕС‡РЅРёРєР° РќР• СѓРґР°Р»РёС‚ СЂРµСЃСѓСЂСЃС‹
         other.body = nullptr;
         other.triangleMesh = nullptr;
         other.interiorBody = nullptr;
@@ -206,7 +252,7 @@ struct RigidBodyComponent
     {
         if (this == &other) return *this;
 
-        // Сначала освобождаем текущие ресурсы
+        // РЎРЅР°С‡Р°Р»Р° РѕСЃРІРѕР±РѕР¶РґР°РµРј С‚РµРєСѓС‰РёРµ СЂРµСЃСѓСЂСЃС‹
         DestroyResources();
 
         body = other.body;
@@ -266,7 +312,7 @@ private:
             delete body;
             body = nullptr;
 
-            // Удаляем связанную форму, если это compound (оригинальная логика)
+            // РЈРґР°Р»СЏРµРј СЃРІСЏР·Р°РЅРЅСѓСЋ С„РѕСЂРјСѓ, РµСЃР»Рё СЌС‚Рѕ compound (РѕСЂРёРіРёРЅР°Р»СЊРЅР°СЏ Р»РѕРіРёРєР°)
             if (shapeLocal && shapeLocal->getShapeType() == COMPOUND_SHAPE_PROXYTYPE)
             {
                 auto* compound = static_cast<btCompoundShape*>(shapeLocal);
@@ -289,10 +335,10 @@ private:
                 convexHulls.clear();
             }
 
-            // Если есть interiorBody, удаляем его тоже
+            // Р•СЃР»Рё РµСЃС‚СЊ interiorBody, СѓРґР°Р»СЏРµРј РµРіРѕ С‚РѕР¶Рµ
             if (interiorBody)
             {
-                // interiorBody может иметь свою motionState
+                // interiorBody РјРѕР¶РµС‚ РёРјРµС‚СЊ СЃРІРѕСЋ motionState
                 delete interiorBody->getMotionState();
                 delete interiorBody;
                 interiorBody = nullptr;
@@ -335,23 +381,23 @@ struct CharacterController
     float capsuleRadius = 0.4f;
     float capsuleHeight = 1.4f;
     float capsuleCenterOffsetY = 1.1f;
-    float stepHeight = 0.22f;
+    float stepHeight = 1.f;
     float jumpSpeed = 6.0f;
     float gravity = 15.0f;
     float maxSlope = 45.0f;
 
     bool isGrounded = false;
 
-    // Последняя синхронизированная позиция/ротация — для детекции изменений из редактора
+    // РџРѕСЃР»РµРґРЅСЏСЏ СЃРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅРЅР°СЏ РїРѕР·РёС†РёСЏ/СЂРѕС‚Р°С†РёСЏ вЂ” РґР»СЏ РґРµС‚РµРєС†РёРё РёР·РјРµРЅРµРЅРёР№ РёР· СЂРµРґР°РєС‚РѕСЂР°
     XMFLOAT3 lastSyncedPosition = { 0.0f, 0.0f, 0.0f };
     XMFLOAT3 lastSyncedRotation = { 0.0f, 0.0f, 0.0f };
 
-    // Запрет копирования
+    // Р—Р°РїСЂРµС‚ РєРѕРїРёСЂРѕРІР°РЅРёСЏ
     CharacterController() = default;
     CharacterController(const CharacterController&) = delete;
     CharacterController& operator=(const CharacterController&) = delete;
 
-    // Move-семантика (только перенос указателей)
+    // Move-СЃРµРјР°РЅС‚РёРєР° (С‚РѕР»СЊРєРѕ РїРµСЂРµРЅРѕСЃ СѓРєР°Р·Р°С‚РµР»РµР№)
     CharacterController(CharacterController&& other) noexcept
         : ghostObj(other.ghostObj)
         , controller(other.controller)
@@ -422,25 +468,28 @@ struct CharacterController
 };
 struct CharacterMovement
 {
-    XMFLOAT3 walkDirection = { 0, 0, 0 };  // ? Явная инициализация
-    bool wantJump = false;                // ? По умолчанию — не прыгать
+    XMFLOAT3 walkDirection = { 0, 0, 0 };  // ? РЇРІРЅР°СЏ РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ
+    bool wantJump = false;                // ? РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ вЂ” РЅРµ РїСЂС‹РіР°С‚СЊ
 
     float moveSpeed = 3.5f;
     float runSpeed = 6.0f;
     float rotationSpeed = 5.0f;
-
-    bool isMoving = false;                // ? По умолчанию — стоит
-    bool isGrounded = false;              // ? По умолчанию — в воздухе (безопаснее) 
+    bool wantsRun = false;
+	bool isRunning = false;                 // ? РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ вЂ” РЅРµ Р±РµР¶РёС‚
+    bool isMoving = false;                // ? РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ вЂ” СЃС‚РѕРёС‚
+    bool isGrounded = false;              // ? РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ вЂ” РІ РІРѕР·РґСѓС…Рµ (Р±РµР·РѕРїР°СЃРЅРµРµ) 
     float currentSpeed = 0.0f;
 
-    // Конструктор можно убрать — инициализация выше уже работает
-    // Но если хочешь оставить — ок:
+    PlayerLocomotionState locomotionState = PlayerLocomotionState::Idle;
+
+    // РљРѕРЅСЃС‚СЂСѓРєС‚РѕСЂ РјРѕР¶РЅРѕ СѓР±СЂР°С‚СЊ вЂ” РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РІС‹С€Рµ СѓР¶Рµ СЂР°Р±РѕС‚Р°РµС‚
+    // РќРѕ РµСЃР»Рё С…РѕС‡РµС€СЊ РѕСЃС‚Р°РІРёС‚СЊ вЂ” РѕРє:
     CharacterMovement() = default;
 };;
 
 struct PlayerGameTag
 {
-    // Пустой компонент — служит только для идентификации игрока
+    // РџСѓСЃС‚РѕР№ РєРѕРјРїРѕРЅРµРЅС‚ вЂ” СЃР»СѓР¶РёС‚ С‚РѕР»СЊРєРѕ РґР»СЏ РёРґРµРЅС‚РёС„РёРєР°С†РёРё РёРіСЂРѕРєР°
 };
 
 struct StaticColliderComponent
@@ -451,62 +500,94 @@ struct StaticColliderComponent
 
 struct BuoyancyComponent
 {
-    float fluidDensity = 1025.0f;  // Морская вода
+    float fluidDensity = 1025.0f;  // РњРѕСЂСЃРєР°СЏ РІРѕРґР°
     float volume = 10.0f;
     float height = 5.0f;
     float buoyancyMultiplier = 1.0f;
     float smoothedSubmersion = 0.0f;
 
-    // ?? НОВОЕ: Отслеживание изменений для пересчета физики
-    float lastCalculatedVolume = -1.0f;  // -1 = не инициализировано
+    // ?? РќРћР’РћР•: РћС‚СЃР»РµР¶РёРІР°РЅРёРµ РёР·РјРµРЅРµРЅРёР№ РґР»СЏ РїРµСЂРµСЃС‡РµС‚Р° С„РёР·РёРєРё
+    float lastCalculatedVolume = -1.0f;  // -1 = РЅРµ РёРЅРёС†РёР°Р»РёР·РёСЂРѕРІР°РЅРѕ
 };
 
 
+enum class DoorAnimationMode
+{
+    Vertical = 0,
+    Sliding = 1
+};
+
 struct DoorComponent
 {
-    // Отсеки по обе стороны двери
+    // РћС‚СЃРµРєРё РїРѕ РѕР±Рµ СЃС‚РѕСЂРѕРЅС‹ РґРІРµСЂРё
     Entity compartmentA = INVALID_ENTITY;
     Entity compartmentB = INVALID_ENTITY;
 
-    // Состояние двери
-    bool isOpen = false; // открыта ли дверь
-    bool isBroken = false; // сломана — заблокирована в открытом положении
+    // Rooms on both sides of the door for atmosphere simulation
+    Entity roomA = INVALID_ENTITY;
+    Entity roomB = INVALID_ENTITY;
 
-    // Скорость потока воды через открытую дверь (м?/с)
-    // Чем больше — тем быстрее выравнивается уровень между отсеками
+    // РЎРѕСЃС‚РѕСЏРЅРёРµ РґРІРµСЂРё
+    bool isOpen = false; // РѕС‚РєСЂС‹С‚Р° Р»Рё РґРІРµСЂСЊ
+    bool isBroken = false; // СЃР»РѕРјР°РЅР° вЂ” Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅР° РІ РѕС‚РєСЂС‹С‚РѕРј РїРѕР»РѕР¶РµРЅРёРё
+
+    // РЎРєРѕСЂРѕСЃС‚СЊ РїРѕС‚РѕРєР° РІРѕРґС‹ С‡РµСЂРµР· РѕС‚РєСЂС‹С‚СѓСЋ РґРІРµСЂСЊ (Рј?/СЃ)
+    // Р§РµРј Р±РѕР»СЊС€Рµ вЂ” С‚РµРј Р±С‹СЃС‚СЂРµРµ РІС‹СЂР°РІРЅРёРІР°РµС‚СЃСЏ СѓСЂРѕРІРµРЅСЊ РјРµР¶РґСѓ РѕС‚СЃРµРєР°РјРё
     float flowRate = 1.0f;
 
-    // Требуется ли питание для открытия/закрытия (электрические затворы)
+    // РўСЂРµР±СѓРµС‚СЃСЏ Р»Рё РїРёС‚Р°РЅРёРµ РґР»СЏ РѕС‚РєСЂС‹С‚РёСЏ/Р·Р°РєСЂС‹С‚РёСЏ (СЌР»РµРєС‚СЂРёС‡РµСЃРєРёРµ Р·Р°С‚РІРѕСЂС‹)
     bool requiresPower = false;
 
-    // Анимационный прогресс открытия [0.0 = закрыта, 1.0 = полностью открыта]
-    // FloodingSystem использует его как множитель flowRate
+    // РђРЅРёРјР°С†РёРѕРЅРЅС‹Р№ РїСЂРѕРіСЂРµСЃСЃ РѕС‚РєСЂС‹С‚РёСЏ [0.0 = Р·Р°РєСЂС‹С‚Р°, 1.0 = РїРѕР»РЅРѕСЃС‚СЊСЋ РѕС‚РєСЂС‹С‚Р°]
+    // FloodingSystem РёСЃРїРѕР»СЊР·СѓРµС‚ РµРіРѕ РєР°Рє РјРЅРѕР¶РёС‚РµР»СЊ flowRate
     float openProgress = 0.0f;
 
-    // Скорость анимации открытия/закрытия (единиц в секунду)
+    // РЎРєРѕСЂРѕСЃС‚СЊ Р°РЅРёРјР°С†РёРё РѕС‚РєСЂС‹С‚РёСЏ/Р·Р°РєСЂС‹С‚РёСЏ (РµРґРёРЅРёС† РІ СЃРµРєСѓРЅРґСѓ)
     float openSpeed = 2.0f;
 
-    // -- Вспомогательные методы ------------------------------------------------
+    // Old rotation data is kept for compatibility with saved scenes.
+    float openAngle = 90.0f;
+    XMFLOAT3 closedRotation = { 0.0f, 0.0f, 0.0f };
+    bool rotationInitialized = false;
 
-    // Открыть дверь (с учётом питания и поломки)
+    // Vertical sliding animation. DoorSystem captures the closed position
+    // on the first update and raises the door along world Y while opening.
+    DoorAnimationMode animationMode = DoorAnimationMode::Vertical;
+    float openHeight = 2.0f;
+    XMFLOAT3 closedPosition = { 0.0f, 0.0f, 0.0f };
+    bool positionInitialized = false;
+
+    // Optional two-leaf sci-fi sliding door. If these are valid, DoorSystem
+    // moves the leaves apart and leaves the frame/root entity in place.
+    Entity leftLeaf = INVALID_ENTITY;
+    Entity rightLeaf = INVALID_ENTITY;
+    XMFLOAT3 leftClosedPosition = { 0.0f, 0.0f, 0.0f };
+    XMFLOAT3 rightClosedPosition = { 0.0f, 0.0f, 0.0f };
+    bool leafPositionsInitialized = false;
+    XMFLOAT3 slideAxis = { 1.0f, 0.0f, 0.0f };
+    float slideDistance = 1.75f;
+
+    // -- Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ РјРµС‚РѕРґС‹ ------------------------------------------------
+
+    // РћС‚РєСЂС‹С‚СЊ РґРІРµСЂСЊ (СЃ СѓС‡С‘С‚РѕРј РїРёС‚Р°РЅРёСЏ Рё РїРѕР»РѕРјРєРё)
     bool TryOpen(bool hasPower)
     {
-        if (isBroken) return true; // сломана — уже открыта
+        if (isBroken) return true; // СЃР»РѕРјР°РЅР° вЂ” СѓР¶Рµ РѕС‚РєСЂС‹С‚Р°
         if (requiresPower && !hasPower) return false;
         isOpen = true;
         return true;
     }
 
-    // Закрыть дверь
+    // Р—Р°РєСЂС‹С‚СЊ РґРІРµСЂСЊ
     bool TryClose(bool hasPower)
     {
-        if (isBroken) return false; // сломана — не закрыть
+        if (isBroken) return false; // СЃР»РѕРјР°РЅР° вЂ” РЅРµ Р·Р°РєСЂС‹С‚СЊ
         if (requiresPower && !hasPower) return false;
         isOpen = false;
         return true;
     }
 
-    // Текущий множитель потока с учётом анимации
+    // РўРµРєСѓС‰РёР№ РјРЅРѕР¶РёС‚РµР»СЊ РїРѕС‚РѕРєР° СЃ СѓС‡С‘С‚РѕРј Р°РЅРёРјР°С†РёРё
     float GetEffectiveFlowRate() const
     {
         if (isBroken || isOpen)
@@ -515,6 +596,57 @@ struct DoorComponent
     }
 };
 
+
+struct HullPanelComponent
+{
+    std::string panelName = "Panel";
+    std::string roomName = "";
+    Entity room = INVALID_ENTITY;
+
+    float maxHealth = 100.0f;
+    float health = 100.0f;
+    float accumulatedDamage = 0.0f;
+
+    // Incoming hull damage is divided by this value. Tougher alloys can raise
+    // resistance without requiring weapon-specific checks in DamageSystem.
+    float armorResistance = 5.0f;
+
+    int breachCount = 0;
+    int maxBreaches = 3;
+
+    bool isExternal = true;
+    bool isDestroyed = false;
+    bool collisionDisabledWhenDestroyed = true;
+
+    bool CanCreateBreach() const
+    {
+        return breachCount < maxBreaches;
+    }
+
+    float CalculateHullDamage(float incomingDamage) const
+    {
+        return incomingDamage / (std::max)(armorResistance, 0.01f);
+    }
+
+    float Health01() const
+    {
+        return maxHealth > 0.0f ? health / maxHealth : 0.0f;
+    }
+};
+
+struct HullBreachComponent
+{
+    Entity panel = INVALID_ENTITY;
+    Entity room = INVALID_ENTITY;
+
+    XMFLOAT3 localPosition = { 0.0f, 0.0f, 0.0f };
+    XMFLOAT3 localNormal = { 0.0f, 1.0f, 0.0f };
+    XMFLOAT3 worldPosition = { 0.0f, 0.0f, 0.0f };
+
+    float radius = 0.25f;
+    float leakRate = 0.15f;
+    bool sealed = false;
+};
 struct BreachData
 {
     XMFLOAT3 localPosition = { 0, 0, 0 };
@@ -541,7 +673,7 @@ struct CompartmentComponent
     float pumpRate = 0.1f;
     float damageVisual = 0.0f;
 
-    // ?? НОВОЕ: Кэш для отслеживания изменений
+    // ?? РќРћР’РћР•: РљСЌС€ РґР»СЏ РѕС‚СЃР»РµР¶РёРІР°РЅРёСЏ РёР·РјРµРЅРµРЅРёР№
     XMFLOAT3 lastCachedMin = { -1, -1, -1 };
     XMFLOAT3 lastCachedMax = { 1, 1, 1 };
     float lastCachedVolume = -1.0f;
@@ -554,7 +686,7 @@ struct CompartmentComponent
         volume = dx * dy * dz;
     }
 
-    // ?? НОВОЕ: Проверка, изменились ли размеры
+    // ?? РќРћР’РћР•: РџСЂРѕРІРµСЂРєР°, РёР·РјРµРЅРёР»РёСЃСЊ Р»Рё СЂР°Р·РјРµСЂС‹
     bool HasSizeChanged() const
     {
         return lastCachedMin.x != localMin.x || lastCachedMin.y != localMin.y ||
@@ -587,21 +719,21 @@ struct CompartmentComponent
     }
 };
 // ==============================================================================
-// Конфигурация физического корпуса подлодки (толстые стены через btCompoundShape)
-// Настраивается через редактор. Применяется в FinalizeSubmarinePhysics.
+// РљРѕРЅС„РёРіСѓСЂР°С†РёСЏ С„РёР·РёС‡РµСЃРєРѕРіРѕ РєРѕСЂРїСѓСЃР° РїРѕРґР»РѕРґРєРё (С‚РѕР»СЃС‚С‹Рµ СЃС‚РµРЅС‹ С‡РµСЂРµР· btCompoundShape)
+// РќР°СЃС‚СЂР°РёРІР°РµС‚СЃСЏ С‡РµСЂРµР· СЂРµРґР°РєС‚РѕСЂ. РџСЂРёРјРµРЅСЏРµС‚СЃСЏ РІ FinalizeSubmarinePhysics.
 // ==============================================================================
 struct SubmarineHullConfig
 {
-    // Полный внешний размер корпуса (X=ширина, Y=высота, Z=длина)
+    // РџРѕР»РЅС‹Р№ РІРЅРµС€РЅРёР№ СЂР°Р·РјРµСЂ РєРѕСЂРїСѓСЃР° (X=С€РёСЂРёРЅР°, Y=РІС‹СЃРѕС‚Р°, Z=РґР»РёРЅР°)
     XMFLOAT3 hullExtents = { 3.0f, 2.5f, 10.0f };
 
-    // Толщина стен (мин. 0.5м для предотвращения туннелирования)
+    // РўРѕР»С‰РёРЅР° СЃС‚РµРЅ (РјРёРЅ. 0.5Рј РґР»СЏ РїСЂРµРґРѕС‚РІСЂР°С‰РµРЅРёСЏ С‚СѓРЅРЅРµР»РёСЂРѕРІР°РЅРёСЏ)
     float wallThickness = 0.5f;
 
-    // Подлодка кинематическая (true) или динамическая (false)
+    // РџРѕРґР»РѕРґРєР° РєРёРЅРµРјР°С‚РёС‡РµСЃРєР°СЏ (true) РёР»Рё РґРёРЅР°РјРёС‡РµСЃРєР°СЏ (false)
     bool isKinematic = false;
 
-    // Визуализировать физический корпус в редакторе
+    // Р’РёР·СѓР°Р»РёР·РёСЂРѕРІР°С‚СЊ С„РёР·РёС‡РµСЃРєРёР№ РєРѕСЂРїСѓСЃ РІ СЂРµРґР°РєС‚РѕСЂРµ
     bool showDebugHull = true;
 };
 
@@ -613,11 +745,11 @@ struct SubmarineComponent
     bool isDetached = false;
     std::vector<Entity> allCompartments;
 
-    // ?? НОВОЕ: Кэш полной массы и объема
+    // ?? РќРћР’РћР•: РљСЌС€ РїРѕР»РЅРѕР№ РјР°СЃСЃС‹ Рё РѕР±СЉРµРјР°
     float cachedTotalMass = 0.0f;
     float cachedTotalVolume = 0.0f;
 
-    // ?? НОВОЕ: Флаги для отслеживания изменений
+    // ?? РќРћР’РћР•: Р¤Р»Р°РіРё РґР»СЏ РѕС‚СЃР»РµР¶РёРІР°РЅРёСЏ РёР·РјРµРЅРµРЅРёР№
     bool needsPhysicsUpdate = false;
     int compartmentCountLastFrame = -1;
     Entity proxyEntity = INVALID_ENTITY;
@@ -638,6 +770,10 @@ struct SubmarineJointComponent
 {
     Entity compartmentA = INVALID_ENTITY;
     Entity compartmentB = INVALID_ENTITY;
+
+    // Rooms on both sides of the door for atmosphere simulation
+    Entity roomA = INVALID_ENTITY;
+    Entity roomB = INVALID_ENTITY;
     btTypedConstraint* joint = nullptr;
 
     float breakForce = 50000.0f;
@@ -672,25 +808,26 @@ struct JointConnectionComponent
 };
 
 // ==============================================================================
-// Повреждения меша — трещины рисуются прямо в PBR шейдере как decal.
-// Каждая запись = одна трещина в ЛОКАЛЬНЫХ координатах отсека.
+// РџРѕРІСЂРµР¶РґРµРЅРёСЏ РјРµС€Р° вЂ” С‚СЂРµС‰РёРЅС‹ СЂРёСЃСѓСЋС‚СЃСЏ РїСЂСЏРјРѕ РІ PBR С€РµР№РґРµСЂРµ РєР°Рє decal.
+// РљР°Р¶РґР°СЏ Р·Р°РїРёСЃСЊ = РѕРґРЅР° С‚СЂРµС‰РёРЅР° РІ Р›РћРљРђР›Р¬РќР«РҐ РєРѕРѕСЂРґРёРЅР°С‚Р°С… РѕС‚СЃРµРєР°.
 // ==============================================================================
 struct DamageDecalComponent
 {
-    static constexpr int MAX_CRACKS = 8; // максимум совпадает с cbuffer в шейдере
+    static constexpr int MAX_CRACKS = 8; // РјР°РєСЃРёРјСѓРј СЃРѕРІРїР°РґР°РµС‚ СЃ cbuffer РІ С€РµР№РґРµСЂРµ
 
     struct CrackEntry
     {
-        XMFLOAT3 localPosition = { 0,0,0 }; // позиция в пространстве меша
-        float    radius = 0.5f;       // радиус трещины (м)
-        float    intensity = 0.0f;       // 0=нет, 1=максимум (зависит от flowRate)
-        float    rotation = 0.0f;       // угол поворота текстуры трещины (рандом)
-        float    _pad[2] = {};         // выравнивание до 32 байт для cbuffer
+        XMFLOAT3 localPosition = { 0,0,0 };
+        XMFLOAT3 localNormal = { 0,0,1 }; // РЅРѕСЂРјР°Р»СЊ РїРѕРІРµСЂС…РЅРѕСЃС‚Рё РІ РїСЂРѕСЃС‚СЂР°РЅСЃС‚РІРµ РјРµС€Р°
+        float    radius = 0.5f;       // СЂР°РґРёСѓСЃ С‚СЂРµС‰РёРЅС‹ (Рј)
+        float    intensity = 0.0f;       // 0=РЅРµС‚, 1=РјР°РєСЃРёРјСѓРј (Р·Р°РІРёСЃРёС‚ РѕС‚ flowRate)
+        float    rotation = 0.0f;       // СѓРіРѕР» РїРѕРІРѕСЂРѕС‚Р° С‚РµРєСЃС‚СѓСЂС‹ С‚СЂРµС‰РёРЅС‹ (СЂР°РЅРґРѕРј)
+        float    _pad[2] = {};         // РІС‹СЂР°РІРЅРёРІР°РЅРёРµ РґРѕ 32 Р±Р°Р№С‚ РґР»СЏ cbuffer
     };
 
     std::vector<CrackEntry> cracks;
 
-    // Синхронизировать с BreachData отсека
+    // РЎРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°С‚СЊ СЃ BreachData РѕС‚СЃРµРєР°
     void SyncFromBreaches(const CompartmentComponent& comp)
     {
         cracks.resize(comp.breaches.size());
@@ -705,19 +842,123 @@ struct DamageDecalComponent
     }
 };
 
-// Добавить новый простой компонент для настройки "интерьера" подлодки
+// Marks the single visual mesh that contains all hull panels of one ship.
+// Damage decals are collected from the individual panels and rendered on it.
+struct ShipPanelVisualBatchComponent
+{
+    Entity shipRoot = INVALID_ENTITY;
+    Entity room = INVALID_ENTITY;
+};
+// Р”РѕР±Р°РІРёС‚СЊ РЅРѕРІС‹Р№ РїСЂРѕСЃС‚РѕР№ РєРѕРјРїРѕРЅРµРЅС‚ РґР»СЏ РЅР°СЃС‚СЂРѕР№РєРё "РёРЅС‚РµСЂСЊРµСЂР°" РїРѕРґР»РѕРґРєРё
 struct SubmarineCollisionSetup
 {
-    // Внешний размер внутренней коробки (м). Рекомендуется чуть меньше визуального корпуса.
+    // Р’РЅРµС€РЅРёР№ СЂР°Р·РјРµСЂ РІРЅСѓС‚СЂРµРЅРЅРµР№ РєРѕСЂРѕР±РєРё (Рј). Р РµРєРѕРјРµРЅРґСѓРµС‚СЃСЏ С‡СѓС‚СЊ РјРµРЅСЊС€Рµ РІРёР·СѓР°Р»СЊРЅРѕРіРѕ РєРѕСЂРїСѓСЃР°.
     XMFLOAT3 interiorSize = { 2.8f, 2.3f, 9.5f };
 
-    // Локальный оффсет внутр. бокса относительно корневой трансформации подлодки
+    // Р›РѕРєР°Р»СЊРЅС‹Р№ РѕС„С„СЃРµС‚ РІРЅСѓС‚СЂ. Р±РѕРєСЃР° РѕС‚РЅРѕСЃРёС‚РµР»СЊРЅРѕ РєРѕСЂРЅРµРІРѕР№ С‚СЂР°РЅСЃС„РѕСЂРјР°С†РёРё РїРѕРґР»РѕРґРєРё
     XMFLOAT3 interiorOffset = { 0.0f, 0.0f, 0.0f };
 
-    // Использовать ли этот внутренний коллайдер
+    // РСЃРїРѕР»СЊР·РѕРІР°С‚СЊ Р»Рё СЌС‚РѕС‚ РІРЅСѓС‚СЂРµРЅРЅРёР№ РєРѕР»Р»Р°Р№РґРµСЂ
     bool useInteriorCollider = true;
 
-    // Коэффициент усадки (0.9–0.98) — задайте 0.95 для ~5% меньше корпуса
+    // РљРѕСЌС„С„РёС†РёРµРЅС‚ СѓСЃР°РґРєРё (0.9вЂ“0.98) вЂ” Р·Р°РґР°Р№С‚Рµ 0.95 РґР»СЏ ~5% РјРµРЅСЊС€Рµ РєРѕСЂРїСѓСЃР°
     float interiorShrinkFactor = 0.95f;
 };
 
+struct SpawnObjectDesc
+{
+    AssimpModelClass* model = nullptr;
+    MaterialClass* material = nullptr;
+    std::string name = "Object";
+
+    XMFLOAT3 position{ 0, 0, 0 };
+    XMFLOAT3 rotation{ 0, 0, 0 };
+    XMFLOAT3 scale{ 1, 1, 1 };
+
+    bool active = true;
+    bool addMeshRenderer = true;
+    bool meshCastsShadow = true;
+    bool addInteraction = false;
+    InteractionComponent interaction{};
+
+    bool addRigidBody = false;
+    RigidBodyComponent rigidBody{};
+};
+
+struct InteractionEvent
+{
+    Entity interactor = INVALID_ENTITY; // РљС‚Рѕ РёРЅРёС†РёРёСЂРѕРІР°Р» РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ
+    Entity target = INVALID_ENTITY;     // РЎ РєР°РєРёРј РѕР±СЉРµРєС‚РѕРј РІР·Р°РёРјРѕРґРµР№СЃС‚РІРёРµ
+
+};
+
+struct RoomComponent
+{
+    std::string roomName = "Room";
+    std::vector<Entity> objectsInRoom;
+    std::vector<Entity> connectedRooms;
+    XMFLOAT3 localMin = { -0.5f, -0.5f, -0.5f };
+    XMFLOAT3 localMax = { 0.5f, 0.5f, 0.5f };
+    float oxygen = 1.0f;
+    float pressure = 1.0f;
+    float temperature = 20.0f;
+
+    float leakRate = 0.0f;
+    bool isActive = true;
+};
+
+
+#pragma once
+#include <algorithm>
+
+struct DamageableComponent
+{
+    float health = 100.0f;
+    float maxHealth = 100.0f;
+    bool isDestroyed = false;
+
+    void Normalize()
+    {
+        health = std::clamp(health, 0.0f, maxHealth);
+        isDestroyed = health <= 0.0f;
+    }
+
+    bool IsAlive() const
+    {
+        return health > 0.0f && !isDestroyed;
+    }
+};
+
+
+struct RoomMembershipComponent
+{
+    Entity room = INVALID_ENTITY;
+};
+
+// Marks a mesh as a local first-person visual. Camera-following meshes are used
+// for arms; attached meshes (for example a weapon) leave followCamera disabled.
+struct FirstPersonViewComponent
+{
+    Entity owner = INVALID_ENTITY;
+    XMFLOAT3 cameraOffset = { 0.0f, -1.0f, -0.22f };
+    XMFLOAT3 rotationOffset = { 0.0f, 3.14159265f, 0.0f };
+    XMFLOAT3 scale = { 1.0f, 1.0f, 1.0f };
+    float pitchScale = 1.0f;
+    float pitchOffset = 0.0f;
+    bool followCamera = true;
+    bool syncAnimation = true;
+    bool hideOwner = true;
+};
+
+// Attaches an entity transform to an animated bone on another mesh. The local
+// transform is evaluated in bone space, which makes it suitable for weapons,
+// magazines, flashlights and other socket-like objects.
+struct BoneAttachmentComponent
+{
+    Entity parent = INVALID_ENTITY;
+    std::string boneName = "mixamorig_RightHand";
+    XMFLOAT3 localPosition = { 0.0f, 0.0f, 0.0f };
+    XMFLOAT3 localRotation = { 0.0f, 0.0f, 0.0f };
+    XMFLOAT3 localScale = { 1.0f, 1.0f, 1.0f };
+    bool enabled = true;
+};

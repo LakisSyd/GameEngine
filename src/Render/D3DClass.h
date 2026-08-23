@@ -21,6 +21,8 @@ public:
     void EndScene();
     void Shutdown();
 
+    IDXGISwapChain* GetSwapChain() { return m_swapChain; }
+
     ID3D11Device* GetDevice();
     ID3D11DeviceContext* GetDeviceContext();
 
@@ -31,6 +33,7 @@ public:
     void GetVideoCardInfo(char*, int&);
     void SetBackBufferRenderTarget();
     void ResetViewport();
+    void ClearDepthBuffer();
 
     // Переключение Z-буфера для 2D/3D
     void TurnZBufferOn();

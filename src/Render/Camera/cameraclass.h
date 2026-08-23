@@ -7,6 +7,7 @@ class CameraClass
 {
 public:
     CameraClass();
+    XMFLOAT3 GetForward() const;
     CameraClass(const CameraClass&);
     ~CameraClass();
 

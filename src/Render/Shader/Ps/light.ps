@@ -42,6 +42,12 @@ cbuffer DirectionalLightBuffer : register(b4)
     float4 dirLightAmbient;
 };
 
+cbuffer LightSpotBuffer : register(b9)
+{
+    float4 spotDirectionAndOuterCos[NUM_LIGHTS];
+    float4 spotInnerCosAndFlags[NUM_LIGHTS];
+};
+
 /////////////
 // TYPEDEFS
 /////////////
@@ -57,7 +63,7 @@ struct PixelInputType
 // ════════════════════════════════════════════════════════════
 // 🌑 ФУНКЦИЯ РАСЧЁТА ТЕНЕЙ
 // ════════════════════════════════════════════════════════════
-float CalculateShadow(float3 worldPos)
+float CalculateShadow(float3 worldPos, float3 surfaceNormal, float3 lightDirection)
 {
     // 1. Трансформируем мировую позицию в light space
     float4 lightSpacePos = mul(float4(worldPos, 1.0), lightViewProj);
@@ -84,24 +90,25 @@ float CalculateShadow(float3 worldPos)
     
     // 6. PCF (Percentage-Closer Filtering) — мягкие тени
     float shadow = 0.0;
-    float texelSize = 1.0 / 2048.0; // Размер пикселя shadow map (жёстко захардкоден — можно вынести)
-    float bias = 0.005; // Смещение против shadow acne
+    float texelSize = 1.0 / 1024.0; // Размер пикселя shadow map (жёстко захардкоден — можно вынести)
+    float NdotL = saturate(dot(surfaceNormal, lightDirection));
+    float bias = max(0.00015, 0.0008 * (1.0 - NdotL));
     
     [unroll]
-    for (int x = -1; x <= 1; x++)
+    for (int x = 0; x < 2; x++)
     {
         [unroll]
-        for (int y = -1; y <= 1; y++)
+        for (int y = 0; y < 2; y++)
         {
-            float2 offset = float2(x, y) * texelSize;
-            float sampledDepth = shadowMap.SampleCmp(shadowSampler, shadowUV + offset, currentDepth - bias);
-            
-            // Если текущая глубина больше — мы в тени
-            shadow += (currentDepth - bias > sampledDepth) ? 0.0 : 1.0;
+            float2 offset = (float2(x, y) - 0.5) * texelSize;
+            shadow += shadowMap.SampleCmp(
+                shadowSampler,
+                shadowUV + offset,
+                currentDepth - bias);
         }
     }
     
-    return shadow / 9.0; // Усредняем 9 сэмплов
+    return shadow * 0.25; // Усредняем 9 сэмплов
 }
 
 /////////////
@@ -117,12 +124,12 @@ float4 LightPixelShader(PixelInputType input) : SV_TARGET
     // ════════════════════════════════════════════════════════════
     // 🌑 РАСЧЁТ ТЕНИ (ОДИН РАЗ ДЛЯ ВСЕГО ПИКСЕЛЯ)
     // ════════════════════════════════════════════════════════════
-    float shadowFactor = CalculateShadow(input.worldPos);
+    float3 lightDir = normalize(-dirLightDirection.xyz);
+    float shadowFactor = CalculateShadow(input.worldPos, normal, lightDir);
     
     // ════════════════════════════════════════════════════════════
     // 🌞 DIRECTIONAL LIGHT (СОЛНЦЕ) + ТЕНИ
     // ════════════════════════════════════════════════════════════
-    float3 lightDir = normalize(-dirLightDirection.xyz);
     float dirIntensity = saturate(dot(normal, lightDir));
     dirIntensity *= dirLightDirection.w;
     
@@ -130,21 +137,39 @@ float4 LightPixelShader(PixelInputType input) : SV_TARGET
     float3 dirDiffuse = dirIntensity * dirLightColor.rgb * shadowFactor;
     
     // Ambient НЕ затеняется (он идёт со всех сторон)
-    float3 ambient = dirLightAmbient.rgb * dirLightAmbient.a;
+    float ambientVisibility = lerp(0.10, 1.0, shadowFactor);
+    float3 ambient = dirLightAmbient.rgb * dirLightAmbient.a * ambientVisibility;
     
     // ════════════════════════════════════════════════════════════
     // 💡 POINT LIGHTS (без теней — они сложнее)
     // ════════════════════════════════════════════════════════════
     for (int i = 0; i < NUM_LIGHTS; i++)
     {
+        if (diffuseColor[i].w < 0.001f) continue;
         float3 lightVec = lightPosition[i].xyz - input.worldPos;
         float distance = length(lightVec);
+        float radius = max(lightPosition[i].w, 0.01f);
+        float normalizedDistance = distance / radius;
+        if (normalizedDistance >= 1.0f) continue;
         lightVec = normalize(lightVec);
+
+        float spotAttenuation = 1.0f;
+        if (spotInnerCosAndFlags[i].y > 0.5f)
+        {
+            const float3 lightToPixel = -lightVec;
+            const float3 spotDirection = normalize(spotDirectionAndOuterCos[i].xyz);
+            const float coneCos = dot(spotDirection, lightToPixel);
+            const float outerCos = spotDirectionAndOuterCos[i].w;
+            const float innerCos = max(spotInnerCosAndFlags[i].x, outerCos + 0.0001f);
+            spotAttenuation = smoothstep(outerCos, innerCos, coneCos);
+            if (spotAttenuation < 0.0001f) continue;
+        }
         
         float intensity = saturate(dot(normal, lightVec));
-        float attenuation = 1.0 / (1.0 + 0.09 * distance + 0.032 * distance * distance);
+        float attenuation = pow(saturate(1.0 - normalizedDistance), 2.0);
         
-        totalDiffuse += intensity * diffuseColor[i].rgb * attenuation;
+        totalDiffuse += intensity * diffuseColor[i].rgb * max(diffuseColor[i].w, 0.0f)
+            * attenuation * spotAttenuation;
     }
     
     // ════════════════════════════════════════════════════════════

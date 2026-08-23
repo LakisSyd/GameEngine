@@ -1,5 +1,5 @@
-ï»¿////////////////////////////////////////////////////////////////////////////////
-// Ð˜Ð¼Ñ Ñ„Ð°Ð¹Ð»Ð°: materialclass.cpp
+////////////////////////////////////////////////////////////////////////////////
+// Èìÿ ôàéëà: materialclass.cpp
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "materialclass.h"
@@ -20,10 +20,13 @@ bool MaterialClass::Initialize(ID3D11Device* device, const std::wstring& name)
 {
     m_name = name;
     m_shader = nullptr;
-    m_textures.resize(2, nullptr);  // â† Ð±Ñ‹Ð»Ð¾ 1, Ñ‚ÐµÐ¿ÐµÑ€ÑŒ 2: ÑÐ»Ð¾Ñ‚ t0 Ð¸ t1 Ð²ÑÐµÐ³Ð´Ð° Ð³Ð¾Ñ‚Ð¾Ð²Ñ‹
-    m_texturePaths.resize(2);
+    m_textures.assign(2, nullptr);  // t0 and t1 are always available.
+    m_ownedTextures.clear();
+    m_ownedTextures.resize(2);
+    m_texturePaths.assign(2, {});
     m_diffuseColor = XMFLOAT3(1.0f, 1.0f, 1.0f);
     m_specularPower = 20.0f;
+    m_pbrEnvironmentStrength = 1.0f;
     return true;
 }
 void MaterialClass::Shutdown()
@@ -31,6 +34,7 @@ void MaterialClass::Shutdown()
     // Material only references shaders/textures. Ownership stays with ShaderManager,
     // TextureClass owners, AssimpModelClass, or the application-level defaults.
     m_shader = nullptr;
+    m_ownedTextures.clear();
     m_textures.clear();
     m_texturePaths.clear();
 }
@@ -40,7 +44,7 @@ void MaterialClass::Bind(ID3D11DeviceContext* context)
 
     m_shader->BindShader(context);
 
-    // ÐžÑ‚Ð»Ð°Ð´ÐºÐ°: Ð¿Ñ€Ð¾Ð²ÐµÑ€ÑÐµÐ¼, ÐµÑÑ‚ÑŒ Ð»Ð¸ Ñ‚ÐµÐºÑÑ‚ÑƒÑ€Ð°
+    // Îòëàäêà: ïðîâåðÿåì, åñòü ëè òåêñòóðà
     if (m_textures.size() > 0 && m_textures[0])
     {
         ID3D11ShaderResourceView* srv = m_textures[0]->GetTexture();
@@ -63,7 +67,7 @@ void MaterialClass::Bind(ID3D11DeviceContext* context)
 
 void MaterialClass::Unbind(ID3D11DeviceContext* context)
 {
-    // ÐžÐ¿Ñ†Ð¸Ð¾Ð½Ð°Ð»ÑŒÐ½Ð¾: Ð¾Ñ‡Ð¸ÑÑ‚Ð¸Ñ‚ÑŒ Ð¿Ñ€Ð¸Ð²ÑÐ·ÐºÐ¸, ÐµÑÐ»Ð¸ Ð½ÑƒÐ¶Ð½Ð¾
+    // Îïöèîíàëüíî: î÷èñòèòü ïðèâÿçêè, åñëè íóæíî
     ID3D11ShaderResourceView* nullSRV = nullptr;
     context->PSSetShaderResources(0, 1, &nullSRV);
 }
@@ -72,9 +76,26 @@ void MaterialClass::SetTexture(size_t index, TextureClass* texture)
 {
     if (index >= m_textures.size())
         m_textures.resize(index + 1, nullptr);
+    if (index >= m_ownedTextures.size())
+        m_ownedTextures.resize(index + 1);
     if (index >= m_texturePaths.size())
         m_texturePaths.resize(index + 1);
+
+    m_ownedTextures[index].reset();
     m_textures[index] = texture;
+}
+
+void MaterialClass::AdoptTexture(size_t index, std::unique_ptr<TextureClass> texture)
+{
+    if (index >= m_textures.size())
+        m_textures.resize(index + 1, nullptr);
+    if (index >= m_ownedTextures.size())
+        m_ownedTextures.resize(index + 1);
+    if (index >= m_texturePaths.size())
+        m_texturePaths.resize(index + 1);
+
+    m_ownedTextures[index] = std::move(texture);
+    m_textures[index] = m_ownedTextures[index].get();
 }
 
 void MaterialClass::SetTexturePath(size_t index, const std::string& path)

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <Filter Include="Исходные файлы">
@@ -67,8 +67,68 @@
     <Filter Include="Render\DebugRender">
       <UniqueIdentifier>{cc038d9d-9a4d-41b7-9d78-29f664cd3f2c}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Core\font">
+      <UniqueIdentifier>{f18944c0-31ec-462c-93f2-09ef8c2fa7ca}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay">
+      <UniqueIdentifier>{9cc84c96-4354-4d3a-9212-3ad2e95a23d7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Player">
+      <UniqueIdentifier>{a93b1b20-2f10-4e0b-b7d2-9d4be9c59643}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Combat">
+      <UniqueIdentifier>{a8d40a5b-97de-4ac6-9b5e-3e0f4c2af4c2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Effects">
+      <UniqueIdentifier>{ad3f6c26-0d0f-4936-b104-c332afcf7a7d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Lighting">
+      <UniqueIdentifier>{c30b6c36-958a-447e-8b27-e6ec685a3a4a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Interaction">
+      <UniqueIdentifier>{fa726630-b90b-4ac3-9f37-e20e058fc28d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Ship">
+      <UniqueIdentifier>{af005f5c-4244-4d27-a074-4d4bc872a5f3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Physics">
+      <UniqueIdentifier>{03b7d0f2-730e-424d-85b0-2fcec5dd1a2f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Repair">
+      <UniqueIdentifier>{a8c37a21-6279-4064-8c50-9e9f465ba5f9}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Ship\Generator">
+      <UniqueIdentifier>{d042a78c-124c-4618-bb1b-327a73a7ef29}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Power">
+      <UniqueIdentifier>{c4a1e193-956e-487a-92b1-506dae231afa}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\UI">
+      <UniqueIdentifier>{9e210b6a-d1a5-41fb-8aa2-e0bf074690bd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\NPC">
+      <UniqueIdentifier>{6b66c906-ae7e-41ef-b054-eb089804470a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\TimeManager">
+      <UniqueIdentifier>{9cec0ed2-ad67-4e9a-9311-56e7ac77c6ae}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\WorldEvent">
+      <UniqueIdentifier>{5153c210-9d95-4ffa-ac69-e9d71cbcc18e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="src\Gameplay\AI\NpcNavMeshSystem.cpp">
+      <Filter>Gameplay\NPC</Filter>
+    </ClCompile>
+    <ClInclude Include="src\Gameplay\AI\NpcNavMeshSystem.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Lighting\SpotLightComponent.h">
+      <Filter>Gameplay\Lighting</Filter>
+    </ClInclude>
+    <ClCompile Include="src\Gameplay\Ship\RoomCullingSystem.cpp">
+      <Filter>Gameplay\Ship</Filter>
+    </ClCompile>
     <ClCompile Include="src\Core\ApplicationClass.cpp">
       <Filter>Core</Filter>
     </ClCompile>
@@ -195,6 +255,9 @@
     <ClCompile Include="src\ECS\System\PhysicsSystem.cpp">
       <Filter>ECS</Filter>
     </ClCompile>
+    <ClCompile Include="src\ECS\System\MeshCuttingTest.cpp">
+      <Filter>ECS</Filter>
+    </ClCompile>
     <ClCompile Include="src\ECS\System\PressureSystem.cpp">
       <Filter>ECS</Filter>
     </ClCompile>
@@ -228,26 +291,20 @@
     <ClCompile Include="src\Debug\PhysicsDebugRenderer.cpp">
       <Filter>Debug</Filter>
     </ClCompile>
-    <ClCompile Include="FileName.h">
-      <Filter>ECS</Filter>
-    </ClCompile>
-    <ClCompile Include="TinyGltfModelClass.cpp">
+    <ClCompile Include="src\Render\Model\TinyGltfModelClass.cpp">
       <Filter>Render\Model</Filter>
     </ClCompile>
-    <ClCompile Include="AnimationSystem.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClCompile>
-    <ClCompile Include="DragDropSystem.cpp">
+    <ClCompile Include="src\Editor\DragDropSystem.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="SkyShaderClass.cpp">
+    <ClCompile Include="src\Render\Shader\SkyShaderClass.cpp">
       <Filter>Render\Shader</Filter>
     </ClCompile>
-    <ClCompile Include="Renderer.cpp">
+    <ClCompile Include="src\Render\Renderer.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="GameplayController.cpp">
-      <Filter>Исходные файлы</Filter>
+    <ClCompile Include="src\Gameplay\Player\GameplayController.cpp">
+      <Filter>Gameplay\Player</Filter>
     </ClCompile>
     <ClCompile Include="src\Editor\ObjectDebugWindow.cpp">
       <Filter>Исходные файлы</Filter>
@@ -255,14 +312,41 @@
     <ClCompile Include="src\Render\Grass\GrassRenderer.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="CharacterSpawnSystem.cpp">
-      <Filter>Исходные файлы</Filter>
+    <ClCompile Include="src\Gameplay\Combat\DamageSystem.cpp">
+      <Filter>Gameplay\Combat</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Gameplay\Effects\ParticleSystem.cpp">
+      <Filter>Gameplay\Effects</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Gameplay\Effects\ParticleRenderer.cpp">
+      <Filter>Gameplay\Effects</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Gameplay\Effects\ExplosionSystem.cpp">
+      <Filter>Gameplay\Effects</Filter>
+    </ClCompile>
+    <ClCompile Include="src\Gameplay\Player\CharacterSpawnSystem.cpp">
+      <Filter>Gameplay\Player</Filter>
     </ClCompile>
     <ClCompile Include="src\Render\Shader\TerrainBlendShaderClass.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClInclude Include="NPCComponents.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcCommandSystem.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcUtilitySystem.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="StateSystem.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\Gameplay\Ship\RoomCullingSystem.h">
+      <Filter>Gameplay\Ship</Filter>
+    </ClInclude>
     <ClInclude Include="src\HelpFunc\helper.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -377,6 +461,9 @@
     <ClInclude Include="src\ECS\System\RenderSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
+    <ClInclude Include="src\Render\FrustumCulling.h">
+      <Filter>Render</Filter>
+    </ClInclude>
     <ClInclude Include="src\ECS\System\TransformSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
@@ -401,17 +488,8 @@
     <ClInclude Include="src\Render\Shader\WaterShaderClass.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
-    <ClInclude Include="ProjectionShaderClass.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
     <ClInclude Include="src\Core\FileSystem.h">
       <Filter>Core</Filter>
-    </ClInclude>
-    <ClInclude Include="TimeManager.h">
-      <Filter>Config</Filter>
-    </ClInclude>
-    <ClInclude Include="SubmarineBuilder.h">
-      <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="src\Render\Shader\PBRShaderClass.h">
       <Filter>Render\Shader</Filter>
@@ -423,6 +501,9 @@
       <Filter>ECS</Filter>
     </ClInclude>
     <ClInclude Include="src\ECS\System\PhysicsSystem.h">
+      <Filter>ECS</Filter>
+    </ClInclude>
+    <ClInclude Include="src\ECS\System\MeshCuttingTest.h">
       <Filter>ECS</Filter>
     </ClInclude>
     <ClInclude Include="src\ECS\System\PressureSystem.h">
@@ -446,8 +527,8 @@
     <ClInclude Include="src\ECS\System\SubmarineJointSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
-    <ClInclude Include="SubmarineSystem.h">
-      <Filter>ECS</Filter>
+    <ClInclude Include="src\Gameplay\Ship\SubmarineSystem.h">
+      <Filter>Gameplay\Ship</Filter>
     </ClInclude>
     <ClInclude Include="src\Debug\CompartmentDebugRenderer.h">
       <Filter>Debug</Filter>
@@ -464,49 +545,58 @@
     <ClInclude Include="src\Render\Model\tiny_gltf_v3.h">
       <Filter>Render\Model</Filter>
     </ClInclude>
-    <ClInclude Include="TinyGltfModelClass.h">
+    <ClInclude Include="src\Render\Model\TinyGltfModelClass.h">
       <Filter>Render\Model</Filter>
     </ClInclude>
-    <ClInclude Include="AnimationComponent.h">
+    <ClInclude Include="src\Animation\AnimationComponent.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="DragDropSystem.h">
+    <ClInclude Include="src\Animation\AnimationSystem.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="Renderer.h">
+    <ClInclude Include="src\Editor\DragDropSystem.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="SkyShaderClass.h">
+    <ClInclude Include="src\Render\Renderer.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Shader\SkyShaderClass.h">
       <Filter>Render\Shader</Filter>
     </ClInclude>
-    <ClInclude Include="CharacterSpawnSystem.h">
+    <ClInclude Include="src\Gameplay\Player\CharacterSpawnSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
     <ClInclude Include="src\Core\PhysicsWorld.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="CharacterMovementSystem.h">
+    <ClInclude Include="src\Physics\PhysicsRaycast.h">
+      <Filter>Physics</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Player\CharacterMovementSystem.h">
+      <Filter>Gameplay\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Player\GameplayController.h">
+      <Filter>Gameplay\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Player\CharacterControllerSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
-    <ClInclude Include="GameplayController.h">
-      <Filter>Файлы заголовков</Filter>
+    <ClInclude Include="src\Gameplay\Player\CharacterPhysicsTuningComponent.h">
+      <Filter>Gameplay\Player</Filter>
     </ClInclude>
-    <ClInclude Include="CharacterControllerSystem.h">
-      <Filter>ECS</Filter>
-    </ClInclude>
-    <ClInclude Include="AnimationController.h">
+    <ClInclude Include="src\Animation\AnimationController.h">
       <Filter>ECS</Filter>
     </ClInclude>
     <ClInclude Include="src\Editor\ObjectDebugWindow.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="CharacterFacingSystem.h">
+    <ClInclude Include="src\Gameplay\Player\CharacterFacingSystem.h">
       <Filter>ECS</Filter>
     </ClInclude>
-    <ClInclude Include="JobSystem.h">
+    <ClInclude Include="src\Core\JobSystem.h">
       <Filter>Core</Filter>
     </ClInclude>
-    <ClInclude Include="AssetsLoadSystem.h">
+    <ClInclude Include="src\Assets\AssetsLoadSystem.h">
       <Filter>Render\Model</Filter>
     </ClInclude>
     <ClInclude Include="src\Render\Grass\GrassRenderer.h">
@@ -515,14 +605,119 @@
     <ClInclude Include="src\Render\Model\ModelScaleUtils.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
-    <ClInclude Include="WorldAreaComponent.h">
+    <ClInclude Include="src\Gameplay\Ship\WorldAreaComponent.h">
       <Filter>ECS</Filter>
     </ClInclude>
-    <ClInclude Include="AreaDebugRenderer.h">
+    <ClInclude Include="src\Debug\AreaDebugRenderer.h">
       <Filter>Render\DebugRender</Filter>
     </ClInclude>
     <ClInclude Include="src\Render\Shader\TerrainBlendShaderClass.h">
       <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Combat\DamageSystem.h">
+      <Filter>Gameplay\Combat</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Combat\DamageEvent.h">
+      <Filter>Gameplay\Combat</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Combat\WeaponComponent.h">
+      <Filter>Gameplay\Combat</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Combat\WeaponSystem.h">
+      <Filter>Gameplay\Combat</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Effects\ParticleSystem.h">
+      <Filter>Gameplay\Effects</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Effects\ParticleRenderer.h">
+      <Filter>Gameplay\Effects</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Effects\ExplosionSystem.h">
+      <Filter>Gameplay\Effects</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Ship\DecompressionSourceComponent.h">
+      <Filter>Gameplay\Ship</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Player\CharacterExternalVelocitySystem.h">
+      <Filter>Gameplay\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Ship\RoomSystem.h">
+      <Filter>Gameplay\Ship</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Render\Text\DWriteTextSystem.h">
+      <Filter>Core\font</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Interaction\InteractionSystem.h">
+      <Filter>Gameplay\Interaction</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Interaction\EventSystem.h">
+      <Filter>Gameplay\Interaction</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Ship\RoomEnvironmentSystem.h">
+      <Filter>Gameplay\Ship</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Player\PlayerComponents.h">
+      <Filter>Gameplay\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\UI\GameHud.h">
+      <Filter>Gameplay\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\UI\GeneratorHud.h">
+      <Filter>Gameplay\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Player\PlayerVitalsSystem.h">
+      <Filter>Gameplay\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Repair\RepairSystem.h">
+      <Filter>Gameplay\Repair</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Repair\RepairComponent.h">
+      <Filter>Gameplay\Repair</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Repair\RuntimeMeshDamageComponent.h">
+      <Filter>Gameplay\Repair</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Power\OxygenGeneratorComponent.h">
+      <Filter>Gameplay\Power</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Power\OxygenGeneratorSystem.h">
+      <Filter>Gameplay\Power</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Power\GeneratorComponent.h">
+      <Filter>Gameplay\Power</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Power\GeneratorSystem.h">
+      <Filter>Gameplay\Power</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Power\PowerConsumerComponent.h">
+      <Filter>Gameplay\Power</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Power\PowerSystem.h">
+      <Filter>Gameplay\Power</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Power\PowerGridComponent.h">
+      <Filter>Gameplay\Power</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Power\EmergencyBatterySystem.h">
+      <Filter>Gameplay\Power</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Power\ShipPowerGridSystem.h">
+      <Filter>Gameplay\Power</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Ship\ShipAlertSystem.h">
+      <Filter>Gameplay\Ship</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\UI\OxygenGeneratorHud.h">
+      <Filter>Gameplay\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="GameTimer.h">
+      <Filter>Gameplay\TimeManager</Filter>
+    </ClInclude>
+    <ClInclude Include="WorldEvent.h">
+      <Filter>Gameplay\WorldEvent</Filter>
+    </ClInclude>
+    <ClInclude Include="WorldEventLog.h">
+      <Filter>Gameplay\WorldEvent</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -574,7 +769,13 @@
     <None Include="src\Render\Shader\Vs\color.vs">
       <Filter>Файлы ресурсов</Filter>
     </None>
+    <None Include="src\Render\Shader\Vs\particle.vs">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
     <None Include="src\Render\Shader\Ps\color.ps">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="src\Render\Shader\Ps\particle.ps">
       <Filter>Файлы ресурсов</Filter>
     </None>
     <None Include="SkyShader.ps" />

@@ -72,7 +72,8 @@ float4 SkyPS(PixelInput input) : SV_TARGET
     hdrColor.y = (hdrColor.y == hdrColor.y) ? hdrColor.y : 0.0f;
     hdrColor.z = (hdrColor.z == hdrColor.z) ? hdrColor.z : 0.0f;
     hdrColor = max(hdrColor, float3(0.0f, 0.0f, 0.0f));
-    hdrColor = RepairEquirectPinholes(uv, hdrColor);
+    // Do not run pinhole repair here. Space HDRs are mostly dark, so the repair
+    // path would do 4 extra huge texture samples for almost every screen pixel.
     float3 ldrColor = ACESFilm(hdrColor);
     ldrColor = pow(saturate(ldrColor), 1.0f / 2.2f);
     if (fogEnabled > 0.5f)
