@@ -45,7 +45,7 @@ DX Framework — учебный игровой движок и одноврем�
 | Контент | Assimp/TinyGLTF, GLB-корабль, материалы, skinned animation |
 | Симуляция | комнаты, двери, кислород, давление, затопление, плавучесть, power grid, damage/repair |
 | Параллельность | JobSystem, CPU-фаза фоновой загрузки, main-thread GPU upload |
-| Тесты | отдельного автоматического test target и CI пока нет |
+| Тесты | есть `DXFrameworkCoreTests` и локальный build/shader gate; внешний CI пока не настроен |
 
 ### 1.2. Уровень зрелости
 
@@ -54,7 +54,7 @@ DX Framework — учебный игровой движок и одноврем�
 Это выше «учебной демки», потому что подсистемы реально связаны. Это ещё не production engine, потому что:
 
 - Debug x64 собирается, а Release x64 не воспроизводится из текущего project file;
-- нет автоматических модульных и интеграционных тестов;
+- есть начальные core-contract tests, но coverage ещё узкое и внешний CI не настроен;
 - есть несколько разных соглашений об углах и времени;
 - крупные координаторы выросли до нескольких тысяч строк;
 - часть физической и графической математики содержит подтверждённые расхождения;
@@ -1581,7 +1581,11 @@ p = uA + vB + wC,  u+v+w=1
 
 ### 31.4. Асинхронность
 
-CPU geometry можно вычислять на worker. Создание/обновление D3D buffers и structural ECS mutation возвращаются на main thread. Completion должна иметь scene/entity generation token, иначе поздний job применится к уже загруженной новой сцене.
+В текущем коде async cutting уже разделён на две фазы. Main thread выбирает цель и снимает CPU-snapshot вершин и индексов. Worker выполняет clipping и triangulation только на этих копиях. Completion возвращается на main thread, проверяет `ActiveComponent` и то, что entity всё ещё ссылается на ту же model, и только после этого меняет D3D buffers, history и Bullet collider.
+
+Async repair добавляет более сильную optimistic validation: worker запоминает `expectedRevision`, а main-thread completion до первой мутации проверяет revision и наличие repair operation у всех целей. Это защищает от применения устаревшей геометрии.
+
+Scene/entity generation token пока не стал общим engine-контрактом. Локальные проверки model pointer и revision закрывают текущие cutting/repair paths, но новая async-система должна либо получить generation token, либо доказать эквивалентную проверку lifetime. Общая модель worker/completion разобрана в главе 35.
 
 ### 31.5. Repair invariants
 
@@ -1721,42 +1725,140 @@ findNearestPoly(start/target)
 
 NavMesh/path/obstacles рисуются one-frame debug lines. Цвет fallback-сетки должен отличаться от полноценной, чтобы «путь сквозь мебель» не выглядел загадочным AI-багом.
 
-## 35. JobSystem и asset loading
+## 35. JobSystem и асинхронные конвейеры
 
-### 35.1. Thread affinity
+> ФАКТ. Эта глава актуализирована после engine-maturity коммита `9913264`. Асинхронность в этом движке — не «запустить всё в другом потоке», а явно разделить CPU-подготовку и применение результата к живому engine state.
 
-| Работа | Поток |
-|---|---|
-| чтение/parse файла, CPU mesh processing | worker |
-| ECS structural change | main |
-| D3D immediate context/GPU buffer creation | main |
-| Bullet world mutation | physics/main owner thread |
-| ImGui | main |
+### 35.1. Thread affinity: почему нужны две очереди
 
-`AssetLoadSystem` правильно разделяет CPU parse и main-thread GPU upload.
+Worker безопасен только тогда, когда работает с независимыми данными. Сам факт переноса функции в другой поток не делает ECS, Direct3D или Bullet thread-safe.
 
-### 35.2. JobSystem на срезе
+| Работа | Поток | Почему |
+|---|---|---|
+| чтение/parse файла, clipping, frustum test, CPU mesh processing | worker | работа идёт с immutable snapshot или локальным result |
+| публикация CPU-result в completion queue | worker | передаёт владение результатом, но не меняет engine state |
+| ECS structural change | main | component pools и entity lifetime принадлежат main thread |
+| D3D immediate context/GPU buffer creation | main | immediate context и render state имеют одного владельца |
+| Bullet world mutation | physics/main owner thread | world хранит внутренние ссылки на bodies, actions и constraints |
+| ImGui | main | UI живёт в main-frame lifecycle |
 
-- FIFO queue;
-- mutex + condition variable;
-- четыре workers;
-- main-thread queue;
-- `Wait` по empty queue + active count;
-- `Shutdown` ставит stop и join.
-
-### 35.3. Риски
-
-1. Исключение из job может завершить worker/process и не уменьшить `activeJobs`.
-2. Нет cancellation token.
-3. Нет priority/dependency graph.
-4. `Initialize` не оформлен как явно idempotent.
-5. Фиксированные четыре workers не учитывают CPU.
-6. Completion с raw `this` требует гарантии lifetime.
-
-Целевая completion:
+Отсюда следует главный контракт:
 
 ```text
-AssetRequestId + sceneGeneration + entityGeneration + immutable CPU result
+main snapshot → worker CPU result → main-thread validation → ECS/D3D/Bullet apply
+```
+
+### 35.2. Владение и lifecycle JobSystem
+
+`ApplicationClass` хранит `JobSystem` как value member и запускает его с четырьмя workers. Число «4» — это конфигурация приложения, а не ограничение класса: `Initialize(workerCount)` принимает любое положительное число.
+
+Важные гарантии lifecycle:
+
+1. Новый или уже остановленный `JobSystem` имеет `stop=true`, поэтому отвергает job, а не кладёт его в очередь без workers.
+2. `Initialize(0)` и отрицательное число workers отвергаются.
+3. Повторный валидный `Initialize` сначала выполняет `Shutdown`, затем сбрасывает stop/active count и создаёт новые потоки.
+4. Если создание одного из потоков бросит исключение, уже созданные workers останавливаются и join-ятся, а `Initialize` возвращает `false`.
+5. Деструктор вызывает idempotent `Shutdown`; копирование и перемещение запрещены.
+
+Концептуальная машина состояний:
+
+```text
+Stopped/rejecting
+      │ Initialize(N > 0)
+      ▼
+Running/accepting ── Shutdown ──► Draining queued jobs ── join ──► Stopped/rejecting
+```
+
+### 35.3. Как worker извлекает job
+
+Worker ждёт condition variable по предикату `stop || !jobs.empty()`. Очередь `jobs` и флаг `stop` защищены одним `queueMutex`. Job извлекается по FIFO, счётчик `activeJobs` увеличивается, после чего мьютекс отпускается. Тяжёлая функция выполняется вне lock, иначе все workers фактически стали бы одним потоком.
+
+```text
+lock → wait → pop → activeJobs++ → unlock
+                       │
+                       └→ execute job
+                              │
+lock ← notify Wait if idle ← activeJobs-- ←┘
+```
+
+`Shutdown` ставит `stop=true` и будит workers. Worker завершается только при `stop && jobs.empty()`: уже принятые CPU-jobs дренируются, но новые `SubmitJob` отвергает.
+
+### 35.4. Wait не равен completion fence
+
+В движке две независимые очереди:
+
+- `SubmitJob` кладёт CPU-работу в worker queue;
+- `SubmitMainThread` кладёт completion в main-thread queue.
+
+`Wait()` ждёт только `jobs.empty() && activeJobs == 0`. Он не запускает main-thread callbacks. Поэтому «`Wait` вернулся» означает «CPU-фаза закончена», но не «результат уже применён к сцене». Вызывать `Wait()` из worker job нельзя: текущий job сам учтён в `activeJobs`, поэтому будет ждать собственного завершения.
+
+`ExecuteMainThreadJobs()` под lock меняет shared queue на локальную, затем выполняет callbacks без удержания mutex. Callback, добавленный во время этого прохода, останется до следующего вызова. Это убирает re-entrancy и долгое удержание `mainThreadMutex`.
+
+### 35.5. Фактические async-конвейеры
+
+| Потребитель | Worker-фаза | Main-thread применение | Защита от устаревшего результата |
+|---|---|---|---|
+| `AssetLoadSystem` | Assimp/file parse и CPU mesh | completion ставит `CpuLoaded`, `Update()` создаёт GPU buffers | tracker и state; completion захватывает raw `this`, поэтому важен shutdown-порядок |
+| async ship import | Assimp читает GLB, готовит nodes, collision proxies и panel batches | ECS/Bullet/GPU создаются фазами с бюджетом 4 ms на кадр | state живёт в `shared_ptr`; `Clear()` отцепляет старый state от новой сцены |
+| `RenderCandidateSystem` | frustum test по snapshot transform/bounds | completion публикует cache visible entities | cache используется только при близких view/projection; иначе fail-open считает entity кандидатом |
+| async cutting | clipping копии CPU mesh | проверка entity/model, GPU apply, history и collider rebuild | active entity + тот же model pointer |
+| async repair | копирование baseline и replay оставшихся cuts | валидация всех целей, GPU apply и collider rebuild | `expectedRevision`, operation ID/state и per-model pending lock |
+
+`AssetLoadSystem::RequestMeshLoad` реализован, но в текущем editor spawn path флаг `useAsyncMesh` выключен. Поэтому generic mesh loader — готовый, но не основной runtime path. Активные async-пути сегодня — ship import, render candidates, cutting и repair.
+
+### 35.6. Порядок внутри кадра и shutdown
+
+В начале `ApplicationClass::Frame` порядок такой:
+
+1. `ExecuteMainThreadJobs()` применяет готовые completions.
+2. `AssetLoadSystem::Update(device)` создаёт GPU buffers для состояния `CpuLoaded`.
+3. `UpdateAsyncShipImport(..., 4.0f)` тратит ограниченный main-thread budget на текущую фазу импорта.
+
+Порядок shutdown ещё важнее:
+
+```text
+JobSystem.Shutdown()          // reject new jobs, drain accepted jobs, join workers
+ExecuteMainThreadJobs()       // apply every completion produced before join
+SceneManager.Clear()          // release ECS/Bullet runtime owners
+PhysicsWorld.Shutdown()
+AssetLoadSystem.Shutdown()
+```
+
+Так raw `this` в asset completion не становится dangling в штатном `ApplicationClass` lifecycle: workers уже join-нуты, completions выполнены, и только затем уничтожаются scene/assets. Вынос `AssetLoadSystem` в другой lifetime потребует новой гарантии.
+
+### 35.7. Проверяемые контракты
+
+`tests/CoreContractsTests.cpp` теперь доказывает базовый lifecycle `JobSystem`:
+
+- job отвергается до `Initialize`;
+- неположительное число workers отвергается;
+- запущенные workers выполняют все принятые jobs;
+- после `Shutdown` новая работа отвергается;
+- повторный `Initialize` снова принимает и выполняет job.
+
+Контракты запускаются для Debug и Release x64 через:
+
+```powershell
+.\scripts\verify_engine.ps1 -Configuration All
+```
+
+Это уже автоматический test target, но не полное async test suite и не внешний CI.
+
+### 35.8. Текущие ограничения
+
+1. Исключение из worker job не перехватывается `JobSystem`: обычно это завершит process, а `activeJobs--` не будет выполнен.
+2. Исключение из main-thread completion также не изолировано и выйдет в `ApplicationClass::Frame` или `Shutdown`.
+3. Нет cancellation token: принятый job при shutdown дренируется, а не отменяется.
+4. Нет priority queue, dependency graph, task handle/future и общего канала ошибок.
+5. Приложение всегда запускает четыре workers и не учитывает `hardware_concurrency` и нагрузку на render thread.
+6. `SubmitMainThread` не проверяет stop-state и не возвращает status; вне штатного application lifecycle completion может остаться без consumer.
+7. Нет универсального scene/entity generation token. Cutting и repair имеют локальную валидацию, ship import изолирует state через `shared_ptr`, но новый async-consumer не получает эту защиту автоматически.
+8. Static cache `RenderCandidateSystem` не имеет scene generation и не сбрасывается в `SceneManager::Clear`; матричный fail-open снижает риск невидимого объекта, но не заменяет lifecycle token.
+
+Целевая форма completion для новых систем:
+
+```text
+RequestId + sceneGeneration + entityGeneration/revision + immutable CPU result + error
 ```
 
 ## 36. Scene save, runtime save и Entity remap
@@ -1887,7 +1989,7 @@ UI может вызвать command, но правило симуляции д�
 | P2 | monolithic coordinators | дорогие правки/merge conflicts | module dependency budget |
 | P2 | duplicate vendored ImGui | drift/size | single dependency source |
 | P2 | mixed encoding | C4566/mojibake | UTF-8 compile policy |
-| P2 | no tests/CI | регрессии узнаются вручную | test target + build gate |
+| P2 | узкое test coverage / no CI | сложные регрессии всё ещё узнаются вручную | расширять contracts/integration tests + CI gate |
 
 ### 39.1. Самые важные пять
 
