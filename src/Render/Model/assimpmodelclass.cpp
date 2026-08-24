@@ -732,7 +732,8 @@ bool AssimpModelClass::Initialize(
     }
 
     if (!m_scene || (m_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !m_scene->mRootNode) {
-        MessageBoxA(NULL, m_importer.GetErrorString(), "Assimp Load Error", MB_OK);
+        OutputDebugStringA((std::string("Assimp failed to load '") + modelPath + "': "
+            + m_importer.GetErrorString() + "\n").c_str());
         return false;
     }
 
@@ -939,7 +940,8 @@ bool AssimpModelClass::Initialize(
     }
 
     if (m_meshParts.empty()) {
-        MessageBoxA(NULL, "No valid meshes found!", "Assimp Error", MB_OK);
+        OutputDebugStringA((std::string("Assimp model contains no valid meshes: ")
+            + modelPath + "\n").c_str());
         return false;
     }
 

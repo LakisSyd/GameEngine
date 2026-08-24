@@ -28,7 +28,8 @@ private:
 
 public:
     ModelClass();
-    ModelClass(const ModelClass&);
+    ModelClass(const ModelClass&) = delete;
+    ModelClass& operator=(const ModelClass&) = delete;
     ~ModelClass();
 
     bool Initialize(ID3D11Device*, ID3D11DeviceContext*, const char* tex1, const char* tex2);

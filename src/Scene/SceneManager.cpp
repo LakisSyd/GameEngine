@@ -21,6 +21,8 @@
 #include <chrono>
 #include <unordered_map>
 #include "CharacterSpawnSystem.h"
+#include "JointConnectionSystem.h"
+#include "SubmarineJointSystem.h"
 #include "Gameplay/Player/CharacterPhysicsTuningComponent.h"
 #include "RoomSystem.h"
 #include "RoomEnvironmentSystem.h"
@@ -2051,7 +2053,11 @@ bool SceneManager::RemoveObject(Entity entity)
     if (!isSceneObject)
         return false; // СЃСѓС‰РЅРѕСЃС‚СЊ РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚
 
-    
+    // Constraints must leave Bullet before either endpoint body is destroyed.
+    // Connections may be owned by a different entity, so handle both systems.
+    SubmarineJointSystem::RemoveJointsForEntity(m_registry, entity);
+    JointConnectionSystem::RemoveJointsForEntity(m_registry, entity);
+
     // РЈР±РёСЂР°РµРј С‚РµРі Р°РєС‚РёРІРЅРѕСЃС‚Рё вЂ” RenderSystem РїСЂРѕРїСѓСЃС‚РёС‚ СЌС‚Сѓ СЃСѓС‰РЅРѕСЃС‚СЊ
     m_registry.RemoveComponent<ActiveComponent>(entity);
     if (auto* mesh = m_registry.GetComponent<MeshRendererComponent>(entity))
@@ -2084,6 +2090,8 @@ void SceneManager::Clear()
     // Entity обязательно забываем старые Detour meshes и пути NPC.
     NpcNavMeshSystem::InvalidateAll();
 
+    ReleasePhysicsRuntime();
+
     auto& meshes = m_registry.GetComponents<MeshRendererComponent>();
     for (auto& [entity, mesh] : meshes)
     {
@@ -2095,16 +2103,33 @@ void SceneManager::Clear()
     // РќРµРґРµР»СЏ 3: РѕС‡РёС‰Р°РµРј ECS СЂРµРµСЃС‚СЂ С‡РµСЂРµР· РїРµСЂРµСЃРѕР·РґР°РЅРёРµ
     // (РїРѕР»РЅС‹Р№ СЃР±СЂРѕСЃ вЂ” РІСЃРµ Entity Рё РІСЃРµ РєРѕРјРїРѕРЅРµРЅС‚С‹)
     m_registry = ECSRegistry{};
+    m_sprites.clear();
     m_importedShipModels.clear();
     for (auto& [name, model] : m_modelCache)
     {
         delete model;  // РР»Рё model->Shutdown() РµСЃР»Рё РµСЃС‚СЊ
     }
     m_modelCache.clear();
-    m_importedShipModels.clear();
 
     // Р’ MaterialClass::~MaterialClass()
   
+}
+
+void SceneManager::ReleasePhysicsRuntime() noexcept
+{
+    // Bullet constraints retain references to both rigid bodies. Component
+    // pools are unordered, so relying on ECSRegistry destruction order would
+    // intermittently leave constraints pointing at already-deleted bodies.
+    m_registry.ForEach<SubmarineJointComponent>(
+        [](Entity, SubmarineJointComponent& joint) { joint.ResetJoint(); });
+
+    m_registry.ForEach<JointConnectionComponent>(
+        [](Entity, JointConnectionComponent& joint) { joint.ResetJoint(); });
+
+    // Character actions and ghost objects are also registered in Bullet and
+    // must be detached before their component storage is released.
+    m_registry.ForEach<CharacterController>(
+        [](Entity, CharacterController& controller) { controller.ResetRuntime(); });
 }
 
 // ============================================================================
@@ -2203,6 +2228,91 @@ void SceneManager::UpdateAll(float deltaTime, Entity player)
     ShipAlertSystem::Update(m_registry, player);
    
 }
+void SceneManager::PreparePbrDrawState(
+    ID3D11DeviceContext* context,
+    MaterialClass* material,
+    Entity entity,
+    const XMMATRIX& worldMatrix)
+{
+    auto* shader = material ? material->GetShader() : nullptr;
+    if (!context || !shader || shader->GetType() != ShaderType::PBR)
+        return;
+
+    auto* pbrShader = static_cast<PBRShaderClass*>(shader);
+    const DamageDecalComponent* damage =
+        m_registry.GetComponent<DamageDecalComponent>(entity);
+    DamageDecalComponent batchDamage;
+
+    if (const auto* batch =
+        m_registry.GetComponent<ShipPanelVisualBatchComponent>(entity))
+    {
+        // The batch mesh is built in ship/world coordinates. Convert every
+        // panel-local decal to that space, then draw all of them in one call.
+        const XMMATRIX inverseBatchWorld =
+            XMMatrixInverse(nullptr, worldMatrix);
+        const XMMATRIX batchNormalToLocal = XMMatrixTranspose(worldMatrix);
+
+        m_registry.ForEach<HullPanelComponent>(
+            [&](Entity panelEntity, HullPanelComponent& panel)
+            {
+                if (batchDamage.cracks.size() >=
+                    DamageDecalComponent::MAX_CRACKS)
+                {
+                    return;
+                }
+
+                const auto* part =
+                    m_registry.GetComponent<ShipPartComponent>(panelEntity);
+                const auto* panelTransform =
+                    m_registry.GetComponent<TransformComponent>(panelEntity);
+                const auto* panelDamage =
+                    m_registry.GetComponent<DamageDecalComponent>(panelEntity);
+                if (!part || part->root != batch->shipRoot ||
+                    (batch->room != INVALID_ENTITY && panel.room != batch->room) ||
+                    !panelTransform || !panelDamage)
+                {
+                    return;
+                }
+
+                const XMMATRIX panelWorld = panelTransform->GetWorldMatrix();
+                const XMMATRIX panelNormalToWorld =
+                    XMMatrixTranspose(XMMatrixInverse(nullptr, panelWorld));
+                for (const auto& crack : panelDamage->cracks)
+                {
+                    if (batchDamage.cracks.size() >=
+                        DamageDecalComponent::MAX_CRACKS)
+                    {
+                        break;
+                    }
+
+                    DamageDecalComponent::CrackEntry batchCrack = crack;
+                    const XMVECTOR worldPosition = XMVector3TransformCoord(
+                        XMLoadFloat3(&crack.localPosition), panelWorld);
+                    XMStoreFloat3(
+                        &batchCrack.localPosition,
+                        XMVector3TransformCoord(worldPosition, inverseBatchWorld));
+
+                    const XMVECTOR worldNormal = XMVector3Normalize(
+                        XMVector3TransformNormal(
+                            XMLoadFloat3(&crack.localNormal),
+                            panelNormalToWorld));
+                    XMStoreFloat3(
+                        &batchCrack.localNormal,
+                        XMVector3Normalize(XMVector3TransformNormal(
+                            worldNormal, batchNormalToLocal)));
+                    batchDamage.cracks.push_back(batchCrack);
+                }
+            });
+
+        damage = &batchDamage;
+    }
+
+    pbrShader->SetDamageDecals(
+        context,
+        damage && !damage->cracks.empty() ? damage : nullptr,
+        worldMatrix);
+}
+
 // ============================================================================
 // RenderAllECS вЂ” СЂРµРЅРґРµСЂ РІСЃРµС… Р°РєС‚РёРІРЅС‹С… РѕР±СЉРµРєС‚РѕРІ С‡РµСЂРµР· RenderSystem
 //
@@ -2256,61 +2366,6 @@ int SceneManager::RenderAllECS(
         roomVisibilityCache.emplace(entity, visible);
         return visible;
     };
-    auto updatePbrDamageState = [&](MaterialClass* mat, Entity entity, const XMMATRIX& world)
-    {
-        auto* shader = mat ? mat->GetShader() : nullptr;
-        if (!shader || shader->GetType() != ShaderType::PBR)
-            return;
-
-        auto* pbrShader = static_cast<PBRShaderClass*>(shader);
-        const DamageDecalComponent* damage = m_registry.GetComponent<DamageDecalComponent>(entity);
-        DamageDecalComponent batchDamage;
-
-        if (const auto* batch = m_registry.GetComponent<ShipPanelVisualBatchComponent>(entity))
-        {
-            // The batch mesh is built in ship/world coordinates. Convert every
-            // panel-local decal to that space, then draw all of them in one call.
-            const XMMATRIX inverseBatchWorld = XMMatrixInverse(nullptr, world);
-            const XMMATRIX batchNormalToLocal = XMMatrixTranspose(world);
-
-            m_registry.ForEach<HullPanelComponent>([&](Entity panelEntity, HullPanelComponent& panel)
-            {
-                if (batchDamage.cracks.size() >= DamageDecalComponent::MAX_CRACKS)
-                    return;
-
-                const auto* part = m_registry.GetComponent<ShipPartComponent>(panelEntity);
-                const auto* panelTransform = m_registry.GetComponent<TransformComponent>(panelEntity);
-                const auto* panelDamage = m_registry.GetComponent<DamageDecalComponent>(panelEntity);
-                if (!part || part->root != batch->shipRoot ||
-                    (batch->room != INVALID_ENTITY && panel.room != batch->room) ||
-                    !panelTransform || !panelDamage)
-                    return;
-
-                const XMMATRIX panelWorld = panelTransform->GetWorldMatrix();
-                const XMMATRIX panelNormalToWorld = XMMatrixTranspose(XMMatrixInverse(nullptr, panelWorld));
-                for (const auto& crack : panelDamage->cracks)
-                {
-                    if (batchDamage.cracks.size() >= DamageDecalComponent::MAX_CRACKS)
-                        break;
-
-                    DamageDecalComponent::CrackEntry batchCrack = crack;
-                    const XMVECTOR worldPosition = XMVector3TransformCoord(XMLoadFloat3(&crack.localPosition), panelWorld);
-                    XMStoreFloat3(&batchCrack.localPosition, XMVector3TransformCoord(worldPosition, inverseBatchWorld));
-
-                    const XMVECTOR worldNormal = XMVector3Normalize(XMVector3TransformNormal(
-                        XMLoadFloat3(&crack.localNormal), panelNormalToWorld));
-                    XMStoreFloat3(&batchCrack.localNormal, XMVector3Normalize(
-                        XMVector3TransformNormal(worldNormal, batchNormalToLocal)));
-                    batchDamage.cracks.push_back(batchCrack);
-                }
-            });
-
-            damage = &batchDamage;
-        }
-
-        pbrShader->SetDamageDecals(context, damage && !damage->cracks.empty() ? damage : nullptr, world);
-    };
-
     // -- РџСЂРѕС…РѕРґ 1: С‚РѕР»СЊРєРѕ РЅРµРїСЂРѕР·СЂР°С‡РЅС‹Рµ РѕР±СЉРµРєС‚С‹ (Р·Р°РїРёСЃСЊ РІ z-buffer) ------------
     for (auto& [entity, mesh] : meshPool)
     {
@@ -2343,12 +2398,13 @@ int SceneManager::RenderAllECS(
         if (!frustum.IsVisible(world, localMin, localMax)) continue;
 
         auto* animComp = m_registry.GetComponent<AnimationComponent>(entity);
-        updatePbrDamageState(mat, entity, world);
+        PreparePbrDrawState(context, mat, entity, world);
 
         bool renderedAsync = false;
         // The async asset path currently uploads only point-light data. Keep
         // spot-lit geometry on the full renderer so the cone is not lost.
-        if (! mesh.useAsyncMesh && m_assetLoadSystem && !mesh.asyncModelPath.empty())
+        if (!hasActiveSpotLight && mesh.useAsyncMesh &&
+            m_assetLoadSystem && !mesh.asyncModelPath.empty())
         {
             renderedAsync = m_assetLoadSystem->RenderMeshAsset(
                 context, mesh.asyncModelPath, world, viewMatrix, projectionMatrix,
@@ -2401,7 +2457,8 @@ int SceneManager::RenderAllECS(
         XMFLOAT3 localMax;
         mesh.model->GetBoundingBox(&localMin, &localMax);
         if (!frustum.IsVisible(world, localMin, localMax)) continue;
-        updatePbrDamageState(mat, entity, world);
+        PreparePbrDrawState(context, mat, entity, world);
+        auto* animComp = m_registry.GetComponent<AnimationComponent>(entity);
 
         bool renderedAsync = false;
         if (!hasActiveSpotLight && mesh.useAsyncMesh && m_assetLoadSystem && !mesh.asyncModelPath.empty())
@@ -2418,7 +2475,7 @@ int SceneManager::RenderAllECS(
         {
             RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
                 mat, lightColors, lightPositions, fog,
-                entity == selectedEntity, cameraPos, deltaTime, nullptr,
+                entity == selectedEntity, cameraPos, deltaTime, animComp,
                 lightDirectionsAndOuterCos, lightInnerCosAndFlags,
                 light && !light->enabled ? 0.0f : 1.0f);
             renderedCount++;
@@ -2498,11 +2555,13 @@ int SceneManager::RenderFirstPersonECS(
         if (!material)
             continue;
 
+        const XMMATRIX world = transform->GetWorldMatrix();
+        PreparePbrDrawState(context, material, entity, world);
         auto* animation = m_registry.GetComponent<AnimationComponent>(entity);
         RenderMesh(
             context,
             mesh.model,
-            transform->GetWorldMatrix(),
+            world,
             viewMatrix,
             projectionMatrix,
             material,
@@ -2539,7 +2598,9 @@ void SceneManager::RenderAllECSExcluding(
     const Settings::FogSettings& fog,
     Entity               excludeEntity,
     float                deltaTime,
-    XMFLOAT3             cameraPos)
+    XMFLOAT3             shadingCameraPos,
+    XMFLOAT3             visibilityCameraPos,
+    bool                 skipReflectionSurfaces)
 {
 
     // ?? РќРћР’РћР•: РЎРѕР±РёСЂР°РµРј СЃРІРµС‚Р° РёР· ECS (РєР°Рє РІ RenderAllECS)
@@ -2558,7 +2619,8 @@ void SceneManager::RenderAllECSExcluding(
     auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
     const FrustumCulling frustum(viewMatrix, projectionMatrix);
     std::vector<Entity> visibleRooms;
-    RoomCullingSystem::BuildVisibleRooms(m_registry, cameraPos, visibleRooms);
+    RoomCullingSystem::BuildVisibleRooms(
+        m_registry, visibilityCameraPos, visibleRooms);
     std::unordered_map<Entity, bool> roomVisibilityCache;
     auto isVisibleByRoom = [&](Entity entity)
     {
@@ -2588,6 +2650,19 @@ void SceneManager::RenderAllECSExcluding(
 
         auto* mat = mesh.material ? mesh.material : defaultMaterial;
         if (!mat) continue;
+        if (skipReflectionSurfaces)
+        {
+            auto* shader = mat->GetShader();
+            if (shader)
+            {
+                const ShaderType type = shader->GetType();
+                if (type == ShaderType::Water ||
+                    type == ShaderType::Reflection)
+                {
+                    continue;
+                }
+            }
+        }
 
         XMMATRIX world = transform->GetWorldMatrix();
 
@@ -2595,6 +2670,7 @@ void SceneManager::RenderAllECSExcluding(
         XMFLOAT3 localMax;
         mesh.model->GetBoundingBox(&localMin, &localMax);
         if (!frustum.IsVisible(world, localMin, localMax)) continue;
+        PreparePbrDrawState(context, mat, entity, world);
         auto* animComp = m_registry.GetComponent<AnimationComponent>(entity);
 
         bool renderedAsync = false;
@@ -2608,7 +2684,8 @@ void SceneManager::RenderAllECSExcluding(
         if (!renderedAsync)
         {
             RenderMesh(context, mesh.model, world, viewMatrix, projectionMatrix,
-                mat, lightColors, lightPositions, fog, false, XMFLOAT3(), deltaTime, animComp,
+                mat, lightColors, lightPositions, fog, false,
+                shadingCameraPos, deltaTime, animComp,
                 lightDirectionsAndOuterCos, lightInnerCosAndFlags,
                 [&]()
                 {
@@ -3536,9 +3613,7 @@ bool SceneManager::LoadScene(const std::string& filename,
     json scene;
     file >> scene;
 
-    NpcNavMeshSystem::InvalidateAll();
-    m_registry = ECSRegistry{};
-    m_importedShipModels.clear();
+    Clear();
     std::unordered_map<uint32_t, Entity> remap;
 
     if (scene.contains("world"))
@@ -4044,7 +4119,7 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
         joint.currentStress = j.value("sub_joint_current_stress", joint.currentStress);
         joint.isBroken = j.value("sub_joint_is_broken", joint.isBroken);
         joint.joint = nullptr;
-        m_registry.AddComponent<SubmarineJointComponent>(e, joint);
+        m_registry.AddComponent<SubmarineJointComponent>(e, std::move(joint));
     }
 
     if (j.value("has_joint_connection", false))
@@ -4063,7 +4138,7 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
             conn.gizmoColor = { c[0], c[1], c[2], c[3] };
         }
         conn.joint = nullptr;
-        m_registry.AddComponent<JointConnectionComponent>(e, conn);
+        m_registry.AddComponent<JointConnectionComponent>(e, std::move(conn));
     }
 
     if (j.value("has_player_tag", false))

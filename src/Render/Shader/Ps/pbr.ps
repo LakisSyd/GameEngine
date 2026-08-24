@@ -46,7 +46,7 @@ cbuffer LightSpotBuffer : register(b9)
     float4 spotInnerCosAndFlags[NUM_LIGHTS];
 };
 
-#include "src/Render/Shader/Vs/fog_common.hlsli"
+#include "../fog_common.hlsli"
 
 cbuffer SelectedBuffer : register(b3)
 {

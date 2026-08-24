@@ -23,7 +23,7 @@ public:
 
         if (!rootTransform || !rootSub)
         {
-            OutputDebugStringA("❌ ERROR: Invalid submarine root\n");
+            OutputDebugStringA("[Submarine] ERROR: Invalid submarine root\n");
             return INVALID_ENTITY;
         }
 
@@ -70,7 +70,7 @@ public:
         rootSub->needsPhysicsUpdate = true;
 
         OutputDebugStringA(
-            ("✅ Added compartment #" + std::to_string(compartment) +
+            ("[Submarine] Added compartment #" + std::to_string(compartment) +
                 " to submarine #" + std::to_string(submarineRoot) +
                 " (volume: " + std::to_string(comp.volume) + ")\n").c_str()
         );
@@ -87,7 +87,7 @@ public:
 
         if (!rootRb || !rootBuoy || !rootSub)
         {
-            OutputDebugStringA("❌ ERROR: Missing components for submarine\n");
+            OutputDebugStringA("[Submarine] ERROR: Missing components for submarine\n");
             return;
         }
 
@@ -122,9 +122,9 @@ public:
 
         char buf[512];
         sprintf_s(buf,
-            "✅ Updated submarine physics:\n"
-            "   Total volume: %.2f m³\n"
-            "   Neutral mass (ρ·V): %.0f kg\n"
+            "[Submarine] Updated physics:\n"
+            "   Total volume: %.2f m^3\n"
+            "   Neutral mass (density * volume): %.0f kg\n"
             "   Actual mass (95%%): %.0f kg\n"
             "   Buoyancy margin: %.0f N\n",
             totalVolume, neutralMass, totalMass,
@@ -139,7 +139,7 @@ public:
 
         if (!rootRb)
         {
-            OutputDebugStringA("❌ ERROR: No RigidBody on submarine\n");
+            OutputDebugStringA("[Submarine] ERROR: No RigidBody on submarine\n");
             return;
         }
 
@@ -171,7 +171,7 @@ public:
             rootRb->body->setAngularVelocity(savedAngularVelocity);
         }
 
-        OutputDebugStringA("✅ Refreshed submarine physics\n");
+        OutputDebugStringA("[Submarine] Refreshed physics\n");
     }
 
     // 🔧 Проверить, нужно ли обновить физику

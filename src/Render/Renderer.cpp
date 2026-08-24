@@ -287,6 +287,9 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
 
         // -- Вычисляем матрицу отражения ------------------------------------------
         const XMMATRIX reflectionMatrix = BuildReflectionMatrix(0.0f);
+        const XMFLOAT3 cameraPosition = m_camera
+            ? m_camera->GetPosition()
+            : XMFLOAT3{};
         UpdateWaterMaterials(context, reflectionMatrix, needsReflectionPass, needsRefractionPass);
 
         // -- Pass: Reflection > m_reflectionTexture --------------------------------
@@ -295,7 +298,16 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             m_lastStats.reflectionPassUsed = true;
             m_reflectionTexture->SetRenderTarget(context);
             m_reflectionTexture->ClearRenderTarget(context, 0.f, 0.f, 0.f, 1.f);
-            RenderExcluding(context, reflectionMatrix, projection, INVALID_ENTITY);
+            XMFLOAT3 reflectionCameraPosition = cameraPosition;
+            reflectionCameraPosition.y = -reflectionCameraPosition.y;
+            RenderExcluding(
+                context,
+                reflectionMatrix,
+                projection,
+                INVALID_ENTITY,
+                reflectionCameraPosition,
+                cameraPosition,
+                true);
             m_direct3D->SetBackBufferRenderTarget();
             m_direct3D->ResetViewport();
             ClearSRVSlots(context);
@@ -311,9 +323,24 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             // Рендерим всё кроме Glass/Water
             m_direct3D->TurnZBufferOn();
             m_direct3D->TurnAlphaBlendingOff();
+            BindShadowState(context);
 
-            XMFLOAT4 lightColors[NUM_LIGHTS];
-            XMFLOAT4 lightPositions[NUM_LIGHTS];
+            const auto fog = m_sceneManager->BuildFogSettingsFromWorld();
+            ShaderManager::Get().ForEach([&](ShaderBaseClass* shader)
+                {
+                    shader->UpdateFog(context, fog);
+                });
+
+            XMFLOAT4 lightColors[NUM_LIGHTS] = {};
+            XMFLOAT4 lightPositions[NUM_LIGHTS] = {};
+            XMFLOAT4 lightDirectionsAndOuterCos[NUM_LIGHTS] = {};
+            XMFLOAT4 lightInnerCosAndFlags[NUM_LIGHTS] = {};
+            m_sceneManager->GatherLightsForShader(
+                lightColors,
+                lightPositions,
+                lightDirectionsAndOuterCos,
+                lightInnerCosAndFlags,
+                NUM_LIGHTS);
             auto& meshPool = m_sceneManager->GetECSRegistry().GetComponents<MeshRendererComponent>();
             const FrustumCulling frustum(view, projection);
 
@@ -338,10 +365,15 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
                 XMFLOAT3 localMax;
                 mesh.model->GetBoundingBox(&localMin, &localMax);
                 if (!frustum.IsVisible(world, localMin, localMax)) continue;
-                const auto fog = m_sceneManager->BuildFogSettingsFromWorld();
+                m_sceneManager->PreparePbrDrawState(
+                    context, mat, entity, world);
+                auto* animation = m_sceneManager->GetECSRegistry()
+                    .GetComponent<AnimationComponent>(entity);
                 RenderMesh(context, mesh.model, world, view, projection,
                     mat, lightColors, lightPositions,
-                    fog, false);
+                    fog, false, cameraPosition,
+                    TimeManager::UnscaledDeltaTime(), animation,
+                    lightDirectionsAndOuterCos, lightInnerCosAndFlags);
                 m_lastStats.refractionRenderedObjects++;
             }
 
@@ -596,10 +628,14 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
         ID3D11DeviceContext* context,
         const XMMATRIX& view,
         const XMMATRIX& projection,
-        Entity excludeEntity)
+        Entity excludeEntity,
+        const XMFLOAT3& shadingCameraPosition,
+        const XMFLOAT3& visibilityCameraPosition,
+        bool skipReflectionSurfaces)
     {
         m_direct3D->TurnZBufferOn();
         m_direct3D->TurnAlphaBlendingOff();
+        BindShadowState(context);
 
         const auto fog = m_sceneManager->BuildFogSettingsFromWorld();
 
@@ -607,8 +643,8 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             s->UpdateFog(context, fog);
             });
 
-        XMFLOAT4 lightColors[NUM_LIGHTS];
-        XMFLOAT4 lightPositions[NUM_LIGHTS];
+        XMFLOAT4 lightColors[NUM_LIGHTS] = {};
+        XMFLOAT4 lightPositions[NUM_LIGHTS] = {};
 
         m_sceneManager->RenderAllECSExcluding(
             context, view, projection,
@@ -617,7 +653,9 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
             fog,
             excludeEntity,
             TimeManager::UnscaledDeltaTime(),
-            m_camera ? m_camera->GetPosition() : XMFLOAT3());
+            shadingCameraPosition,
+            visibilityCameraPosition,
+            skipReflectionSurfaces);
     }
 
     // ============================================================================
@@ -700,6 +738,38 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
     // ============================================================================
     // Приватные хелперы
     // ============================================================================
+    void Renderer::BindShadowState(ID3D11DeviceContext* context)
+    {
+        if (!context || !m_shadowMap)
+            return;
+
+        ID3D11ShaderResourceView* shadowSrv =
+            m_shadowMap->GetShaderResourceView();
+        if (!shadowSrv)
+            return;
+
+        const XMMATRIX lightViewProjection =
+            m_shadowMap->GetLightViewProjection();
+
+        if (m_lightShader)
+        {
+            m_lightShader->SetShadowMap(
+                context, shadowSrv, lightViewProjection);
+        }
+        if (m_pbrShader)
+        {
+            m_pbrShader->SetShadowMap(
+                context, shadowSrv, lightViewProjection);
+        }
+        if (auto* terrainShader =
+            ShaderManager::Get().GetAs<TerrainBlendShaderClass>(
+                "terrain_blend"))
+        {
+            terrainShader->SetShadowMap(
+                context, shadowSrv, lightViewProjection);
+        }
+    }
+
     void Renderer::UpdateDirectionalLight(ID3D11DeviceContext* context)
     {
         const auto& world = m_sceneManager->GetWorldSettings();

@@ -2,7 +2,7 @@
 Texture2D SkyTexture : register(t0);
 SamplerState SkySampler : register(s0);
 
-#include "src/Render/Shader/Vs/fog_common.hlsli"
+#include "../fog_common.hlsli"
 
 struct PixelInput {
     float4 positionClip : SV_POSITION;

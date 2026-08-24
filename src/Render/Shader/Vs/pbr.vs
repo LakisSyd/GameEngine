@@ -23,7 +23,8 @@ cbuffer LightPositionBuffer : register(b1)
     float4 lightPosition[NUM_LIGHTS];
 };
 
-#include "fog_common.hlsli"
+#include "../fog_common.hlsli"
+#include "../normal_transform.hlsli"
 
 float3 SafeNormalize(float3 value, float3 fallback)
 {
@@ -125,9 +126,14 @@ PixelInputType PBRVertexShader(VertexInputType input)
 
     float3x3 worldRot = (float3x3)worldMatrix;
 
-    output.normal   = SafeNormalize(mul(finalNormal, worldRot), float3(0.0f, 1.0f, 0.0f));
-    output.tangent  = SafeNormalize(mul(finalTangent, worldRot), float3(1.0f, 0.0f, 0.0f));
-    output.binormal = SafeNormalize(mul(finalBinormal, worldRot), SafeNormalize(cross(output.normal, output.tangent), float3(0.0f, 0.0f, 1.0f)));
+    BuildWorldTangentBasis(
+        finalNormal,
+        finalTangent,
+        finalBinormal,
+        worldRot,
+        output.normal,
+        output.tangent,
+        output.binormal);
 
     const float3 lightDelta0 = lightPosition[0].xyz - worldPos.xyz;
     const float3 lightDelta1 = lightPosition[1].xyz - worldPos.xyz;

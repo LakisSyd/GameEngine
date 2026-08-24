@@ -35,5 +35,5 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 //    // 💡 ВАЖНО: очистка вызывается ЯВНО, а не в деструкторе (см. systemclass.cpp)
     system.Shutdown();
 //
-    return 0;
+    return result ? 0 : 1;
 }

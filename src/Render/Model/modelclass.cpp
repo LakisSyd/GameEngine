@@ -11,12 +11,9 @@ ModelClass::ModelClass()
     m_Textures[1] = nullptr;
 }
 
-ModelClass::ModelClass(const ModelClass& other)
-{
-}
-
 ModelClass::~ModelClass()
 {
+    Shutdown();
 }
 
 // Initialize создает буферы.

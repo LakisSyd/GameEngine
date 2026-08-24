@@ -752,6 +752,7 @@
       <Filter>Файлы ресурсов</Filter>
     </None>
     <None Include="src\Render\Shader\fog_common.hlsli" />
+    <None Include="src\Render\Shader\normal_transform.hlsli" />
     <None Include="src\Render\Shader\Ps\pbr.ps">
       <Filter>Файлы ресурсов</Filter>
     </None>

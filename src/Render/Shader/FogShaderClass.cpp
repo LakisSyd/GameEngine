@@ -8,12 +8,9 @@ FogShaderClass::FogShaderClass()
 {
 }
 
-FogShaderClass::FogShaderClass(const FogShaderClass& other)
-{
-}
-
 FogShaderClass::~FogShaderClass()
 {
+    Shutdown();
 }
 
 bool FogShaderClass::Initialize(ID3D11Device* device, HWND hwnd)

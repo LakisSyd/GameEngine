@@ -5,6 +5,8 @@ cbuffer MatrixBuffer : register(b0)
     matrix projectionMatrix;
 };
 
+#include "../normal_transform.hlsli"
+
 struct VertexInputType
 {
     float4 position : POSITION;
@@ -35,8 +37,13 @@ PixelInputType TerrainBlendVertexShader(VertexInputType input)
 
     output.worldPos = worldPos.xyz;
     output.maskUV = input.tex;
-    output.normal = normalize(mul(input.normal, (float3x3)worldMatrix));
-    output.tangent = normalize(mul(input.tangent, (float3x3)worldMatrix));
-    output.binormal = normalize(mul(input.binormal, (float3x3)worldMatrix));
+    BuildWorldTangentBasis(
+        input.normal,
+        input.tangent,
+        input.binormal,
+        (float3x3)worldMatrix,
+        output.normal,
+        output.tangent,
+        output.binormal);
     return output;
 }

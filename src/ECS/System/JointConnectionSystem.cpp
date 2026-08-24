@@ -67,6 +67,7 @@ void JointConnectionSystem::CreateJoint(ECSRegistry& registry, Entity entity, Jo
     {
         world->addConstraint(joint, jointComp.disableCollisions);
         jointComp.joint = joint;
+        jointComp.registeredInPhysicsWorld = true;
 
         char buf[256];
         sprintf_s(buf, "[JointConnectionSystem] Joint created: %u <-> %u, breakForce=%.0f\n",
@@ -82,16 +83,7 @@ void JointConnectionSystem::CreateJoint(ECSRegistry& registry, Entity entity, Jo
 
 void JointConnectionSystem::RemoveJoint(ECSRegistry& registry, JointConnectionComponent& jointComp)
 {
-    if (jointComp.joint)
-    {
-        btDiscreteDynamicsWorld* world = PhysicsWorld::Get().GetWorld();
-        if (world)
-        {
-            world->removeConstraint(jointComp.joint);
-        }
-        delete jointComp.joint;
-        jointComp.joint = nullptr;
-    }
+    jointComp.ResetJoint();
 }
 
 void JointConnectionSystem::RemoveJointsForEntity(ECSRegistry& registry, Entity entity)

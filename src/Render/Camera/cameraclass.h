@@ -8,14 +8,15 @@ class CameraClass
 public:
     CameraClass();
     XMFLOAT3 GetForward() const;
-    CameraClass(const CameraClass&);
-    ~CameraClass();
+    CameraClass(const CameraClass&) = default;
+    CameraClass& operator=(const CameraClass&) = default;
+    ~CameraClass() = default;
 
     void SetPosition(float, float, float);
     void SetRotation(float, float, float);
 
-    XMFLOAT3 GetPosition();
-    XMFLOAT3 GetRotation();
+    XMFLOAT3 GetPosition() const;
+    XMFLOAT3 GetRotation() const;
 
     void Render();
     void GetViewMatrix(XMMATRIX&);
@@ -42,7 +43,11 @@ public:
     );
 
 private:
-    float m_positionX, m_positionY, m_positionZ;
-    float m_rotationX, m_rotationY, m_rotationZ;
-    XMMATRIX m_viewMatrix;
+    float m_positionX = 0.0f;
+    float m_positionY = 0.0f;
+    float m_positionZ = 0.0f;
+    float m_rotationX = 0.0f;
+    float m_rotationY = 0.0f;
+    float m_rotationZ = 0.0f;
+    XMMATRIX m_viewMatrix = XMMatrixIdentity();
 };

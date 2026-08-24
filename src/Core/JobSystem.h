@@ -17,15 +17,44 @@ using namespace DirectX;
 class JobSystem
 {
 public:
+	JobSystem() = default;
+	~JobSystem()
+	{
+		Shutdown();
+	}
+
+	JobSystem(const JobSystem&) = delete;
+	JobSystem& operator=(const JobSystem&) = delete;
+	JobSystem(JobSystem&&) = delete;
+	JobSystem& operator=(JobSystem&&) = delete;
+
 	bool Initialize(int workerCount)
 	{
+		if (workerCount <= 0)
+			return false;
 
-		for (int i = 0; i < workerCount; ++i)
+		Shutdown();
 		{
-			workers.emplace_back([this] {
-				WorkerLoop();
-				});
+			std::lock_guard<std::mutex> lock(queueMutex);
+			stop = false;
+			activeJobs.store(0);
 		}
+
+		try
+		{
+			for (int i = 0; i < workerCount; ++i)
+			{
+				workers.emplace_back([this] {
+					WorkerLoop();
+				});
+			}
+		}
+		catch (...)
+		{
+			Shutdown();
+			return false;
+		}
+
 		return true;
 	}
 
@@ -126,7 +155,10 @@ private:
 	std::mutex queueMutex;
 	std::condition_variable condition;
 
-	bool stop = false;
+	// A default-constructed or shut-down queue must reject work. Otherwise a
+	// job submitted before Initialize() would remain queued with no worker able
+	// to execute it, and Wait() would block forever.
+	bool stop = true;
 	std::atomic<int> activeJobs = 0;
 
 	std::queue<std::function<void()>> mainThreadJobs;

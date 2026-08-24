@@ -20,7 +20,8 @@ cbuffer LightPositionBuffer : register(b1)
 };
 
 // ✅ Туман — слот b2
-#include "fog_common.hlsli"
+#include "../fog_common.hlsli"
+#include "../normal_transform.hlsli"
 
 /////////////
 // TYPEDEFS
@@ -38,7 +39,6 @@ struct PixelInputType
     float2 tex : TEXCOORD0;
     float3 normal : NORMAL;
     float3 worldPos : TEXCOORD1;        // 🔥 ДОБАВЛЕНО: мировая позиция
-    float4 shadowPos : TEXCOORD2;
     float  fogFactor : FOG;
 };
 
@@ -60,12 +60,10 @@ PixelInputType LightVertexShader(VertexInputType input)
 
     output.position = mul(viewPosition, projectionMatrix);
     
-    // 🔥 ДОБАВИТЬ: трансформ в light space (если нужно)
-    // output.shadowPos = mul(worldPosition, lightViewProj);
-    
     output.tex = input.tex;
-    output.normal = mul(input.normal, (float3x3)worldMatrix);
-    output.normal = normalize(output.normal);
+    output.normal = TransformNormalToWorld(
+        input.normal,
+        (float3x3)worldMatrix);
 
     return output;
 }

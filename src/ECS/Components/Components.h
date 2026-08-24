@@ -7,6 +7,7 @@
 #include "ECSTypes.h"
 #include <vector>
 #include <string>
+#include <utility>
 #include <BulletCollision/CollisionDispatch/btGhostObject.h>        // btPairCachingGhostObject
 #include <BulletDynamics/Character/btKinematicCharacterController.h> // btKinematicCharacterController
 #include "WorldAreaComponent.h"
@@ -224,6 +225,8 @@ struct RigidBodyComponent
         , angularFactor(other.angularFactor)
         , friction(other.friction)
         , isKinematic(other.isKinematic)
+        , shape(other.shape)
+        , needsCollisionRebuild(other.needsCollisionRebuild)
         , lastSyncedPosition(other.lastSyncedPosition)
         , lastSyncedRotation(other.lastSyncedRotation)
         , lastSyncedScale(other.lastSyncedScale)
@@ -243,6 +246,7 @@ struct RigidBodyComponent
     {
         // Обнуляем указатели у источника — деструктор источника НЕ удалит ресурсы
         other.body = nullptr;
+        other.shape = nullptr;
         other.triangleMesh = nullptr;
         other.interiorBody = nullptr;
         other.interiorShape = nullptr;
@@ -265,6 +269,8 @@ struct RigidBodyComponent
         angularFactor = other.angularFactor;
         friction = other.friction;
         isKinematic = other.isKinematic;
+        shape = other.shape;
+        needsCollisionRebuild = other.needsCollisionRebuild;
         lastSyncedPosition = other.lastSyncedPosition;
         lastSyncedRotation = other.lastSyncedRotation;
         lastSyncedScale = other.lastSyncedScale;
@@ -283,6 +289,7 @@ struct RigidBodyComponent
         interiorShape = other.interiorShape;
 
         other.body = nullptr;
+        other.shape = nullptr;
         other.triangleMesh = nullptr;
         other.interiorBody = nullptr;
         other.interiorShape = nullptr;
@@ -311,6 +318,7 @@ private:
             delete body->getMotionState();
             delete body;
             body = nullptr;
+            shape = nullptr;
 
             // Удаляем связанную форму, если это compound (оригинальная логика)
             if (shapeLocal && shapeLocal->getShapeType() == COMPOUND_SHAPE_PROXYTYPE)
@@ -421,6 +429,7 @@ struct CharacterController
     CharacterController& operator=(CharacterController&& other) noexcept {
         if (this == &other) return *this;
 
+        ResetRuntime();
         ghostObj = other.ghostObj;
         controller = other.controller;
         capsuleShape = other.capsuleShape;
@@ -442,29 +451,24 @@ struct CharacterController
         return *this;
     }
 
-    ~CharacterController()
+    void ResetRuntime() noexcept
     {
-        if(controller)
+        if (auto* world = PhysicsWorld::Get().GetWorld())
         {
-            delete controller;
-            controller = nullptr;
+            if (controller)
+                world->removeAction(controller);
+            if (ghostObj && ghostObj->getBroadphaseHandle())
+                world->removeCollisionObject(ghostObj);
         }
-        if (ghostObj)
-        {
-            delete ghostObj;
-            ghostObj = nullptr;
-        }
-
-        if(capsuleShape)
-        {
-            delete capsuleShape;
-            capsuleShape = nullptr;
-		}
-
-       
+        delete controller;
+        controller = nullptr;
+        delete ghostObj;
+        ghostObj = nullptr;
+        delete capsuleShape;
+        capsuleShape = nullptr;
     }
 
-   
+    ~CharacterController() { ResetRuntime(); }
 };
 struct CharacterMovement
 {
@@ -775,19 +779,62 @@ struct SubmarineJointComponent
     Entity roomA = INVALID_ENTITY;
     Entity roomB = INVALID_ENTITY;
     btTypedConstraint* joint = nullptr;
+    bool registeredInPhysicsWorld = false;
 
     float breakForce = 50000.0f;
     float currentStress = 0.0f;
     bool isBroken = false;
 
-    ~SubmarineJointComponent()
+    SubmarineJointComponent() = default;
+    SubmarineJointComponent(const SubmarineJointComponent&) = delete;
+    SubmarineJointComponent& operator=(const SubmarineJointComponent&) = delete;
+
+    SubmarineJointComponent(SubmarineJointComponent&& other) noexcept
+        : compartmentA(other.compartmentA)
+        , compartmentB(other.compartmentB)
+        , roomA(other.roomA)
+        , roomB(other.roomB)
+        , joint(other.joint)
+        , registeredInPhysicsWorld(other.registeredInPhysicsWorld)
+        , breakForce(other.breakForce)
+        , currentStress(other.currentStress)
+        , isBroken(other.isBroken)
     {
-        if (joint)
-        {
-            delete joint;
-            joint = nullptr;
-        }
+        other.joint = nullptr;
+        other.registeredInPhysicsWorld = false;
     }
+
+    SubmarineJointComponent& operator=(SubmarineJointComponent&& other) noexcept
+    {
+        if (this == &other) return *this;
+        ResetJoint();
+        compartmentA = other.compartmentA;
+        compartmentB = other.compartmentB;
+        roomA = other.roomA;
+        roomB = other.roomB;
+        joint = other.joint;
+        registeredInPhysicsWorld = other.registeredInPhysicsWorld;
+        breakForce = other.breakForce;
+        currentStress = other.currentStress;
+        isBroken = other.isBroken;
+        other.joint = nullptr;
+        other.registeredInPhysicsWorld = false;
+        return *this;
+    }
+
+    void ResetJoint() noexcept
+    {
+        if (joint && registeredInPhysicsWorld)
+        {
+            if (auto* world = PhysicsWorld::Get().GetWorld())
+                world->removeConstraint(joint);
+        }
+        registeredInPhysicsWorld = false;
+        delete joint;
+        joint = nullptr;
+    }
+
+    ~SubmarineJointComponent() { ResetJoint(); }
 };
 
 struct JointConnectionComponent
@@ -801,10 +848,64 @@ struct JointConnectionComponent
     bool disableCollisions = true;
 
     btTypedConstraint* joint = nullptr;
+    bool registeredInPhysicsWorld = false;
     bool isBroken = false;
 
     bool showGizmo = true;
     XMFLOAT4 gizmoColor = { 1.0f, 1.0f, 0.0f, 1.0f };
+
+    JointConnectionComponent() = default;
+    JointConnectionComponent(const JointConnectionComponent&) = delete;
+    JointConnectionComponent& operator=(const JointConnectionComponent&) = delete;
+
+    JointConnectionComponent(JointConnectionComponent&& other) noexcept
+        : targetEntity(other.targetEntity)
+        , pivotA(other.pivotA)
+        , pivotB(other.pivotB)
+        , breakForce(other.breakForce)
+        , disableCollisions(other.disableCollisions)
+        , joint(other.joint)
+        , registeredInPhysicsWorld(other.registeredInPhysicsWorld)
+        , isBroken(other.isBroken)
+        , showGizmo(other.showGizmo)
+        , gizmoColor(other.gizmoColor)
+    {
+        other.joint = nullptr;
+        other.registeredInPhysicsWorld = false;
+    }
+
+    JointConnectionComponent& operator=(JointConnectionComponent&& other) noexcept
+    {
+        if (this == &other) return *this;
+        ResetJoint();
+        targetEntity = other.targetEntity;
+        pivotA = other.pivotA;
+        pivotB = other.pivotB;
+        breakForce = other.breakForce;
+        disableCollisions = other.disableCollisions;
+        joint = other.joint;
+        registeredInPhysicsWorld = other.registeredInPhysicsWorld;
+        isBroken = other.isBroken;
+        showGizmo = other.showGizmo;
+        gizmoColor = other.gizmoColor;
+        other.joint = nullptr;
+        other.registeredInPhysicsWorld = false;
+        return *this;
+    }
+
+    void ResetJoint() noexcept
+    {
+        if (joint && registeredInPhysicsWorld)
+        {
+            if (auto* world = PhysicsWorld::Get().GetWorld())
+                world->removeConstraint(joint);
+        }
+        registeredInPhysicsWorld = false;
+        delete joint;
+        joint = nullptr;
+    }
+
+    ~JointConnectionComponent() { ResetJoint(); }
 };
 
 // ==============================================================================

@@ -9,10 +9,6 @@ MultiTextureShaderClass::MultiTextureShaderClass()
 	m_sampleState = nullptr;
 }
 
-MultiTextureShaderClass::MultiTextureShaderClass(const MultiTextureShaderClass&)
-{
-}
-
 MultiTextureShaderClass::~MultiTextureShaderClass()
 {
 	ShutDown();

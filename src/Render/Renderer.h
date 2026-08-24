@@ -42,6 +42,10 @@ public:
     };
     Renderer(D3DClass* d3d, CameraClass* camera,
         SceneManager* sceneManager, ShadowMap* shadowMap);
+    Renderer(const Renderer&) = delete;
+    Renderer& operator=(const Renderer&) = delete;
+    Renderer(Renderer&&) = delete;
+    Renderer& operator=(Renderer&&) = delete;
 
     ~Renderer()
     {
@@ -117,7 +121,10 @@ public:
         ID3D11DeviceContext* context,
         const XMMATRIX& view,
         const XMMATRIX& projection,
-        Entity excludeEntity = INVALID_ENTITY);
+        Entity excludeEntity,
+        const XMFLOAT3& shadingCameraPosition,
+        const XMFLOAT3& visibilityCameraPosition,
+        bool skipReflectionSurfaces);
 
     void RenderToShadowMap(
         ID3D11DeviceContext* context,
@@ -137,10 +144,10 @@ private:
         const XMMATRIX& view,
         const XMMATRIX& projection);
     // -- Ядро -----------------------------------------------------------------
-    D3DClass* m_direct3D;
-    CameraClass* m_camera;
-    ShadowMap* m_shadowMap;     // не владеем: lifetime у ApplicationClass
-    SceneManager* m_sceneManager;
+    D3DClass* m_direct3D = nullptr;
+    CameraClass* m_camera = nullptr;
+    ShadowMap* m_shadowMap = nullptr;
+    SceneManager* m_sceneManager = nullptr;
     RenderFrameStats m_lastStats;
     bool m_firstPersonViewActive = false;
     Entity m_firstPersonLocalPlayer = INVALID_ENTITY;
@@ -171,6 +178,7 @@ private:
 
     // -- Приватные хелперы -----------------------------------------------------
     XMMATRIX BuildReflectionMatrix(float reflectY = 0.0f) const;
+    void     BindShadowState(ID3D11DeviceContext* context);
     void     UpdateWaterMaterials(ID3D11DeviceContext* context,
         const XMMATRIX& reflectionMatrix,
         bool needsReflectionPass,

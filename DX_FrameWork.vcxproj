@@ -230,6 +230,7 @@
     <None Include="SkyShader.ps" />
     <None Include="SkyShader.vs" />
     <None Include="src\Render\Shader\fog_common.hlsli" />
+    <None Include="src\Render\Shader\normal_transform.hlsli" />
     <None Include="src\Render\Grass\grass_instanced.ps" />
     <None Include="src\Render\Grass\grass_instanced.vs" />
     <None Include="src\Render\Shader\Ps\color.ps" />
@@ -308,7 +309,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros">
     <EngineIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\Animation;$(ProjectDir)src\Assets;$(ProjectDir)src\Config;$(ProjectDir)src\Core;$(ProjectDir)src\Debug;$(ProjectDir)src\ECS;$(ProjectDir)src\ECS\Components;$(ProjectDir)src\ECS\System;$(ProjectDir)src\Editor;$(ProjectDir)src\Gameplay\Combat;$(ProjectDir)src\Gameplay\Interaction;$(ProjectDir)src\Gameplay\Player;$(ProjectDir)src\Gameplay\Ship;$(ProjectDir)src\Gameplay\UI;$(ProjectDir)src\HelpFunc;$(ProjectDir)src\Input;$(ProjectDir)src\Render;$(ProjectDir)src\Render\BitMap;$(ProjectDir)src\Render\Camera;$(ProjectDir)src\Render\Grass;$(ProjectDir)src\Render\Material;$(ProjectDir)src\Render\Model;$(ProjectDir)src\Render\Shader;$(ProjectDir)src\Render\Text;$(ProjectDir)src\Render\Texture;$(ProjectDir)src\Scene;$(ProjectDir)src\Scene\Light;$(ProjectDir)lib;$(ProjectDir)lib\assimp;$(ProjectDir)lib\imgui-master</EngineIncludeDirectories>
+    <BulletRoot Condition="'$(BulletRoot)'=='' and '$(VCPKG_ROOT)'!=''">$(VCPKG_ROOT)\installed\x64-windows</BulletRoot>
     <BulletRoot Condition="'$(BulletRoot)'==''">$(ProjectDir)..\..\vcpkg\installed\x64-windows</BulletRoot>
+    <AssimpRuntimeDll Condition="'$(AssimpRuntimeDll)'=='' and Exists('$(ProjectDir)lib\Release\assimp-vc143-mt.dll')">$(ProjectDir)lib\Release\assimp-vc143-mt.dll</AssimpRuntimeDll>
+    <AssimpRuntimeDll Condition="'$(AssimpRuntimeDll)'=='' and Exists('$(ProjectDir)lib\assimp-vc143-mt.dll')">$(ProjectDir)lib\assimp-vc143-mt.dll</AssimpRuntimeDll>
+    <AssimpRuntimeDll Condition="'$(AssimpRuntimeDll)'=='' and Exists('$(ProjectDir)..\x64\$(Configuration)\assimp-vc143-mt.dll')">$(ProjectDir)..\x64\$(Configuration)\assimp-vc143-mt.dll</AssimpRuntimeDll>
+    <AssimpRuntimeDll Condition="'$(AssimpRuntimeDll)'=='' and Exists('$(ProjectDir)..\x64\Debug\assimp-vc143-mt.dll')">$(ProjectDir)..\x64\Debug\assimp-vc143-mt.dll</AssimpRuntimeDll>
     <!-- One-switch optional layer. Set to 0 and remove NpcNavMeshSystem.cpp if
          Recast/Detour must be completely detached from the project. -->
     <NpcNavMeshEnabled Condition="'$(NpcNavMeshEnabled)'==''">1</NpcNavMeshEnabled>
@@ -345,7 +351,7 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_CONSOLE;NPC_NAVMESH_ENABLED=$(NpcNavMeshEnabled);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;NPC_NAVMESH_ENABLED=$(NpcNavMeshEnabled);%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(EngineIncludeDirectories);$(BulletRoot)\include;$(BulletRoot)\include\bullet;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
@@ -366,14 +372,19 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;NPC_NAVMESH_ENABLED=$(NpcNavMeshEnabled);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NDEBUG;NPC_NAVMESH_ENABLED=$(NpcNavMeshEnabled);%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(EngineIncludeDirectories);$(BulletRoot)\include;$(BulletRoot)\include\bullet;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <SubSystem>Console</SubSystem>
+      <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies Condition="'$(NpcNavMeshEnabled)'=='1'">Recast.lib;Detour.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)lib;$(ProjectDir)lib\Release;$(BulletRoot)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <AdditionalDependencies Condition="'$(NpcNavMeshEnabled)'=='1'">assimp-vc143-mt.lib;BulletDynamics.lib;BulletCollision.lib;LinearMath.lib;Recast.lib;Detour.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(NpcNavMeshEnabled)'!='1'">assimp-vc143-mt.lib;BulletDynamics.lib;BulletCollision.lib;LinearMath.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
@@ -387,5 +398,12 @@
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\directxtex_desktop_win10.2026.4.1.1\build\native\directxtex_desktop_win10.targets'))" />
     <Error Condition="!Exists('..\packages\VisualLeakDetector.2.5.0.0\build\native\VisualLeakDetector.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\VisualLeakDetector.2.5.0.0\build\native\VisualLeakDetector.targets'))" />
+  </Target>
+  <Target Name="CopyAssimpRuntime" AfterTargets="Build" Condition="'$(Platform)'=='x64'">
+    <Warning Condition="'$(AssimpRuntimeDll)'==''" Text="assimp-vc143-mt.dll was not found. The executable will build but cannot start until the Assimp runtime is placed next to it or AssimpRuntimeDll is set." />
+    <Copy Condition="'$(AssimpRuntimeDll)'!=''"
+          SourceFiles="$(AssimpRuntimeDll)"
+          DestinationFolder="$(OutDir)"
+          SkipUnchangedFiles="true" />
   </Target>
 </Project>

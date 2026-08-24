@@ -238,6 +238,12 @@ public:
         XMFLOAT3 cameraPos,
         float deltaTime = 0.0f);
 
+    void PreparePbrDrawState(
+        ID3D11DeviceContext* context,
+        MaterialClass* material,
+        Entity entity,
+        const XMMATRIX& worldMatrix);
+
     void SetFirstPersonViewContext(bool active, Entity localPlayer)
     {
         m_firstPersonViewActive = active;
@@ -252,9 +258,11 @@ public:
         XMFLOAT4        lightColors[],
         XMFLOAT4        lightPositions[],
         const Settings::FogSettings& fog,
-        Entity excludeEntity = INVALID_ENTITY,
-        float deltaTime = 0.0f,
-        XMFLOAT3 cameraPos = { 0.0f, 0.0f, 0.0f });
+        Entity excludeEntity,
+        float deltaTime,
+        XMFLOAT3 shadingCameraPos,
+        XMFLOAT3 visibilityCameraPos,
+        bool skipReflectionSurfaces);
 
     // =========================================================================
     // Light-СЃС„РµСЂС‹ (С‚РѕР»СЊРєРѕ РґР»СЏ СЂРµРґР°РєС‚РѕСЂР°, РЅРµ С‡Р°СЃС‚СЊ ECS)
@@ -284,12 +292,8 @@ public:
 
     bool IsLightActive(Entity i)
     {
-
-        if (m_registry.HasComponent<LightComponent>(i))
-        {
-            return m_registry.GetComponent<LightComponent>(i)->enabled;
-        }
-
+        const auto* light = m_registry.GetComponent<LightComponent>(i);
+        return light && light->enabled;
     }
 
     bool SetObjectActive(Entity entity, bool active);
@@ -313,6 +317,7 @@ public:
 private:
 
     bool ShouldRenderInWorldPass(Entity entity);
+    void ReleasePhysicsRuntime() noexcept;
 
     struct AsyncShipImportState;
     std::shared_ptr<AsyncShipImportState> m_asyncShipImport;

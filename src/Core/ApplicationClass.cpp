@@ -175,6 +175,15 @@ ID3D11ShaderResourceView* ApplicationClass::LoadSkyboxFromWorldSettings(
 // ============================================================================
 bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 {
+    Shutdown();
+    m_isShutdown = false;
+    struct InitializationGuard
+    {
+        ApplicationClass* owner = nullptr;
+        bool committed = false;
+        ~InitializationGuard() { if (!committed) owner->Shutdown(); }
+    } initializationGuard{ this };
+
     m_hwnd = hwnd;
     m_screenWidth = screenWidth;
     m_screenHeight = screenHeight;
@@ -249,7 +258,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_normalMapShader = sm.Load<NormalMapShaderClass>("normalmap", m_direct3D->GetDevice(), hwnd);
     m_fogShader = sm.Load<FogShaderClass>("fog", m_direct3D->GetDevice(), hwnd);
     m_ClipPlaneShader = sm.Load<ClipPlaneShaderClass>("clip", m_direct3D->GetDevice(), hwnd);
-    m_ColorShader = sm.Load<ColorShaderClass>("color", m_direct3D->GetDevice(), hwnd);
+    m_colorShader = sm.Load<ColorShaderClass>("color", m_direct3D->GetDevice(), hwnd);
     m_WaterShader = sm.Load<WaterShaderClass>("water", m_direct3D->GetDevice(), hwnd);
     m_reflectionShader = sm.Load<ReflectionShaderClass>("reflection", m_direct3D->GetDevice(), hwnd);
     m_glassShader = sm.Load<GlassShaderClass>("glass", m_direct3D->GetDevice(), hwnd);
@@ -258,6 +267,17 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_pbrShader = sm.Load<PBRShaderClass>("pbr", m_direct3D->GetDevice(), hwnd);
     m_terrainBlendShader = sm.Load<TerrainBlendShaderClass>("terrain_blend", m_direct3D->GetDevice(), hwnd);
     m_SkyShader = sm.Load<SkyShaderClass>("sky",m_direct3D->GetDevice(), hwnd);
+
+    if (!m_textureShader || !m_multiTextureShader || !m_lightMapShader ||
+        !m_normalMapShader || !m_fogShader || !m_ClipPlaneShader ||
+        !m_colorShader || !m_WaterShader || !m_reflectionShader ||
+        !m_glassShader || !m_projectionShader || !m_lightShader ||
+        !m_pbrShader || !m_terrainBlendShader || !m_SkyShader)
+    {
+        OutputDebugStringA(
+            "Application initialization aborted: one or more required shaders failed.\n");
+        return false;
+    }
 
     
 
@@ -274,14 +294,6 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     if (!m_compartmentRenderer->Initialize(m_direct3D->GetDevice()))
     {
         MessageBox(hwnd, L"Failed to initialize CompartmentDebugRenderer", L"Error", MB_OK);
-        return false;
-    }
-
-    m_colorShader = new ColorShaderClass();
-
-    if (!m_colorShader->Initialize(m_direct3D->GetDevice(), hwnd))
-    {
-        MessageBox(hwnd, L"Failed to initialize ColorShader", L"Error", MB_OK);
         return false;
     }
 
@@ -324,8 +336,6 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     // ?? FIX: Расширяем ортогональную проекцию (была 30x30, теперь 50x50)
     // Это позволит охватить все объекты
     XMMATRIX lightProj = XMMatrixOrthographicLH(100, 100, 0.5f, 200.0f);
-
-    m_shadowMap->SetLightViewProjection(lightView, lightProj);
 
     m_shadowMap->SetLightViewProjection(lightView, lightProj);
     // Создаём тестовую физическую сцену
@@ -539,12 +549,14 @@ m_renderer = new Renderer(
 
     dwrite_text.InitializeRenderTarget(m_direct3D->GetSwapChain());
 
-	m_jobSystem.Initialize(4); // Инициализируем с 4 рабочими потоками (можно по количеству ядер)
+	if (!m_jobSystem.Initialize(4))
+		return false;
 
 
 	m_sceneManager.SpawnSprite(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/sprite_test.png", 0, 0, 0, 1, 1);
 
 
+    initializationGuard.committed = true;
     return true;
 }
 
@@ -558,6 +570,10 @@ m_renderer = new Renderer(
 // ============================================================================
 void ApplicationClass::Shutdown()
 {
+    if (m_isShutdown)
+        return;
+    m_isShutdown = true;
+
     m_jobSystem.Shutdown();
     m_jobSystem.ExecuteMainThreadJobs();
 
@@ -579,10 +595,10 @@ void ApplicationClass::Shutdown()
         m_direct3D->GetDeviceContext()->Flush();
     }
 
-    // Bullet keeps non-owning pointers to ECS physics components. Detach those
-    // registrations before clearing the registry and deleting the components.
-    PhysicsWorld::Get().Shutdown();
+    // ECS owns Bullet actions, constraints, bodies and shapes. Release them in
+    // dependency order while the world is still alive, then destroy the world.
     m_sceneManager.Clear();
+    PhysicsWorld::Get().Shutdown();
 
     if (m_lightSphereModel)
     {
@@ -704,12 +720,7 @@ void ApplicationClass::Shutdown()
         m_renderer = nullptr;  // Обязательно обнуляем!
     }
 
-    if (m_colorShader)
-    {
-        m_colorShader->ShutDown();
-        delete m_colorShader;
-        m_colorShader = nullptr;
-    }
+    m_colorShader = nullptr;
 
     m_editorUI.Shutdown();
 
@@ -729,6 +740,8 @@ void ApplicationClass::Shutdown()
 
     if (m_direct3D)
         m_direct3D->Shutdown();
+
+    m_input = nullptr;
 
 }
 

@@ -4764,7 +4764,7 @@ void EditorUI::RenderJointConnectionUI(ECSRegistry& registry, Entity selectedEnt
             if (ImGui::Button("Add Joint Connection"))
             {
                 JointConnectionComponent newComp{};
-                registry.AddComponent<JointConnectionComponent>(selectedEntity, newComp);
+                registry.AddComponent<JointConnectionComponent>(selectedEntity, std::move(newComp));
                 jointComp = registry.GetComponent<JointConnectionComponent>(selectedEntity);
             }
         }

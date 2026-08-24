@@ -78,7 +78,9 @@ public:
         : m_assetLoadSystem(m_jobSystem)
     {
     }
-    ~ApplicationClass() = default;
+    ApplicationClass(const ApplicationClass&) = delete;
+    ApplicationClass& operator=(const ApplicationClass&) = delete;
+    ~ApplicationClass() { Shutdown(); }
 
     bool Initialize(int screenWidth, int screenHeight, HWND hwnd);
     void CreatePhysicsTestScene();
@@ -93,6 +95,7 @@ public:
     void SetInput(InputClass* input) { m_input = input; m_cameraController.SetInput(&m_inputManager, m_input, m_hwnd); }
 
 private:
+    bool m_isShutdown = true;
     // -- Методы рендеринга ----------------------------------------------------
     void Render3DObjects(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
     void RenderLightSources(ID3D11DeviceContext* context, const XMMATRIX& view, const XMMATRIX& proj);
@@ -143,8 +146,8 @@ private:
     void UpdateTestRifleVisuals();
 
 
-    ShadowMap* m_shadowMap;
-    ShadowShaderClass* m_shadowShader;  // < НОВОЕ
+    ShadowMap* m_shadowMap = nullptr;
+    ShadowShaderClass* m_shadowShader = nullptr;
 
     // -- Ядро Direct3D --------------------------------------------------------
     std::unique_ptr<D3DClass> m_direct3D;
@@ -181,7 +184,6 @@ private:
     NormalMapShaderClass* m_normalMapShader = nullptr;
     FogShaderClass* m_fogShader = nullptr;
     ClipPlaneShaderClass* m_ClipPlaneShader = nullptr;
-    ColorShaderClass* m_ColorShader = nullptr;
     WaterShaderClass* m_WaterShader = nullptr;
     GlassShaderClass* m_glassShader = nullptr;
     ReflectionShaderClass* m_reflectionShader = nullptr;
@@ -195,8 +197,8 @@ private:
     int m_screenHeight = 0;
 
     // -- Матрицы кадра --------------------------------------------------------
-    XMMATRIX m_viewMatrix;
-    XMMATRIX m_projMatrix;
+    XMMATRIX m_viewMatrix = XMMatrixIdentity();
+    XMMATRIX m_projMatrix = XMMatrixIdentity();
 
     // -- Состояние активного перетаскивания -----------------------------------
     bool     m_isDragging = false;

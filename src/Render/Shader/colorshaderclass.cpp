@@ -10,11 +10,6 @@ ColorShaderClass::ColorShaderClass()
 
 }
 
-ColorShaderClass::ColorShaderClass(const ColorShaderClass&)
-{
-	
-}
-
 ColorShaderClass::~ColorShaderClass()
 {
     ShutDown();
