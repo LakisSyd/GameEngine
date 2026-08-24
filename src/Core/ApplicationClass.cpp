@@ -1653,15 +1653,15 @@ void ApplicationClass::ProcessEditorRequests()
             }
             else
             {
-                Entity ship = m_sceneManager.RequestShipImportAsync(
+                const bool submitted = m_sceneManager.RequestShipImportAsync(
                     req.path
-                    
+
                 );
 
-                if (ship == INVALID_ENTITY)
+                if (!submitted)
                 {
                     OutputDebugStringA(
-                        "[ImportShip] Sync import failed.\n");
+                        "[ImportShip] Async import request was rejected.\n");
                 }
             }
         }
