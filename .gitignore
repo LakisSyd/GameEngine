@@ -18,6 +18,21 @@ bld/
 .vscode/
 
 assets/
+!assets/
+assets/*
+!assets/model/
+assets/model/*
+!assets/model/Kevin_Combat_Game.blend
+!assets/model/Kevin_Combat_Game.glb
+!assets/model/Kevin_Combat_FP.blend
+!assets/model/Kevin_Combat_FP.glb
+!assets/model/*.sockets.json
+!assets/model/Rifle_M4_CC0.glb
+!assets/model/Rifle_M4_CC0_SOURCE.md
+!assets/config/
+assets/config/*
+!assets/config/weapons/
+!assets/config/weapons/*.json
 
 # ReSharper
 _ReSharper*/
@@ -103,3 +118,31 @@ $RECYCLE.BIN/
 # !*.tga
 # !*.png
 # !*.jpgassets/
+
+# === Generated local artifacts ===
+__pycache__/
+*.py[cod]
+vcpkg_installed/
+docs/_docx_render_tools/
+docs/_render_*/
+tools/qa/
+tools/qa_*/
+tools/*_qa/
+tools/*_report.txt
+
+# === Local engine books / generated documentation ===
+# Исходники игры остаются видимыми, а большие учебники, превью и результаты
+# проверки документации не попадают в новые коммиты.
+docs/DX_FRAMEWORK_ENGINE_*
+docs/ENGINE_TEXTBOOK_*
+docs/ROADMAP_*
+docs/qa_textbook_*
+docs/.v*_render*/
+docs/_qa_*/
+docs/qa_*/
+docs/*_preview.pdf
+
+# === Local Python authoring / QA helpers ===
+# Эти скрипты используются локально для Blender, экспорта и генерации книг.
+docs/*.py
+tools/*.py
