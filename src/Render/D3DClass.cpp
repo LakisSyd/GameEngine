@@ -1,30 +1,16 @@
 ﻿#include "D3DClass.h"
 #include <string>
+#include <vector>
+#include <wrl/client.h>
 #include "helper.h"
 //==============CHECK 
 
 
-D3DClass::D3DClass()
-{
-	m_swapChain = nullptr; 
-	m_device = nullptr;
-	m_deviceContext = nullptr;
-	m_renderTargetView = nullptr;
-	m_depthStencilBuffer = nullptr;
-	m_depthStencilState = nullptr;
-	m_depthStencilView = nullptr;
-	m_rasterState = nullptr;
-    m_depthDisabledStencilState = nullptr;  // ❗ Важно!
-
-    
-}
-
-D3DClass::D3DClass(const D3DClass&)
-{
-}
+D3DClass::D3DClass() = default;
 
 D3DClass::~D3DClass()
 {
+    Shutdown();
 }
 
 // 📌 Инициализация графической подсистемы DirectX 11
@@ -44,21 +30,33 @@ bool D3DClass::Initialize(
     float screenDepth,
     float screenNear)
 {
+    if (!hwnd || screenWidth <= 0 || screenHeight <= 0
+        || screenNear <= 0.0f || screenDepth <= screenNear)
+        return false;
+
+    Shutdown();
+    struct InitializationGuard
+    {
+        D3DClass* owner = nullptr;
+        bool committed = false;
+        ~InitializationGuard() { if (!committed) owner->Shutdown(); }
+    } initializationGuard{ this };
+
     // ========================================================================
     // 📦 ПЕРЕМЕННЫЕ И ПОДГОТОВКА
     // ========================================================================
     HRESULT result;
-    IDXGIFactory* factory = nullptr;
-    IDXGIAdapter* adapter = nullptr;
-    IDXGIOutput* adapterOutput = nullptr;
+    Microsoft::WRL::ComPtr<IDXGIFactory> factory;
+    Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
+    Microsoft::WRL::ComPtr<IDXGIOutput> adapterOutput;
     unsigned int numModes = 0, i = 0, numerator = 60, denominator = 1;
     unsigned long long stringLength;
-    DXGI_MODE_DESC* displayModeList = nullptr;
-    DXGI_ADAPTER_DESC adapterDesc;
+    std::vector<DXGI_MODE_DESC> displayModeList;
+    DXGI_ADAPTER_DESC adapterDesc{};
     int error;
     DXGI_SWAP_CHAIN_DESC swapChainDesc;
     D3D_FEATURE_LEVEL featureLevel;
-    ID3D11Texture2D* backBufferPtr = nullptr;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> backBufferPtr;
     D3D11_TEXTURE2D_DESC depthBufferDesc;
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc;
     D3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc;
@@ -72,13 +70,15 @@ bool D3DClass::Initialize(
     // ========================================================================
 
     // Создаём фабрику DXGI
-    DX_CHECK(CreateDXGIFactory(__uuidof(IDXGIFactory), (void**)&factory));
+    DX_CHECK(CreateDXGIFactory(
+        __uuidof(IDXGIFactory),
+        reinterpret_cast<void**>(factory.GetAddressOf())));
 
     // Получаем основной адаптер (видеокарту)
-    DX_CHECK(factory->EnumAdapters(0, &adapter));
+    DX_CHECK(factory->EnumAdapters(0, adapter.GetAddressOf()));
 
     // Получаем выход адаптера (монитор)
-    DX_CHECK(adapter->EnumOutputs(0, &adapterOutput));
+    DX_CHECK(adapter->EnumOutputs(0, adapterOutput.GetAddressOf()));
 
     // Получаем количество поддерживаемых режимов отображения
     DX_CHECK(adapterOutput->GetDisplayModeList(
@@ -88,15 +88,14 @@ bool D3DClass::Initialize(
         NULL));
 
     // Создаём массив для хранения режимов
-    displayModeList = new DXGI_MODE_DESC[numModes];
-    if (!displayModeList) return false;
+    displayModeList.resize(numModes);
 
     // Заполняем массив режимов
     DX_CHECK(adapterOutput->GetDisplayModeList(
         DXGI_FORMAT_R8G8B8A8_UNORM,
         DXGI_ENUM_MODES_INTERLACED,
         &numModes,
-        displayModeList));
+        displayModeList.data()));
 
     // Ищем режим, совпадающий с разрешением экрана
     for (i = 0; i < numModes; i++)
@@ -117,19 +116,6 @@ bool D3DClass::Initialize(
     error = wcstombs_s(&stringLength, m_videoCardDescription, 128,
         adapterDesc.Description, 128);
     if (error != 0) return false;
-
-    // Освобождаем временные ресурсы
-    delete[] displayModeList;
-    displayModeList = nullptr;
-
-    adapterOutput->Release();
-    adapterOutput = nullptr;
-
-    adapter->Release();
-    adapter = nullptr;
-
-    factory->Release();
-    factory = nullptr;
 
     // ========================================================================
     // 🔗 НАСТРОЙКА SWAP CHAIN
@@ -169,12 +155,18 @@ bool D3DClass::Initialize(
     // ⭐ СОЗДАНИЕ УСТРОЙСТВА И SWAP CHAIN (ТОЛЬКО ПОСЛЕ НАСТРОЙКИ!)
     // ========================================================================
 
-    UINT createDeviceFlags = 0;
+
+   
+
+
+
+    UINT createDeviceFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
 #ifdef _DEBUG
     createDeviceFlags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
-    DX_CHECK(D3D11CreateDeviceAndSwapChain(
+    result = D3D11CreateDeviceAndSwapChain(
         NULL,
         D3D_DRIVER_TYPE_HARDWARE,
         NULL,
@@ -186,18 +178,42 @@ bool D3DClass::Initialize(
         &m_swapChain,
         &m_device,
         NULL,
-        &m_deviceContext));
+        &m_deviceContext);
+
+#ifdef _DEBUG
+    // The optional Direct3D debug layer is not installed on every developer
+    // or demo machine. Keep Debug builds runnable and report the fallback.
+    if (result == DXGI_ERROR_SDK_COMPONENT_MISSING)
+    {
+        OutputDebugStringA(
+            "[D3D] Debug layer is unavailable; creating the device without it.\n");
+        createDeviceFlags &= ~D3D11_CREATE_DEVICE_DEBUG;
+        result = D3D11CreateDeviceAndSwapChain(
+            NULL,
+            D3D_DRIVER_TYPE_HARDWARE,
+            NULL,
+            createDeviceFlags,
+            &featureLevel,
+            1,
+            D3D11_SDK_VERSION,
+            &swapChainDesc,
+            &m_swapChain,
+            &m_device,
+            NULL,
+            &m_deviceContext);
+    }
+#endif
+
+    DX_CHECK(result);
 
     // ========================================================================
     // 🎨 СОЗДАНИЕ BACK BUFFER
     // ========================================================================
 
     DX_CHECK(m_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D),
-        (LPVOID*)&backBufferPtr));
-    DX_CHECK(m_device->CreateRenderTargetView(backBufferPtr, NULL,
+        reinterpret_cast<void**>(backBufferPtr.GetAddressOf())));
+    DX_CHECK(m_device->CreateRenderTargetView(backBufferPtr.Get(), NULL,
         &m_renderTargetView));
-    backBufferPtr->Release();
-    backBufferPtr = nullptr;
 
     // ========================================================================
     // 🧱 СОЗДАНИЕ DEPTH BUFFER
@@ -350,6 +366,7 @@ bool D3DClass::Initialize(
         (float)screenHeight, 0.0f,
         screenNear, screenDepth);
 
+    initializationGuard.committed = true;
     return true;
 }
 
@@ -458,6 +475,15 @@ void D3DClass::BeginScene(float red, float green, float blue, float alpha)
     m_deviceContext->ClearDepthStencilView(m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
 
     return;
+}
+
+void D3DClass::ClearDepthBuffer()
+{
+    if (m_deviceContext && m_depthStencilView)
+    {
+        m_deviceContext->ClearDepthStencilView(
+            m_depthStencilView, D3D11_CLEAR_DEPTH, 1.0f, 0);
+    }
 }
 
 void D3DClass::EndScene()

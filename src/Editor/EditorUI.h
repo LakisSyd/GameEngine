@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 #include <imgui.h>
 #include <string>
 #include <array>
@@ -7,7 +7,10 @@
 #include "FileSystem.h"
 #include "ShaderManager.h"
 #include "PhysicsDebugRenderer.h"
-#include "../../GameplayController.h"
+#include "GameplayController.h"
+#include "Gameplay/Effects/ParticleSystem.h"
+
+class CameraController;
 
 class EditorUI
 {
@@ -22,6 +25,7 @@ public:
     void RenderMainMenu(SceneManager& sceneManager);
     void Update(SceneManager& sceneManager);
     void UpdateDebugOverlay(SceneManager& sceneManager);
+    void UpdatePlayOverlay(SceneManager& sceneManager);
     void BeginMainMenuBar(SceneManager& sceneManager);
     void Render();
 
@@ -82,6 +86,19 @@ public:
         return req;
     }
 
+
+    struct ImportShipRequest
+    {
+        bool pending = false;
+        std::string path;
+    };
+
+    ImportShipRequest ConsumeImportShipRequest()
+    {
+        ImportShipRequest req = m_importShipRequest;
+        m_importShipRequest.pending = false;
+        return req;
+    }
     struct FileActionRequest
     {
         bool        pending = false;
@@ -117,20 +134,31 @@ public:
     bool WantCaptureMouse() const;
     void ToggleObjectDebugWindow() { m_showObjectDebugWindow = !m_showObjectDebugWindow; }
     bool IsObjectDebugWindowVisible() const { return m_showObjectDebugWindow; }
+    bool ConsumeWeaponVisualReloadRequest()
+    {
+        const bool requested = m_weaponVisualReloadRequested;
+        m_weaponVisualReloadRequested = false;
+        return requested;
+    }
     void RefreshShaderList() { m_shaderNames = ShaderManager::Get().GetNames(); }
+    void SetCameraController(CameraController* controller) { m_cameraController = controller; }
 
 private:
-    // ── Состояние выделения ───────────────────────────────────────────────────
+    // -- Состояние выделения ---------------------------------------------------
     SelectedType m_selectedType = SelectedType::None;
     Entity       m_selectedEntity = INVALID_ENTITY;
     int          m_selectedLegacyIndex = -1;
     bool         m_showObjectDebugWindow = false;
+    bool         m_weaponVisualReloadRequested = false;
+    std::string  m_weaponProfileStatus;
 
     void RenderPhysicsDebugPanel();
+    void RenderCameraPanel();
     void CreateNewCompartment(ECSRegistry& registry, Entity submarineRoot);
     ID3D11ShaderResourceView* m_scenePreviewSRV = nullptr;
 
     SpawnRequest      m_spawnRequest;
+    ImportShipRequest m_importShipRequest;
     FileActionRequest m_saveRequest;
     FileActionRequest m_loadRequest;
 
@@ -147,6 +175,35 @@ private:
 	char m_spawnCollisionModelPath[256] = "physics_";
     char  m_spawnTexturePath[256] = "assets/texture/stone.tga";
     float m_spawnPos[3] = { 0.0f, 0.0f, 0.0f };
+
+    // Image particle authoring. Static pictures use a 1x1 atlas; animated
+    // sprite sheets can select any columns/rows/frame count.
+    char m_particleTexturePath[260] = "assets/texture/particles/fire_realistic_4x4.png";
+    float m_particlePosition[3] = { 0.0f, 1.0f, 0.0f };
+    float m_particleDirection[3] = { 0.0f, 1.0f, 0.0f };
+    float m_particleAcceleration[3] = { 0.0f, 0.2f, 0.0f };
+    float m_particleStartColor[4] = { 1.0f, 0.65f, 0.2f, 1.0f };
+    float m_particleEndColor[4] = { 1.0f, 0.12f, 0.01f, 0.0f };
+    float m_particleRate = 20.0f;
+    float m_particleRadius = 0.05f;
+    float m_particleSpread = 0.35f;
+    float m_particleSpeed[2] = { 0.4f, 1.2f };
+    float m_particleLifetime[2] = { 0.5f, 1.2f };
+    float m_particleStartSize[2] = { 0.15f, 0.30f };
+    float m_particleEndSize[2] = { 0.35f, 0.70f };
+    float m_particleRotationSpeed[2] = { -1.0f, 1.0f };
+    float m_particleDrag = 0.5f;
+    float m_particleAspectRatio = 1.0f;
+    int m_particleAtlasColumns = 4;
+    int m_particleAtlasRows = 4;
+    int m_particleAtlasFrameCount = 16;
+    float m_particleAtlasFps = 20.0f;
+    bool m_particleAtlasLoop = true;
+    bool m_particleRandomStartFrame = false;
+    int m_particleBlendMode = 1;
+    int m_particleBurstCount = 32;
+    ParticleEmitterId m_particlePreviewEmitter = INVALID_PARTICLE_EMITTER;
+    std::string m_particleEditorStatus;
 
     char m_skyboxPathBuf[256] = "assets/texture/cubemap/day.hdr";
 
@@ -177,18 +234,21 @@ private:
 
     float m_menuBarHeight = 0.0f;
 
-    // ── Методы рендера ────────────────────────────────────────────────────────
+    // -- Методы рендера --------------------------------------------------------
     void RenderSidebar(SceneManager& sceneManager);
     void RenderSceneOutliner(SceneManager& sceneManager);
     void RenderDetailsPanel(SceneManager& sceneManager);
     void RenderObjectDebugWindow(SceneManager& sceneManager);
+    void RenderWeaponGripPlayWindow(SceneManager& sceneManager);
     void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity entity);
     void RenderSpawnPanel(SceneManager& sceneManager);
+    void RenderParticleEditor();
+    void RenderAssetLoadingPanel(SceneManager& sceneManager);
     void RenderFogPanel(SceneManager& sceneManager);
     void RenderScenePreview();
 
     void RenderObjectProperties(SceneManager& sceneManager, Entity entity);
-    void RenderComponentManager(SceneManager& sceneManager, Entity entity); // ← НОВЫЙ
+    void RenderComponentManager(SceneManager& sceneManager, Entity entity); // < НОВЫЙ
     void RenderSpriteProperties(WorldSpriteClass* sprite);
     void RenderLightPropertiesByEntity(SceneManager& sceneManager, Entity lightEntity);
 
@@ -231,6 +291,7 @@ private:
     ShaderBaseClass* m_knifeOldShader = nullptr;
 
     PhysicsDebugSettings m_debugSettings;
+    CameraController* m_cameraController = nullptr;
 
 
     FileSystem* m_fileSystem = nullptr;
@@ -322,7 +383,7 @@ private:
     bool m_rebuildGrassRequested = false;
 
 
-    // Синхронизация кэша из внешнего кода (ApplicationClass → corner drag)
+    // Синхронизация кэша из внешнего кода (ApplicationClass > corner drag)
     void UpdateCacheFromCompartment_Public(const CompartmentComponent* comp) { UpdateCacheFromCompartment(comp); }
     private:
     // Вспомогательные методы

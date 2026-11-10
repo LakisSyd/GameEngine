@@ -21,7 +21,7 @@ namespace Settings {
 
     // === Πενδεπ ===
     constexpr float GIZMO_CLIP_SPACE_SIZE = 0.3f;
-    constexpr bool VSYNC_ENABLED = true;
+    constexpr bool VSYNC_ENABLED = false;
     constexpr bool FULLSCREEN = false;
     constexpr float SCREEN_DEPTH = 1000.0f;
     constexpr float SCREEN_NEAR = 0.3f;

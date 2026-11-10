@@ -32,6 +32,10 @@ class ShaderBaseClass
 {
 public:
     ShaderBaseClass();
+    ShaderBaseClass(const ShaderBaseClass&) = delete;
+    ShaderBaseClass& operator=(const ShaderBaseClass&) = delete;
+    ShaderBaseClass(ShaderBaseClass&&) = delete;
+    ShaderBaseClass& operator=(ShaderBaseClass&&) = delete;
 
     virtual ~ShaderBaseClass();
     virtual bool Initialize(ID3D11Device* device, HWND hwnd) { return true; }
@@ -45,11 +49,11 @@ public:
 
 protected:
     // === Общие ресурсы (доступны наследникам) ===
-    ID3D11VertexShader* m_vertexShader;
-    ID3D11PixelShader* m_pixelShader;
-    ID3D11InputLayout* m_layout;
-    ID3D11SamplerState* m_sampleState;
-    ID3D11Buffer* m_fogBuffer;   // ← слот b2 во всех шейдерах
+    ID3D11VertexShader* m_vertexShader = nullptr;
+    ID3D11PixelShader* m_pixelShader = nullptr;
+    ID3D11InputLayout* m_layout = nullptr;
+    ID3D11SamplerState* m_sampleState = nullptr;
+    ID3D11Buffer* m_fogBuffer = nullptr;
 
     // === Утилиты для наследников (НЕ виртуальные!) ===
     bool CompileShader(

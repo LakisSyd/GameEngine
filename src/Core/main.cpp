@@ -1,6 +1,5 @@
 ﻿#include "SystemClass.h"
 #include <windows.h>
-#define _CRTDBG_MAP_ALLOC
 #include <crtdbg.h>
 // 📌 WinMain — стандартная точка входа для оконных приложений Windows
 // ⚙️ Параметры:
@@ -13,9 +12,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, int nCmdShow)
 {
-    _CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-    _CrtSetReportMode(_CRT_WARN, _CRTDBG_MODE_DEBUG);
-   _CrtSetBreakAlloc(4452);
+
     // 💡 DPI Awareness — отключаем автоматическое масштабирование Windows
 //    //    Без этого окно может "поплыть" на мониторах с высоким DPI (4K и т.д.)
 //    //    Важно для точного контроля над размерами рендера в DirectX
@@ -38,5 +35,5 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PSTR pCmdLine, 
 //    // 💡 ВАЖНО: очистка вызывается ЯВНО, а не в деструкторе (см. systemclass.cpp)
     system.Shutdown();
 //
-    return 0;
+    return result ? 0 : 1;
 }

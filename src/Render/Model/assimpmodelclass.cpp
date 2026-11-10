@@ -1,5 +1,5 @@
 // ============================================================================
-// assimpmodelclass.cpp � ������ ���������� � ����������� ��������
+// assimpmodelclass.cpp пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 
 #include "assimpmodelclass.h"
@@ -8,6 +8,7 @@
 #include <fstream>
 #include <GltfMaterial.h>
 #include <algorithm>
+#include <cctype>
 #include "PBRShaderClass.h"
 #include <DirectXMath.h>
 #include <functional>
@@ -15,26 +16,26 @@
 using namespace DirectX;
 
 // ============================================================================
-// ���������� ��������� �������
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
-#define DEBUG_VERBOSE 0          // ��������� �����
-#define DEBUG_BONE_MATCHING 0    // ������� ������������� ������
-#define DEBUG_TRANSFORMS 0       // ������� �������������
-#define DEBUG_ANIMATION_KEYS 0   // ������� ������ ��������
+#define DEBUG_VERBOSE 0          // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
+#define DEBUG_BONE_MATCHING 0    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
+#define DEBUG_TRANSFORMS 0       // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
+#define DEBUG_ANIMATION_KEYS 0   // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 
 static std::string SafeReadAiString(const aiString& aiStr) {
     if (aiStr.length == 0) return "";
-    // ������ ����� aiStr.length ����, ��������� ���������� \0
+    // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ aiStr.length пїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ \0
     return std::string(aiStr.C_Str(), aiStr.length);
 }
 
 
 static std::string NormalizeBoneName(std::string name) {
-    // 1. ������� �������� ���������� �����������
+    // 1. пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     size_t pos = name.find("_scaleCompensation");
     if (pos != std::string::npos) name = name.substr(0, pos);
 
-    // 2. ������� �������� ���� _01, _02, _14 � �.�.
+    // 2. пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ _01, _02, _14 пїЅ пїЅ.пїЅ.
     pos = name.find_last_of('_');
     if (pos != std::string::npos) {
         std::string suffix = name.substr(pos + 1);
@@ -46,7 +47,7 @@ static std::string NormalizeBoneName(std::string name) {
 }
 
 // ============================================================================
-// ��������������� ������� �������
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 static void PrintMatrix(const XMFLOAT4X4& matrix, const std::string& label) {
 #if DEBUG_VERBOSE
@@ -78,7 +79,7 @@ static void PrintQuaternion(const XMFLOAT4& quat, const std::string& label) {
 }
 
 // ============================================================================
-// ����������� / ����������
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ / пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 AssimpModelClass::AssimpModelClass()
     : m_scene(nullptr),
@@ -108,7 +109,7 @@ AssimpModelClass::~AssimpModelClass()
 }
 
 // ============================================================================
-// ��������������� �������
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 static bool WriteTempFile(const std::string& filename, const char* data, size_t size)
 {
@@ -118,10 +119,42 @@ static bool WriteTempFile(const std::string& filename, const char* data, size_t 
     return of.good();
 }
 
+static std::unordered_map<std::string, ID3D11ShaderResourceView*> g_assimpTextureCache;
+
+static std::string MakeTextureCacheKey(
+    const aiScene* scene,
+    const aiMaterial* mat,
+    aiTextureType type,
+    const aiString& path)
+{
+    return std::to_string(reinterpret_cast<uintptr_t>(scene)) + "|" +
+        std::to_string(reinterpret_cast<uintptr_t>(mat)) + "|" +
+        std::to_string(static_cast<int>(type)) + "|" + path.C_Str();
+}
+
+static ID3D11ShaderResourceView* TryGetCachedTexture(const std::string& key)
+{
+    auto it = g_assimpTextureCache.find(key);
+    if (it == g_assimpTextureCache.end() || !it->second)
+        return nullptr;
+
+    it->second->AddRef();
+    return it->second;
+}
+
+static void StoreCachedTexture(const std::string& key, ID3D11ShaderResourceView* srv)
+{
+    if (!srv || g_assimpTextureCache.find(key) != g_assimpTextureCache.end())
+        return;
+
+    srv->AddRef();
+    g_assimpTextureCache[key] = srv;
+}
+
 XMFLOAT4X4 AssimpModelClass::ConvertMatrix(const aiMatrix4x4& from) const
 {
     XMFLOAT4X4 to;
-    // ������������� ��� �����������:
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ:
     to._11 = from.a1; to._12 = from.b1; to._13 = from.c1; to._14 = from.d1;
     to._21 = from.a2; to._22 = from.b2; to._23 = from.c2; to._24 = from.d2;
     to._31 = from.a3; to._32 = from.b3; to._33 = from.c3; to._34 = from.d3;
@@ -194,7 +227,7 @@ ID3D11ShaderResourceView* AssimpModelClass::Create1x1SRVFromColor(ID3D11Device* 
 }
 
 // ============================================================================
-// �������� ������� (���������� � �������)
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
 // ============================================================================
 ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
     ID3D11Device* device,
@@ -207,13 +240,17 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
     if (!mat) return nullptr;
     aiString path;
 
-    // ������� ������ ��� ��������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     if (mat->GetTextureCount(type1) > 0 && mat->GetTexture(type1, 0, &path) == AI_SUCCESS)
     {
         std::string texPath = path.C_Str();
         if (!texPath.empty())
         {
-            // ���������� �������� (������ ���� "*0")
+            const std::string cacheKey = MakeTextureCacheKey(scene, mat, type1, path);
+            if (auto* cached = TryGetCachedTexture(cacheKey))
+                return cached;
+
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ "*0")
             if (texPath[0] == '*')
             {
                 int index = atoi(texPath.c_str() + 1);
@@ -222,7 +259,7 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                     const aiTexture* tex = scene->mTextures[index];
                     if (!tex) return nullptr;
 
-                    if (tex->mHeight == 0) // ������ ������ (PNG/JPG)
+                    if (tex->mHeight == 0) // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ (PNG/JPG)
                     {
                         char tmpPath[MAX_PATH] = { 0 };
                         if (GetTempPathA(MAX_PATH, tmpPath) == 0) return nullptr;
@@ -249,10 +286,14 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                         m_ownedTextures.push_back(t);
                         DeleteFileA(filename.c_str());
                         ID3D11ShaderResourceView* srv = t->GetTexture();
-                        if (srv) srv->AddRef();
+                        if (srv)
+                        {
+                            StoreCachedTexture(cacheKey, srv);
+                            srv->AddRef();
+                        }
                         return srv;
                     }
-                    else // Raw RGBA ������
+                    else // Raw RGBA пїЅпїЅпїЅпїЅпїЅпїЅ
                     {
                         D3D11_TEXTURE2D_DESC desc = {};
                         desc.Width = tex->mWidth; desc.Height = tex->mHeight;
@@ -272,11 +313,13 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                         ID3D11ShaderResourceView* srv = nullptr;
                         HRESULT hr = device->CreateShaderResourceView(tex2d, nullptr, &srv);
                         tex2d->Release();
+                        if (SUCCEEDED(hr) && srv)
+                            StoreCachedTexture(cacheKey, srv);
                         return SUCCEEDED(hr) ? srv : nullptr;
                     }
                 }
             }
-            else // ������� ����
+            else // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
             {
                 TextureClass* t = new TextureClass();
                 if (!t) return nullptr;
@@ -288,13 +331,17 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
                 }
                 m_ownedTextures.push_back(t);
                 ID3D11ShaderResourceView* srv = t->GetTexture();
-                if (srv) srv->AddRef();
+                if (srv)
+                {
+                    StoreCachedTexture(cacheKey, srv);
+                    srv->AddRef();
+                }
                 return srv;
             }
         }
     }
 
-    // ������� ������ ���, ���� ������ �� ������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     if (type2 != aiTextureType_NONE && mat->GetTextureCount(type2) > 0)
     {
         if (mat->GetTexture(type2, 0, &path) == AI_SUCCESS)
@@ -305,7 +352,7 @@ ID3D11ShaderResourceView* AssimpModelClass::ExtractTexture_Internal(
 }
 
 // ============================================================================
-// �������� ������ � ������������ ������ � ��������
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 void AssimpModelClass::LoadBones(const aiScene* scene)
 {
@@ -356,7 +403,7 @@ void AssimpModelClass::LoadBones(const aiScene* scene)
         }
     }
 
-    // �������� ������ � ��������������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     m_finalBoneMatrices.resize(m_boneInfoMap.size());
     XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
     for (auto& mat : m_finalBoneMatrices) mat = identity;
@@ -365,7 +412,7 @@ void AssimpModelClass::LoadBones(const aiScene* scene)
 }
 
 // ============================================================================
-// �������� �������� � ������������ ������ � ��������
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 void AssimpModelClass::LoadAnimations(const aiScene* scene)
 {
@@ -393,7 +440,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
             aiNodeAnim* channel = anim->mChannels[c];
             BoneAnimationChannel boneChannel;
 
-            // ��������: ���������� mNodeName � ��� ���� � ��������
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ mNodeName пїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             boneChannel.nodeName = NormalizeBoneName(channel->mNodeName.C_Str());
             std::string originalNodeName = channel->mNodeName.C_Str();
 
@@ -407,7 +454,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
             OutputDebugStringA(("    Scale keys: " + std::to_string(channel->mNumScalingKeys) + "\n").c_str());
 #endif
 
-            // �������
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             for (unsigned int k = 0; k < channel->mNumPositionKeys; ++k)
             {
                 KeyPosition kp;
@@ -423,7 +470,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
 #endif
             }
 
-            // ��������
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             for (unsigned int k = 0; k < channel->mNumRotationKeys; ++k)
             {
                 KeyRotation kr;
@@ -442,7 +489,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
 #endif
             }
 
-            // �������
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             for (unsigned int k = 0; k < channel->mNumScalingKeys; ++k)
             {
                 KeyScale ks;
@@ -469,7 +516,7 @@ void AssimpModelClass::LoadAnimations(const aiScene* scene)
 }
 
 // ============================================================================
-// ������������ ������������� � ��������
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 XMMATRIX AssimpModelClass::InterpolatePosition(const std::vector<KeyPosition>& keys, float animTime) const
 {
@@ -486,7 +533,7 @@ XMMATRIX AssimpModelClass::InterpolatePosition(const std::vector<KeyPosition>& k
     if (dt < 0.0001f) dt = 1.0f;
     float factor = std::clamp((animTime - k1.timeStamp) / dt, 0.0f, 1.0f);
 
-#if DEBUG_TRANSFORMS && false // �������� ��� ������� ������������
+#if DEBUG_TRANSFORMS && false // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     char dbg[256];
     sprintf_s(dbg, "[InterpPos] factor=%.3f, t1=%.3f, t2=%.3f, animTime=%.3f\n",
         factor, k1.timeStamp, k2.timeStamp, animTime);
@@ -552,7 +599,7 @@ XMMATRIX AssimpModelClass::InterpolateScale(const std::vector<KeyScale>& keys, f
 }
 
 // ============================================================================
-// ReadNodeHierarchy � �������� ������ �������� � ��������
+// ReadNodeHierarchy пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 void AssimpModelClass::ReadNodeHierarchy(
     const aiNode* node,
@@ -573,7 +620,7 @@ void AssimpModelClass::ReadNodeHierarchy(
     depth++;
 #endif
 
-    // 1. ��������� ������������� �� �����
+    // 1. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
     XMFLOAT4X4 nodeLocalFloat = ConvertMatrix(node->mTransformation);
     XMMATRIX nodeTransform = XMLoadFloat4x4(&nodeLocalFloat);
 
@@ -581,7 +628,7 @@ void AssimpModelClass::ReadNodeHierarchy(
     PrintMatrix(nodeLocalFloat, indent + "  NodeLocal");
 #endif
 
-    // 2. ���� ������������ ����� ��� ����� ����
+    // 2. пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
     const BoneAnimationChannel* channel = nullptr;
     for (const auto& ch : anim.channels)
     {
@@ -594,14 +641,14 @@ void AssimpModelClass::ReadNodeHierarchy(
         }
     }
 
-    // 3. ���� ���� �������� � �������������� ��������� �������������
+    // 3. пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     if (channel)
     {
         XMMATRIX posMat = InterpolatePosition(channel->positions, animTimeInSeconds);
         XMMATRIX rotMat = InterpolateRotation(channel->rotations, animTimeInSeconds);
         XMMATRIX scaleMat = InterpolateScale(channel->scales, animTimeInSeconds);
 
-        // �������: Scale > Rotate > Translate (��������� ������������)
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ: Scale > Rotate > Translate (пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
         nodeTransform = scaleMat * rotMat * posMat;
 
 #if DEBUG_TRANSFORMS && false
@@ -609,21 +656,21 @@ void AssimpModelClass::ReadNodeHierarchy(
 #endif
     }
 
-    // 4. ���������� ������������� = �������� * ���������
+    // 4. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ = пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ * пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     XMMATRIX globalTransform = nodeTransform * parentTransform;
 
 #if DEBUG_TRANSFORMS && false
     PrintMatrix(globalTransform, indent + "  Global");
 #endif
 
-    // 5. ���� ���� ���� � �����, ��������� ��������� ������� ��� �������
+    // 5. пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     auto boneIt = m_boneInfoMap.find(nodeName);
     if (boneIt != m_boneInfoMap.end())
     {
         int boneIndex = boneIt->second.boneIndex;
         XMMATRIX offsetMat = XMLoadFloat4x4(&boneIt->second.offsetMatrix);
 
-        // ? ���������� ������� ��� DirectX: offset * global
+        // ? пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ DirectX: offset * global
         XMMATRIX finalMat = globalTransform * offsetMat;
         XMStoreFloat4x4(&m_finalBoneMatrices[boneIndex], finalMat);
 
@@ -632,7 +679,7 @@ void AssimpModelClass::ReadNodeHierarchy(
             indent.c_str(), nodeName.c_str(), boneIndex);
         OutputDebugStringA(dbg);
 
-        // ������� ������ ������� ��� �������
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         static bool firstBonePrinted = false;
         if (!firstBonePrinted && boneIndex == 0) {
             XMFLOAT4X4 temp; XMStoreFloat4x4(&temp, nodeTransform);
@@ -642,7 +689,7 @@ void AssimpModelClass::ReadNodeHierarchy(
 #endif
     }
 
-    // 6. �������� �� �����
+    // 6. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
     for (unsigned int i = 0; i < node->mNumChildren; ++i)
     {
         ReadNodeHierarchy(node->mChildren[i], globalTransform, anim, animTimeInSeconds);
@@ -654,7 +701,7 @@ void AssimpModelClass::ReadNodeHierarchy(
 }
 
 // ============================================================================
-// Initialize � ������� ������� �������� � ��������
+// Initialize пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 bool AssimpModelClass::Initialize(
     ID3D11Device* device,
@@ -685,7 +732,8 @@ bool AssimpModelClass::Initialize(
     }
 
     if (!m_scene || (m_scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE) || !m_scene->mRootNode) {
-        MessageBoxA(NULL, m_importer.GetErrorString(), "Assimp Load Error", MB_OK);
+        OutputDebugStringA((std::string("Assimp failed to load '") + modelPath + "': "
+            + m_importer.GetErrorString() + "\n").c_str());
         return false;
     }
 
@@ -697,18 +745,22 @@ bool AssimpModelClass::Initialize(
 
     m_totalIndexCount = 0;
     m_meshParts.clear();
+    m_cpuVertices.clear();
+    m_cpuTriangles.clear();
+    m_cpuMeshVertices.clear();
+    m_cpuMeshIndices.clear();
     m_boneInfoMap.clear();
     m_finalBoneMatrices.clear();
     m_animations.clear();
     m_animationTime = 0.0f;
 
-    // ��������� ����� � ��������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     LoadBones(m_scene);
     LoadAnimations(m_scene);
 
 
 
-    // ������ ����� ������
+    // пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     if (!m_finalBoneMatrices.empty())
     {
         ID3D11Device* dev = nullptr;
@@ -726,7 +778,7 @@ bool AssimpModelClass::Initialize(
         }
     }
 
-    // ��������� ����
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
     for (unsigned int i = 0; i < m_scene->mNumMeshes; ++i)
     {
         aiMesh* mesh = m_scene->mMeshes[i];
@@ -756,65 +808,80 @@ bool AssimpModelClass::Initialize(
                 v.binormal = XMFLOAT3(mesh->mBitangents[j].x, mesh->mBitangents[j].y, mesh->mBitangents[j].z);
             }
 
-            // ����������� �������� ����
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
             for (int b = 0; b < 4; ++b) {
                 v.boneIDs[b] = -1;
                 v.boneWeights[b] = 0.0f;
             }
 
-            // ���������� �����
-            for (unsigned int b = 0; b < mesh->mNumBones; ++b)
-            {
-                aiBone* bone = mesh->mBones[b];
-                for (unsigned int w = 0; w < bone->mNumWeights; ++w)
-                {
-                    if (bone->mWeights[w].mVertexId == j)
-                    {
-                        auto it = m_boneInfoMap.find(NormalizeBoneName(bone->mName.C_Str()));
-                        if (it == m_boneInfoMap.end()) continue;
-
-                        int boneIdx = it->second.boneIndex;
-                        float weight = bone->mWeights[w].mWeight;
-
-                        int minSlot = -1; float minW = 999.0f;
-                        for (int s = 0; s < 4; ++s) {
-                            if (v.boneIDs[s] == -1) { minSlot = s; break; }
-                            if (v.boneWeights[s] < minW) { minW = v.boneWeights[s]; minSlot = s; }
-                        }
-                        if (minSlot >= 0) {
-                            v.boneIDs[minSlot] = boneIdx;
-                            v.boneWeights[minSlot] = weight;
-                        }
-                        break;
-                    }
-                }
-            }
-
-            // ������������ �����
-            float sum = v.boneWeights[0] + v.boneWeights[1] + v.boneWeights[2] + v.boneWeights[3];
-            if (sum > 0.0001f) {
-                v.boneWeights[0] /= sum; v.boneWeights[1] /= sum;
-                v.boneWeights[2] /= sum; v.boneWeights[3] /= sum;
-            }
-            else {
-                // Static meshes must keep boneIDs at -1 so the PBR vertex shader
-                // uses the original vertex position instead of a stale bone buffer.
-                for (int b = 0; b < 4; ++b) {
-                    v.boneIDs[b] = -1;
-                    v.boneWeights[b] = 0.0f;
-                }
-            }
             vertices.push_back(v);
         }
 
-        // �������
+        // Assign skin weights in one pass over Assimp's sparse bone weights.
+        // The old vertex -> bone -> weight search made large skinned GLBs appear frozen.
+        for (unsigned int b = 0; b < mesh->mNumBones; ++b)
+        {
+            const aiBone* bone = mesh->mBones[b];
+            auto boneIt = m_boneInfoMap.find(NormalizeBoneName(bone->mName.C_Str()));
+            if (boneIt == m_boneInfoMap.end())
+                continue;
+
+            const int boneIdx = boneIt->second.boneIndex;
+            for (unsigned int w = 0; w < bone->mNumWeights; ++w)
+            {
+                const aiVertexWeight& influence = bone->mWeights[w];
+                if (influence.mVertexId >= vertices.size() || influence.mWeight <= 0.0f)
+                    continue;
+
+                VertexType& vertex = vertices[influence.mVertexId];
+                int targetSlot = -1;
+                for (int slot = 0; slot < 4; ++slot) {
+                    if (vertex.boneIDs[slot] == -1) {
+                        targetSlot = slot;
+                        break;
+                    }
+                }
+
+                if (targetSlot == -1) {
+                    targetSlot = 0;
+                    for (int slot = 1; slot < 4; ++slot) {
+                        if (vertex.boneWeights[slot] < vertex.boneWeights[targetSlot])
+                            targetSlot = slot;
+                    }
+                    if (influence.mWeight <= vertex.boneWeights[targetSlot])
+                        continue;
+                }
+
+                vertex.boneIDs[targetSlot] = boneIdx;
+                vertex.boneWeights[targetSlot] = influence.mWeight;
+            }
+        }
+
+        for (VertexType& vertex : vertices)
+        {
+            const float sum = vertex.boneWeights[0] + vertex.boneWeights[1]
+                + vertex.boneWeights[2] + vertex.boneWeights[3];
+            if (sum > 0.0001f) {
+                for (int slot = 0; slot < 4; ++slot)
+                    vertex.boneWeights[slot] /= sum;
+            }
+            else {
+                // Static vertices use their original position in the PBR vertex shader.
+                for (int slot = 0; slot < 4; ++slot) {
+                    vertex.boneIDs[slot] = -1;
+                    vertex.boneWeights[slot] = 0.0f;
+                }
+            }
+        }
+
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         std::vector<unsigned long> indices;
         indices.reserve(part.indexCount);
         for (unsigned int f = 0; f < mesh->mNumFaces; f++)
             for (unsigned int k = 0; k < mesh->mFaces[f].mNumIndices; k++)
                 indices.push_back(mesh->mFaces[f].mIndices[k]);
 
-        // �������� �������
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         D3D11_BUFFER_DESC vbDesc = { sizeof(VertexType) * (UINT)vertices.size(), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER };
         D3D11_SUBRESOURCE_DATA vbData = { vertices.data() };
         if (FAILED(device->CreateBuffer(&vbDesc, &vbData, &part.vertexBuffer))) return false;
@@ -823,7 +890,7 @@ bool AssimpModelClass::Initialize(
         D3D11_SUBRESOURCE_DATA ibData = { indices.data() };
         if (FAILED(device->CreateBuffer(&ibDesc, &ibData, &part.indexBuffer))) return false;
 
-        // �������� ���������
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
         if (mesh->mMaterialIndex >= 0 && mesh->mMaterialIndex < (int)m_scene->mNumMaterials)
         {
             const aiMaterial* mat = m_scene->mMaterials[mesh->mMaterialIndex];
@@ -832,7 +899,7 @@ bool AssimpModelClass::Initialize(
             part.metalness = ExtractTexture_Internal(device, deviceContext, m_scene, mat, aiTextureType_METALNESS, aiTextureType_UNKNOWN);
             part.roughness = ExtractTexture_Internal(device, deviceContext, m_scene, mat, aiTextureType_DIFFUSE_ROUGHNESS, aiTextureType_UNKNOWN);
 
-            // �������� �� �����, ���� ��� �������
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
             if (!part.texture && !m_Texture)
                 part.texture = Create1x1SRVFromColor(device, GetPBRColorFromMaterial(mat, aiTextureType_BASE_COLOR));
             if (!part.metalness) {
@@ -847,7 +914,7 @@ bool AssimpModelClass::Initialize(
                 part.roughness = Create1x1SRVFromColor(device, aiColor4D(roughness, roughness, roughness, 1.0f));
             }
 
-            // ������������ � ������
+            // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
             aiString alphaMode; mat->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode);
             float opacity = 1.0f, transmission = 0.0f;
             aiGetMaterialFloat(mat, AI_MATKEY_OPACITY, &opacity);
@@ -873,11 +940,12 @@ bool AssimpModelClass::Initialize(
     }
 
     if (m_meshParts.empty()) {
-        MessageBoxA(NULL, "No valid meshes found!", "Assimp Error", MB_OK);
+        OutputDebugStringA((std::string("Assimp model contains no valid meshes: ")
+            + modelPath + "\n").c_str());
         return false;
     }
 
-    // Fallback ��������
+    // Fallback пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     if (textureFilename && textureFilename[0]) {
         m_Texture = new TextureClass;
         if (!m_Texture || !m_Texture->Initialize(device, deviceContext, textureFilename)) {
@@ -886,10 +954,11 @@ bool AssimpModelClass::Initialize(
         }
     }
 
-    // ����������� ������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     GetBoundingBox(&m_cachedBBMin, &m_cachedBBMax);
     GetBoundingSphere(&m_cachedSphereCenter, &m_cachedSphereRadius);
     m_boundsCached = true;
+
 
 
 #if DEBUG_VERBOSE
@@ -902,13 +971,13 @@ void AssimpModelClass::DebugCompareNames()
 {
     OutputDebugStringA("=== NAME COMPARISON DEBUG ===\n");
 
-    // 1. ����� (�� �����)
+    // 1. пїЅпїЅпїЅпїЅпїЅ (пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ)
     OutputDebugStringA("--- Bones (aiBone::mName) ---\n");
     for (const auto& [name, info] : m_boneInfoMap) {
         OutputDebugStringA(("  BONE: [" + name + "] (index: " + std::to_string(info.boneIndex) + ")\n").c_str());
     }
 
-    // 2. ���� �������� (aiNode::mName)
+    // 2. пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (aiNode::mName)
     std::function<void(const aiNode*, int)> dumpNodes = [&](const aiNode* node, int depth) {
         std::string indent(depth * 2, ' ');
         std::string name = node->mName.C_Str();
@@ -922,7 +991,7 @@ void AssimpModelClass::DebugCompareNames()
         dumpNodes(m_scene->mRootNode, 0);
     }
 
-    // 3. ������������ ������ (aiNodeAnim::mNodeName)
+    // 3. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ (aiNodeAnim::mNodeName)
     OutputDebugStringA("--- Animation Channels (aiNodeAnim::mNodeName) ---\n");
     for (const auto& anim : m_animations) {
         OutputDebugStringA(("  Anim: " + anim.name + "\n").c_str());
@@ -951,6 +1020,10 @@ void AssimpModelClass::Shutdown()
         if (part.roughness) { part.roughness->Release(); part.roughness = nullptr; }
     }
     m_meshParts.clear();
+    m_cpuVertices.clear();
+    m_cpuTriangles.clear();
+    m_cpuMeshVertices.clear();
+    m_cpuMeshIndices.clear();
 
     for (auto* t : m_ownedTextures) { if (t) { t->Shutdown(); delete t; } }
     m_ownedTextures.clear();
@@ -967,8 +1040,639 @@ void AssimpModelClass::Shutdown()
     m_cachedSphereRadius = 0.0f;
 }
 
+
+bool AssimpModelClass::InitializeFromMeshes(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context,
+    const aiScene* scene,
+    const unsigned int* meshIndices,
+    unsigned int meshCount,
+    bool loadImageTextures)
+{
+    if (!device || !context || !scene || !meshIndices || meshCount == 0)
+        return false;
+
+    Shutdown();
+
+    m_scene = nullptr;
+    m_isEmbeddedFormat = true;
+    m_totalIndexCount = 0;
+    m_boundsCached = false;
+
+    XMFLOAT3 bbMin(FLT_MAX, FLT_MAX, FLT_MAX);
+    XMFLOAT3 bbMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    unsigned long globalVertexBase = 0;
+
+    for (unsigned int meshSlot = 0; meshSlot < meshCount; ++meshSlot)
+    {
+        const unsigned int meshIndex = meshIndices[meshSlot];
+        if (meshIndex >= scene->mNumMeshes)
+            continue;
+
+        aiMesh* mesh = scene->mMeshes[meshIndex];
+        if (!mesh || mesh->mNumVertices == 0)
+            continue;
+
+        MeshPart part;
+        part.indexCount = static_cast<int>(mesh->mNumFaces) * 3;
+
+        std::vector<VertexType> vertices;
+        vertices.reserve(mesh->mNumVertices);
+
+        for (unsigned int i = 0; i < mesh->mNumVertices; ++i)
+        {
+            VertexType v = {};
+
+            v.position = XMFLOAT3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
+            v.texture = mesh->HasTextureCoords(0)
+                ? XMFLOAT2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y)
+                : XMFLOAT2(0.0f, 0.0f);
+            v.normal = mesh->HasNormals()
+                ? XMFLOAT3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z)
+                : XMFLOAT3(0.0f, 1.0f, 0.0f);
+
+            if (mesh->HasTangentsAndBitangents())
+            {
+                v.tangent = XMFLOAT3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
+                v.binormal = XMFLOAT3(mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z);
+            }
+
+            for (int b = 0; b < 4; ++b)
+            {
+                v.boneIDs[b] = -1;
+                v.boneWeights[b] = 0.0f;
+            }
+
+            bbMin.x = (std::min)(bbMin.x, v.position.x);
+            bbMin.y = (std::min)(bbMin.y, v.position.y);
+            bbMin.z = (std::min)(bbMin.z, v.position.z);
+            bbMax.x = (std::max)(bbMax.x, v.position.x);
+            bbMax.y = (std::max)(bbMax.y, v.position.y);
+            bbMax.z = (std::max)(bbMax.z, v.position.z);
+
+            m_cpuVertices.push_back(v.position);
+            m_cpuMeshVertices.push_back(v);
+            vertices.push_back(v);
+        }
+
+        std::vector<unsigned long> indices;
+        indices.reserve(part.indexCount);
+
+        for (unsigned int f = 0; f < mesh->mNumFaces; ++f)
+        {
+            const aiFace& face = mesh->mFaces[f];
+            if (face.mNumIndices != 3)
+                continue;
+
+            for (unsigned int j = 0; j < 3; ++j)
+            {
+                const unsigned int idx = face.mIndices[j];
+                indices.push_back(idx);
+                m_cpuTriangles.push_back(vertices[idx].position);
+                m_cpuMeshIndices.push_back(globalVertexBase + idx);
+            }
+        }
+
+        if (vertices.empty() || indices.empty())
+            continue;
+
+        part.indexCount = static_cast<int>(indices.size());
+
+        D3D11_BUFFER_DESC vbDesc = {};
+        vbDesc.ByteWidth = sizeof(VertexType) * static_cast<UINT>(vertices.size());
+        vbDesc.Usage = D3D11_USAGE_DEFAULT;
+        vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+        D3D11_SUBRESOURCE_DATA vbData = {};
+        vbData.pSysMem = vertices.data();
+
+        HRESULT hr = device->CreateBuffer(&vbDesc, &vbData, &part.vertexBuffer);
+        if (FAILED(hr))
+        {
+            Shutdown();
+            return false;
+        }
+
+        D3D11_BUFFER_DESC ibDesc = {};
+        ibDesc.ByteWidth = sizeof(unsigned long) * static_cast<UINT>(indices.size());
+        ibDesc.Usage = D3D11_USAGE_DEFAULT;
+        ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+        D3D11_SUBRESOURCE_DATA ibData = {};
+        ibData.pSysMem = indices.data();
+
+        hr = device->CreateBuffer(&ibDesc, &ibData, &part.indexBuffer);
+        if (FAILED(hr))
+        {
+            if (part.vertexBuffer) part.vertexBuffer->Release();
+            part.vertexBuffer = nullptr;
+            Shutdown();
+            return false;
+        }
+
+        if (mesh->mMaterialIndex < scene->mNumMaterials)
+        {
+            const aiMaterial* mat = scene->mMaterials[mesh->mMaterialIndex];
+            if (loadImageTextures)
+            {
+                part.texture = ExtractTexture_Internal(device, context, scene, mat, aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE);
+                part.normalMap = ExtractTexture_Internal(device, context, scene, mat, aiTextureType_NORMALS, aiTextureType_HEIGHT);
+                part.metalness = ExtractTexture_Internal(device, context, scene, mat, aiTextureType_METALNESS, aiTextureType_UNKNOWN);
+                part.roughness = ExtractTexture_Internal(device, context, scene, mat, aiTextureType_DIFFUSE_ROUGHNESS, aiTextureType_UNKNOWN);
+            }
+
+            if (!part.texture)
+                part.texture = Create1x1SRVFromColor(device, GetPBRColorFromMaterial(mat, aiTextureType_BASE_COLOR));
+
+            if (!part.metalness)
+            {
+                float metallic = 0.0f;
+                aiGetMaterialFloat(mat, AI_MATKEY_METALLIC_FACTOR, &metallic);
+                part.metalness = Create1x1SRVFromColor(device, aiColor4D(metallic, metallic, metallic, 1.0f));
+            }
+
+            if (!part.roughness)
+            {
+                float roughness = 220.0f / 255.0f;
+                if (aiGetMaterialFloat(mat, AI_MATKEY_ROUGHNESS_FACTOR, &roughness) != AI_SUCCESS)
+                    roughness = 220.0f / 255.0f;
+                part.roughness = Create1x1SRVFromColor(device, aiColor4D(roughness, roughness, roughness, 1.0f));
+            }
+
+            aiString alphaMode;
+            mat->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode);
+            float opacity = 1.0f;
+            float transmission = 0.0f;
+            aiGetMaterialFloat(mat, AI_MATKEY_OPACITY, &opacity);
+            aiGetMaterialFloat(mat, AI_MATKEY_TRANSMISSION_FACTOR, &transmission);
+            part.isTransparent = (std::string(alphaMode.C_Str()) == "BLEND") || (opacity < 0.999f) || (transmission > 0.01f);
+            part.opacity = opacity;
+
+            float metallicFactor = 0.0f;
+            float ior = 1.0f;
+            aiGetMaterialFloat(mat, AI_MATKEY_METALLIC_FACTOR, &metallicFactor);
+            aiGetMaterialFloat(mat, AI_MATKEY_REFRACTI, &ior);
+            aiString matName;
+            mat->Get(AI_MATKEY_NAME, matName);
+            std::string matNameStr = matName.C_Str();
+            std::transform(matNameStr.begin(), matNameStr.end(), matNameStr.begin(), ::tolower);
+
+            part.isGlass = (part.isTransparent && (metallicFactor > 0.5f || transmission > 0.01f)) ||
+                matNameStr.find("glass") != std::string::npos ||
+                (ior > 1.01f && metallicFactor > 0.5f);
+            if (part.isGlass && !part.isTransparent) part.isTransparent = true;
+            if (part.isGlass && part.opacity > 0.5f) part.opacity = 0.12f;
+        }
+
+        m_totalIndexCount += part.indexCount;
+        m_meshParts.push_back(part);
+        globalVertexBase += static_cast<unsigned long>(vertices.size());
+    }
+
+    if (m_meshParts.empty())
+        return false;
+
+    m_cachedBBMin = bbMin;
+    m_cachedBBMax = bbMax;
+    m_cachedSphereCenter = XMFLOAT3(
+        (bbMin.x + bbMax.x) * 0.5f,
+        (bbMin.y + bbMax.y) * 0.5f,
+        (bbMin.z + bbMax.z) * 0.5f);
+
+    float maxDistSq = 0.0f;
+    for (const XMFLOAT3& v : m_cpuVertices)
+    {
+        const float dx = v.x - m_cachedSphereCenter.x;
+        const float dy = v.y - m_cachedSphereCenter.y;
+        const float dz = v.z - m_cachedSphereCenter.z;
+        maxDistSq = (std::max)(maxDistSq, dx * dx + dy * dy + dz * dz);
+    }
+
+    m_cachedSphereRadius = sqrtf(maxDistSq);
+    m_boundsCached = true;
+
+    return true;
+}
+bool AssimpModelClass::InitializeFromGeometry(
+    ID3D11Device* device,
+    std::vector<VertexType>&& vertices,
+    std::vector<unsigned long>&& indices,
+    const XMFLOAT4& baseColor,
+    float metallic,
+    float roughness)
+{
+    if (!device || vertices.empty() || indices.size() < 3)
+        return false;
+
+    Shutdown();
+
+    m_scene = nullptr;
+    m_isEmbeddedFormat = true;
+    m_totalIndexCount = static_cast<int>(indices.size());
+    m_boundsCached = false;
+
+    MeshPart part;
+    part.indexCount = static_cast<int>(indices.size());
+    const float safeMetallic = std::clamp(metallic, 0.0f, 1.0f);
+    const float safeRoughness = std::clamp(roughness, 0.04f, 1.0f);
+    part.texture = Create1x1SRVFromColor(device, aiColor4D(baseColor.x, baseColor.y, baseColor.z, baseColor.w));
+    part.metalness = Create1x1SRVFromColor(device, aiColor4D(safeMetallic, safeMetallic, safeMetallic, 1.0f));
+    part.roughness = Create1x1SRVFromColor(device, aiColor4D(safeRoughness, safeRoughness, safeRoughness, 1.0f));
+
+    D3D11_BUFFER_DESC vbDesc = {};
+    vbDesc.ByteWidth = sizeof(VertexType) * static_cast<UINT>(vertices.size());
+    vbDesc.Usage = D3D11_USAGE_DEFAULT;
+    vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA vbData = {};
+    vbData.pSysMem = vertices.data();
+
+    HRESULT hr = device->CreateBuffer(&vbDesc, &vbData, &part.vertexBuffer);
+    if (FAILED(hr))
+    {
+        Shutdown();
+        return false;
+    }
+
+    D3D11_BUFFER_DESC ibDesc = {};
+    ibDesc.ByteWidth = sizeof(unsigned long) * static_cast<UINT>(indices.size());
+    ibDesc.Usage = D3D11_USAGE_DEFAULT;
+    ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA ibData = {};
+    ibData.pSysMem = indices.data();
+
+    hr = device->CreateBuffer(&ibDesc, &ibData, &part.indexBuffer);
+    if (FAILED(hr))
+    {
+        if (part.vertexBuffer) part.vertexBuffer->Release();
+        if (part.texture) part.texture->Release();
+        if (part.metalness) part.metalness->Release();
+        if (part.roughness) part.roughness->Release();
+        part.vertexBuffer = nullptr;
+        part.texture = nullptr;
+        part.metalness = nullptr;
+        part.roughness = nullptr;
+        Shutdown();
+        return false;
+    }
+
+    XMFLOAT3 bbMin(FLT_MAX, FLT_MAX, FLT_MAX);
+    XMFLOAT3 bbMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+    for (const auto& vertex : vertices)
+    {
+        const auto& pos = vertex.position;
+        bbMin.x = (std::min)(bbMin.x, pos.x);
+        bbMin.y = (std::min)(bbMin.y, pos.y);
+        bbMin.z = (std::min)(bbMin.z, pos.z);
+        bbMax.x = (std::max)(bbMax.x, pos.x);
+        bbMax.y = (std::max)(bbMax.y, pos.y);
+        bbMax.z = (std::max)(bbMax.z, pos.z);
+
+        m_cpuVertices.push_back(pos);
+    }
+
+    for (size_t i = 0; i + 2 < indices.size(); i += 3)
+    {
+        if (indices[i] >= vertices.size() ||
+            indices[i + 1] >= vertices.size() ||
+            indices[i + 2] >= vertices.size())
+        {
+            continue;
+        }
+
+        m_cpuTriangles.push_back(vertices[indices[i]].position);
+        m_cpuTriangles.push_back(vertices[indices[i + 1]].position);
+        m_cpuTriangles.push_back(vertices[indices[i + 2]].position);
+    }
+
+    m_cpuMeshVertices = std::move(vertices);
+    m_cpuMeshIndices = std::move(indices);
+    m_meshParts.push_back(part);
+
+    m_cachedBBMin = bbMin;
+    m_cachedBBMax = bbMax;
+    m_cachedSphereCenter = XMFLOAT3(
+        (bbMin.x + bbMax.x) * 0.5f,
+        (bbMin.y + bbMax.y) * 0.5f,
+        (bbMin.z + bbMax.z) * 0.5f);
+
+    float maxDistSq = 0.0f;
+    for (const XMFLOAT3& vertex : m_cpuVertices)
+    {
+        const float dx = vertex.x - m_cachedSphereCenter.x;
+        const float dy = vertex.y - m_cachedSphereCenter.y;
+        const float dz = vertex.z - m_cachedSphereCenter.z;
+        maxDistSq = (std::max)(maxDistSq, dx * dx + dy * dy + dz * dz);
+    }
+
+    m_cachedSphereRadius = sqrtf(maxDistSq);
+    m_boundsCached = true;
+
+    return true;
+}
+
+bool AssimpModelClass::InitializeFromGeometryWithMaterial(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context,
+    const aiScene* scene,
+    const aiMaterial* material,
+    std::vector<VertexType>&& vertices,
+    std::vector<unsigned long>&& indices,
+    bool loadImageTextures)
+{
+    aiColor4D baseColor(0.8f, 0.8f, 0.8f, 1.0f);
+    float metallic = 0.0f;
+    float roughness = 0.5f;
+
+    if (material)
+    {
+        baseColor = GetPBRColorFromMaterial(material, aiTextureType_BASE_COLOR);
+        aiGetMaterialFloat(material, AI_MATKEY_METALLIC_FACTOR, &metallic);
+        if (aiGetMaterialFloat(material, AI_MATKEY_ROUGHNESS_FACTOR, &roughness) != AI_SUCCESS)
+            roughness = 0.5f;
+    }
+
+    if (!InitializeFromGeometry(
+        device,
+        std::move(vertices),
+        std::move(indices),
+        XMFLOAT4(baseColor.r, baseColor.g, baseColor.b, baseColor.a),
+        metallic,
+        roughness))
+    {
+        return false;
+    }
+
+    if (!material || m_meshParts.empty())
+        return true;
+
+    MeshPart& part = m_meshParts.front();
+    auto replaceResource = [](ID3D11ShaderResourceView*& destination, ID3D11ShaderResourceView* replacement)
+    {
+        if (destination)
+            destination->Release();
+        destination = replacement;
+    };
+
+    ID3D11ShaderResourceView* baseColorTexture = nullptr;
+    ID3D11ShaderResourceView* normalTexture = nullptr;
+    ID3D11ShaderResourceView* metallicTexture = nullptr;
+    ID3D11ShaderResourceView* roughnessTexture = nullptr;
+    if (loadImageTextures)
+    {
+        baseColorTexture = ExtractTexture_Internal(
+            device, context, scene, material, aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE);
+        normalTexture = ExtractTexture_Internal(
+            device, context, scene, material, aiTextureType_NORMALS, aiTextureType_HEIGHT);
+        metallicTexture = ExtractTexture_Internal(
+            device, context, scene, material, aiTextureType_METALNESS, aiTextureType_UNKNOWN);
+        roughnessTexture = ExtractTexture_Internal(
+            device, context, scene, material, aiTextureType_DIFFUSE_ROUGHNESS, aiTextureType_UNKNOWN);
+    }
+
+    if (!baseColorTexture)
+        baseColorTexture = Create1x1SRVFromColor(device, baseColor);
+    if (!metallicTexture)
+        metallicTexture = Create1x1SRVFromColor(device, aiColor4D(metallic, metallic, metallic, 1.0f));
+    if (!roughnessTexture)
+        roughnessTexture = Create1x1SRVFromColor(device, aiColor4D(roughness, roughness, roughness, 1.0f));
+
+    replaceResource(part.texture, baseColorTexture);
+    replaceResource(part.normalMap, normalTexture);
+    replaceResource(part.metalness, metallicTexture);
+    replaceResource(part.roughness, roughnessTexture);
+
+    aiString alphaMode;
+    material->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode);
+    float opacity = 1.0f;
+    float transmission = 0.0f;
+    aiGetMaterialFloat(material, AI_MATKEY_OPACITY, &opacity);
+    aiGetMaterialFloat(material, AI_MATKEY_TRANSMISSION_FACTOR, &transmission);
+    part.isTransparent = std::string(alphaMode.C_Str()) == "BLEND" ||
+        opacity < 0.999f || transmission > 0.01f;
+    part.opacity = opacity;
+
+    aiString materialName;
+    material->Get(AI_MATKEY_NAME, materialName);
+    std::string lowerName = materialName.C_Str();
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(),
+        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    float ior = 1.0f;
+    aiGetMaterialFloat(material, AI_MATKEY_REFRACTI, &ior);
+    part.isGlass = lowerName.find("glass") != std::string::npos ||
+        (part.isTransparent && (transmission > 0.01f || (ior > 1.01f && metallic > 0.5f)));
+
+    return true;
+}
+bool AssimpModelClass::InitializeFromMesh(
+    ID3D11Device* device,
+    ID3D11DeviceContext* context,
+    const aiScene* scene,
+    aiMesh* mesh,
+    bool loadImageTextures)
+{
+    if (!device || !context || !scene || !mesh || mesh->mNumVertices == 0)
+        return false;
+
+    Shutdown();
+
+    // пїЅпїЅпїЅпїЅпїЅ: пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ scene пїЅ m_scene. пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ Assimp::Importer,
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ ImportShipFromGlb(). пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ.
+    m_scene = nullptr;
+    m_isEmbeddedFormat = true;
+    m_totalIndexCount = 0;
+    m_boundsCached = false;
+
+    MeshPart part;
+    part.indexCount = static_cast<int>(mesh->mNumFaces) * 3;
+    m_totalIndexCount = part.indexCount;
+
+    std::vector<VertexType> vertices;
+    vertices.reserve(mesh->mNumVertices);
+    m_cpuVertices.reserve(mesh->mNumVertices);
+    m_cpuMeshVertices.reserve(mesh->mNumVertices);
+
+    XMFLOAT3 bbMin(FLT_MAX, FLT_MAX, FLT_MAX);
+    XMFLOAT3 bbMax(-FLT_MAX, -FLT_MAX, -FLT_MAX);
+
+    for (unsigned int i = 0; i < mesh->mNumVertices; ++i)
+    {
+        VertexType v = {};
+
+        v.position = XMFLOAT3(
+            mesh->mVertices[i].x,
+            mesh->mVertices[i].y,
+            mesh->mVertices[i].z);
+
+        v.texture = mesh->HasTextureCoords(0)
+            ? XMFLOAT2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y)
+            : XMFLOAT2(0.0f, 0.0f);
+
+        v.normal = mesh->HasNormals()
+            ? XMFLOAT3(mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z)
+            : XMFLOAT3(0.0f, 1.0f, 0.0f);
+
+        if (mesh->HasTangentsAndBitangents())
+        {
+            v.tangent = XMFLOAT3(mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z);
+            v.binormal = XMFLOAT3(mesh->mBitangents[i].x, mesh->mBitangents[i].y, mesh->mBitangents[i].z);
+        }
+
+        // Ship parts пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ. пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅ shader
+        // пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ bone matrix пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ.
+        for (int b = 0; b < 4; ++b)
+        {
+            v.boneIDs[b] = -1;
+            v.boneWeights[b] = 0.0f;
+        }
+
+        bbMin.x = (std::min)(bbMin.x, v.position.x);
+        bbMin.y = (std::min)(bbMin.y, v.position.y);
+        bbMin.z = (std::min)(bbMin.z, v.position.z);
+        bbMax.x = (std::max)(bbMax.x, v.position.x);
+        bbMax.y = (std::max)(bbMax.y, v.position.y);
+        bbMax.z = (std::max)(bbMax.z, v.position.z);
+
+        m_cpuVertices.push_back(v.position);
+        vertices.push_back(v);
+    }
+
+    std::vector<unsigned long> indices;
+    indices.reserve(part.indexCount);
+
+    for (unsigned int f = 0; f < mesh->mNumFaces; ++f)
+    {
+        const aiFace& face = mesh->mFaces[f];
+        if (face.mNumIndices != 3)
+            continue;
+
+        for (unsigned int j = 0; j < 3; ++j)
+        {
+            const unsigned int idx = face.mIndices[j];
+            indices.push_back(idx);
+            m_cpuTriangles.push_back(m_cpuVertices[idx]);
+        }
+    }
+
+    if (vertices.empty() || indices.empty())
+        return false;
+
+    m_cpuMeshVertices = vertices;
+    m_cpuMeshIndices = indices;
+    part.indexCount = static_cast<int>(indices.size());
+    m_totalIndexCount = part.indexCount;
+
+    D3D11_BUFFER_DESC vbDesc = {};
+    vbDesc.ByteWidth = sizeof(VertexType) * static_cast<UINT>(vertices.size());
+    vbDesc.Usage = D3D11_USAGE_DEFAULT;
+    vbDesc.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA vbData = {};
+    vbData.pSysMem = vertices.data();
+
+    HRESULT hr = device->CreateBuffer(&vbDesc, &vbData, &part.vertexBuffer);
+    if (FAILED(hr))
+        return false;
+
+    D3D11_BUFFER_DESC ibDesc = {};
+    ibDesc.ByteWidth = sizeof(unsigned long) * static_cast<UINT>(indices.size());
+    ibDesc.Usage = D3D11_USAGE_DEFAULT;
+    ibDesc.BindFlags = D3D11_BIND_INDEX_BUFFER;
+
+    D3D11_SUBRESOURCE_DATA ibData = {};
+    ibData.pSysMem = indices.data();
+
+    hr = device->CreateBuffer(&ibDesc, &ibData, &part.indexBuffer);
+    if (FAILED(hr))
+    {
+        part.vertexBuffer->Release();
+        part.vertexBuffer = nullptr;
+        return false;
+    }
+
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ aiMesh. пїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ,
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ Blender/GLB.
+    if (mesh->mMaterialIndex < scene->mNumMaterials)
+    {
+        const aiMaterial* mat = scene->mMaterials[mesh->mMaterialIndex];
+        if (loadImageTextures)
+        {
+            part.texture = ExtractTexture_Internal(device, context, scene, mat, aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE);
+            part.normalMap = ExtractTexture_Internal(device, context, scene, mat, aiTextureType_NORMALS, aiTextureType_HEIGHT);
+            part.metalness = ExtractTexture_Internal(device, context, scene, mat, aiTextureType_METALNESS, aiTextureType_UNKNOWN);
+            part.roughness = ExtractTexture_Internal(device, context, scene, mat, aiTextureType_DIFFUSE_ROUGHNESS, aiTextureType_UNKNOWN);
+        }
+
+        if (!part.texture)
+            part.texture = Create1x1SRVFromColor(device, GetPBRColorFromMaterial(mat, aiTextureType_BASE_COLOR));
+
+        if (!part.metalness)
+        {
+            float metallic = 0.0f;
+            aiGetMaterialFloat(mat, AI_MATKEY_METALLIC_FACTOR, &metallic);
+            part.metalness = Create1x1SRVFromColor(device, aiColor4D(metallic, metallic, metallic, 1.0f));
+        }
+
+        if (!part.roughness)
+        {
+            float roughness = 220.0f / 255.0f;
+            if (aiGetMaterialFloat(mat, AI_MATKEY_ROUGHNESS_FACTOR, &roughness) != AI_SUCCESS)
+                roughness = 220.0f / 255.0f;
+            part.roughness = Create1x1SRVFromColor(device, aiColor4D(roughness, roughness, roughness, 1.0f));
+        }
+
+        aiString alphaMode;
+        mat->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode);
+        float opacity = 1.0f;
+        float transmission = 0.0f;
+        aiGetMaterialFloat(mat, AI_MATKEY_OPACITY, &opacity);
+        aiGetMaterialFloat(mat, AI_MATKEY_TRANSMISSION_FACTOR, &transmission);
+        part.isTransparent = (std::string(alphaMode.C_Str()) == "BLEND") || (opacity < 0.999f) || (transmission > 0.01f);
+        part.opacity = opacity;
+
+        float metallicFactor = 0.0f;
+        float ior = 1.0f;
+        aiGetMaterialFloat(mat, AI_MATKEY_METALLIC_FACTOR, &metallicFactor);
+        aiGetMaterialFloat(mat, AI_MATKEY_REFRACTI, &ior);
+        aiString matName;
+        mat->Get(AI_MATKEY_NAME, matName);
+        std::string matNameStr = matName.C_Str();
+        std::transform(matNameStr.begin(), matNameStr.end(), matNameStr.begin(), ::tolower);
+
+        part.isGlass = (part.isTransparent && (metallicFactor > 0.5f || transmission > 0.01f)) ||
+            matNameStr.find("glass") != std::string::npos ||
+            (ior > 1.01f && metallicFactor > 0.5f);
+        if (part.isGlass && !part.isTransparent) part.isTransparent = true;
+        if (part.isGlass && part.opacity > 0.5f) part.opacity = 0.12f;
+    }
+
+        m_meshParts.push_back(part);
+
+    m_cachedBBMin = bbMin;
+    m_cachedBBMax = bbMax;
+    m_cachedSphereCenter = XMFLOAT3(
+        (bbMin.x + bbMax.x) * 0.5f,
+        (bbMin.y + bbMax.y) * 0.5f,
+        (bbMin.z + bbMax.z) * 0.5f);
+
+    float maxDistSq = 0.0f;
+    for (const XMFLOAT3& v : m_cpuVertices)
+    {
+        const float dx = v.x - m_cachedSphereCenter.x;
+        const float dy = v.y - m_cachedSphereCenter.y;
+        const float dz = v.z - m_cachedSphereCenter.z;
+        maxDistSq = (std::max)(maxDistSq, dx * dx + dy * dy + dz * dz);
+    }
+
+    m_cachedSphereRadius = sqrtf(maxDistSq);
+    m_boundsCached = true;
+
+    return true;
+}
+
 // ============================================================================
-// Render ������
+// Render пїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 void AssimpModelClass::Render(ID3D11DeviceContext* deviceContext)
 {
@@ -1000,9 +1704,12 @@ void AssimpModelClass::RenderAll(
             if (part.metalness) deviceContext->PSSetShaderResources(2, 1, &part.metalness);
             if (part.roughness) deviceContext->PSSetShaderResources(3, 1, &part.roughness);
 
+            XMFLOAT4 noLights[NUM_LIGHTS] = {};
+            XMFLOAT4 noSpotData[NUM_LIGHTS] = {};
             shader->Render(deviceContext, part.indexCount, world, view, proj,
                 part.texture, part.normalMap, part.metalness, part.roughness,
-                nullptr, nullptr, XMFLOAT3(0, 0, 0), 1.0f, 1.0f);
+                noLights, noLights, noSpotData, noSpotData,
+                XMFLOAT3(0, 0, 0), 1.0f, 1.0f);
         }
         else {
             deviceContext->DrawIndexed(part.indexCount, 0, 0);
@@ -1011,7 +1718,7 @@ void AssimpModelClass::RenderAll(
 }
 
 // ============================================================================
-// ������� � �������
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 int AssimpModelClass::GetIndexCount() {
     return m_meshParts.empty() ? m_totalIndexCount : m_meshParts[0].indexCount;
@@ -1032,7 +1739,7 @@ void AssimpModelClass::GetBoundingBox(XMFLOAT3* min, XMFLOAT3* max) const {
             aiMesh* mesh = m_scene->mMeshes[i];
             for (unsigned int j = 0; j < mesh->mNumVertices; j++) {
                 aiVector3D& v = mesh->mVertices[j];
-                bbMin.x = std::min(bbMin.x, v.x); bbMin.y = std::min(bbMin.y, v.y); bbMin.z = std::min(bbMin.z, v.z);
+                bbMin.x = (std::min)(bbMin.x, v.x); bbMin.y = (std::min)(bbMin.y, v.y); bbMin.z = (std::min)(bbMin.z, v.z);
                 bbMax.x = max(bbMax.x, v.x); bbMax.y = max(bbMax.y, v.y); bbMax.z = max(bbMax.z, v.z);
             }
         }
@@ -1045,12 +1752,21 @@ int AssimpModelClass::FindAnimationIndexByName(const std::string& name) const
 {
     for (size_t i = 0; i < m_animations.size(); ++i)
     {
-        if (m_animations[i].name == name)
+        const std::string& candidate = m_animations[i].name;
+        const bool matches = candidate.size() == name.size() &&
+            std::equal(
+                candidate.begin(), candidate.end(), name.begin(),
+                [](unsigned char left, unsigned char right)
+                {
+                    return std::tolower(left) == std::tolower(right);
+                });
+        if (matches)
             return static_cast<int>(i);
     }
 
     return -1;
 }
+
 
 void AssimpModelClass::GetBoundingSphere(XMFLOAT3* center, float* radius) const {
     if (!center || !radius) return;
@@ -1083,6 +1799,14 @@ void AssimpModelClass::GetBoundingSphere(XMFLOAT3* center, float* radius) const 
 
 void AssimpModelClass::GetVertices(std::vector<XMFLOAT3>& out) const {
     out.clear();
+
+    // пїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ aiMesh пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ m_scene,
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ CPU-пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ.
+    if (!m_cpuVertices.empty()) {
+        out = m_cpuVertices;
+        return;
+    }
+
     if (!m_scene) return;
     for (unsigned int i = 0; i < m_scene->mNumMeshes; ++i) {
         const aiMesh* mesh = m_scene->mMeshes[i];
@@ -1096,6 +1820,21 @@ void AssimpModelClass::GetRawVertices(std::vector<XMFLOAT3>& out) const { GetVer
 
 void AssimpModelClass::GetRawTriangles(std::vector<XMFLOAT3>& out) const {
     out.clear();
+
+    if (!m_cpuMeshVertices.empty() && !m_cpuMeshIndices.empty()) {
+        out.reserve(m_cpuMeshIndices.size());
+        for (unsigned long index : m_cpuMeshIndices) {
+            if (index < m_cpuMeshVertices.size())
+                out.push_back(m_cpuMeshVertices[index].position);
+        }
+        return;
+    }
+
+    if (!m_cpuTriangles.empty()) {
+        out = m_cpuTriangles;
+        return;
+    }
+
     if (!m_scene) return;
     for (unsigned int i = 0; i < m_scene->mNumMeshes; ++i) {
         const aiMesh* mesh = m_scene->mMeshes[i];
@@ -1110,9 +1849,8 @@ void AssimpModelClass::GetRawTriangles(std::vector<XMFLOAT3>& out) const {
         }
     }
 }
-
 // ============================================================================
-// ���������� �������� � ����������� � � ����������� ��������
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float deltaTime)
 {
@@ -1124,10 +1862,10 @@ void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float delta
 
     float ticksPerSecond = (anim.ticksPerSecond > 0.0f) ? anim.ticksPerSecond : 24.0f;
 
-    // 1. ����������� �����
+    // 1. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
     animComp.currentTime += deltaTime;
 
-    // 2. ������������ � ��������
+    // 2. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     float animDurationSec = anim.duration / ticksPerSecond;
     if (animDurationSec > 0.0f) {
         animComp.currentTime = fmodf(animComp.currentTime, animDurationSec);
@@ -1137,24 +1875,24 @@ void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float delta
         animComp.currentTime = 0.0f;
     }
 
-    // 3. ������������ � ���� ��� ������������ (��� ���������!)
+    // 3. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ!)
     float animTimeTicks = animComp.currentTime * ticksPerSecond;
     animTimeTicks = fmodf(animTimeTicks, anim.duration);
     if (animTimeTicks < 0.0f) animTimeTicks += anim.duration;
 
-    // 4. ?? �����������: �����������, ��� ����� ������� �������
+    // 4. ?? пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     size_t boneCount = m_boneInfoMap.size();
     if (animComp.finalBoneMatrices.size() != boneCount) {
         animComp.finalBoneMatrices.resize(boneCount);
     }
 
-    // �������������� ����������� ���������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     XMFLOAT4X4 identity; XMStoreFloat4x4(&identity, XMMatrixIdentity());
     for (size_t i = 0; i < boneCount; ++i) {
         animComp.finalBoneMatrices[i] = identity;
     }
 
-    // 5. �������� ���� ������� ������ �������
+    // 5. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     if (m_scene && m_scene->mRootNode) {
         ReadNodeHierarchyToComponent(m_scene->mRootNode, XMMatrixIdentity(), anim, animTimeTicks, animComp.finalBoneMatrices);
     }
@@ -1172,8 +1910,8 @@ void AssimpModelClass::SetBoneMatricesFromComponent(ID3D11DeviceContext* context
     XMFLOAT4X4 identity;
     DirectX::XMStoreFloat4x4(&identity, DirectX::XMMatrixIdentity());
 
-    // ��������� ��� 128 ������ ����������� ���������, ����� ������ �� ����� �����
-    // ��� �����������/�������������� ������.
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ 128 пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
+    // пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ/пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ.
     for (int i = 0; i < 128; ++i) {
         dst[i] = (i < (int)animComp.finalBoneMatrices.size()) ? animComp.finalBoneMatrices[i]
             : identity;
@@ -1183,7 +1921,7 @@ void AssimpModelClass::SetBoneMatricesFromComponent(ID3D11DeviceContext* context
     context->VSSetConstantBuffers(8, 1, &m_boneMatrixBuffer);
 
 #if DEBUG_TRANSFORMS
-    // ������� ������ ������� ��� ��������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     if (!animComp.finalBoneMatrices.empty()) {
         PrintMatrix(animComp.finalBoneMatrices[0], "[SetBoneMatrices] First bone matrix");
     }
@@ -1201,15 +1939,15 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
         return;
     }
 
-    // ���������� ������ �����
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
     std::string rawName = (node->mName.length > 0) ? std::string(node->mName.C_Str(), node->mName.length) : "";
     std::string nodeName = NormalizeBoneName(rawName);
 
-    // �������� ��������� �������������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     XMFLOAT4X4 nodeLocalFloat = ConvertMatrix(node->mTransformation);
     DirectX::XMMATRIX nodeTransform = DirectX::XMLoadFloat4x4(&nodeLocalFloat);
 
-    // ����� ������ ��������
+    // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     const BoneAnimationChannel* channel = nullptr;
     for (const auto& ch : anim.channels) {
         if (ch.nodeName == nodeName) {
@@ -1218,7 +1956,7 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
         }
     }
 
-    // ��������� ��������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     if (channel) {
         XMMATRIX posMat = (channel->positions.size() >= 2) ? InterpolatePosition(channel->positions, animTime) :
             (channel->positions.empty() ? XMMatrixIdentity() : XMMatrixTranslation(channel->positions[0].position.x, channel->positions[0].position.y, channel->positions[0].position.z));
@@ -1232,21 +1970,21 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
 
     DirectX::XMMATRIX globalTransform = nodeTransform * parentTransform;
 
-    // ?? ���� ����� � � ����� ���������
+    // ?? пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     auto boneIt = m_boneInfoMap.find(nodeName);
 
-    // ������� 2: ���� �� ������������� �����
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ 2: пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
     if (boneIt == m_boneInfoMap.end() && !rawName.empty()) {
         boneIt = m_boneInfoMap.find(rawName);
     }
 
-    // ������� 3: ���� �� ����� ������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅ 3: пїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     if (boneIt == m_boneInfoMap.end() && channel) {
         boneIt = m_boneInfoMap.find(channel->nodeName);
     }
 
     if(boneIt != m_boneInfoMap.end()) {
-        // === ��������� �������� ===
+        // === пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ ===
         int boneIndex = boneIt->second.boneIndex;
         if (boneIndex >= 0 && boneIndex < (int)outMatrices.size()) {
             DirectX::XMMATRIX offsetMat = DirectX::XMLoadFloat4x4(&boneIt->second.offsetMatrix);
@@ -1254,17 +1992,13 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
             DirectX::XMStoreFloat4x4(&outMatrices[boneIndex], finalMat);
         }
     }
-    else {
-        // === ������� �������� (��� ������) ===
-        // ���������� ������ ��������� ������������� �������������, ��� global/parent
-        if (!outMatrices.empty() && channel != nullptr) {
-            // nodeTransform ��� �������� �������� (scale*rot*pos)
-            // �� �������� �� parentTransform � ��� ������� ������ ����� worldMatrix
-            DirectX::XMStoreFloat4x4(&outMatrices[0], globalTransform);
-        }
-    }
 
-    // ��������
+    // Animated hierarchy nodes without mesh weights (for example Mixamo End
+    // bones) still affect their children through globalTransform, but must not
+    // overwrite an unrelated skinning slot. Slot 0 belongs to a real weighted
+    // bone and corrupting it stretches every vertex influenced by that bone.
+
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     for (unsigned int i = 0; i < node->mNumChildren; ++i) {
         ReadNodeHierarchyToComponent(node->mChildren[i], globalTransform, anim, animTime, outMatrices);
     }
@@ -1285,33 +2019,33 @@ void AssimpModelClass::ComputeBoneMatrices(int animIndex, float animTime,
 }
 
 // ============================================================================
-// ������� ��� ������ ������ ���������� � ������ (��� �������)
+// пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
 // ============================================================================
 void AssimpModelClass::PrintModelDebugInfo() {
 #if DEBUG_VERBOSE
     OutputDebugStringA("\n========== MODEL DEBUG INFO ==========\n");
 
-    // ���������� � �����
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅ
     if (m_scene) {
         OutputDebugStringA(("Scene: meshes=" + std::to_string(m_scene->mNumMeshes) +
             ", materials=" + std::to_string(m_scene->mNumMaterials) +
             ", textures=" + std::to_string(m_scene->mNumTextures) +
             ", animations=" + std::to_string(m_scene->mNumAnimations) + "\n").c_str());
 
-        // �������� ����
+        // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ
         if (m_scene->mRootNode) {
             OutputDebugStringA(("Root node: '" + std::string(m_scene->mRootNode->mName.C_Str()) +
                 "', children=" + std::to_string(m_scene->mRootNode->mNumChildren) + "\n").c_str());
         }
     }
 
-    // ���������� � ������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     OutputDebugStringA(("Bones: " + std::to_string(m_boneInfoMap.size()) + "\n").c_str());
     for (const auto& [name, info] : m_boneInfoMap) {
         OutputDebugStringA(("  Bone[" + std::to_string(info.boneIndex) + "]: '" + name + "'\n").c_str());
     }
 
-    // ���������� �� ���������
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     OutputDebugStringA(("Animations: " + std::to_string(m_animations.size()) + "\n").c_str());
     for (size_t i = 0; i < m_animations.size(); ++i) {
         const auto& anim = m_animations[i];
@@ -1328,7 +2062,7 @@ void AssimpModelClass::PrintModelDebugInfo() {
         }
     }
 
-    // ���������� � ����
+    // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ
     OutputDebugStringA(("Mesh parts: " + std::to_string(m_meshParts.size()) + "\n").c_str());
     for (size_t i = 0; i < m_meshParts.size(); ++i) {
         const auto& part = m_meshParts[i];
@@ -1342,18 +2076,18 @@ void AssimpModelClass::PrintModelDebugInfo() {
 }
 
 // ============================================================================
-// ?? ����������� ����������� ��� ��������� ������
+// ?? пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
 void AssimpModelClass::DebugAnimationBinding(const AnimationClip& anim) {
     OutputDebugStringA("\n========== ANIMATION BINDING DEBUG ==========\n");
 
-    // 1. ������ ���� ������
+    // 1. пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ
     OutputDebugStringA("--- Registered Bones ---\n");
     for (const auto& [name, info] : m_boneInfoMap) {
         OutputDebugStringA(("  BONE[" + std::to_string(info.boneIndex) + "]: '" + name + "'\n").c_str());
     }
 
-    // 2. ������ ������� �������� � �� ��������
+    // 2. пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     OutputDebugStringA("--- Animation Channels Binding ---\n");
     int bound = 0, unbound = 0;
 
@@ -1376,7 +2110,7 @@ void AssimpModelClass::DebugAnimationBinding(const AnimationClip& anim) {
     OutputDebugStringA(("Summary: bound=" + std::to_string(bound) +
         ", unbound=" + std::to_string(unbound) + "\n").c_str());
 
-    // 3. �������� ������ �������
+    // 3. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     if (!m_finalBoneMatrices.empty()) {
         XMFLOAT4X4& m = m_finalBoneMatrices[0];
         bool isZero = (m._11 == 1 && m._22 == 1 && m._33 == 1 && m._44 == 1 &&
@@ -1389,4 +2123,32 @@ void AssimpModelClass::DebugAnimationBinding(const AnimationClip& anim) {
     }
 
     OutputDebugStringA("========== END BINDING DEBUG ==========\n");
+}
+
+bool AssimpModelClass::TryGetBoneModelTransform(
+    const AnimationComponent& animComp,
+    const std::string& boneName,
+    DirectX::XMMATRIX& outTransform) const
+{
+    auto boneIt = m_boneInfoMap.find(NormalizeBoneName(boneName));
+    if (boneIt == m_boneInfoMap.end())
+        boneIt = m_boneInfoMap.find(boneName);
+    if (boneIt == m_boneInfoMap.end())
+        return false;
+
+    const BoneInfo& bone = boneIt->second;
+    if (bone.boneIndex < 0 ||
+        bone.boneIndex >= static_cast<int>(animComp.finalBoneMatrices.size()))
+    {
+        return false;
+    }
+
+    // Skinning stores offset * animatedGlobal for the row-vector convention
+    // used by this renderer. Remove the inverse-bind offset to recover the
+    // animated bone transform in model space.
+    const XMMATRIX offset = XMLoadFloat4x4(&bone.offsetMatrix);
+    const XMMATRIX skinning = XMLoadFloat4x4(
+        &animComp.finalBoneMatrices[bone.boneIndex]);
+    outTransform = XMMatrixInverse(nullptr, offset) * skinning;
+    return true;
 }

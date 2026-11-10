@@ -1,21 +1,22 @@
 ﻿#include "cameraclass.h"
 #include <DirectXCollision.h> // Для XMVector3Unproject
-CameraClass::CameraClass()
-{
-    m_positionX = 0.0f;
-    m_positionY = 0.0f;
-    m_positionZ = 0.0f;
-    m_rotationX = 0.0f;
-    m_rotationY = 0.0f;
-    m_rotationZ = 0.0f;
-}
+CameraClass::CameraClass() = default;
 
-CameraClass::CameraClass(const CameraClass& other)
+XMFLOAT3 CameraClass::GetForward() const
 {
-}
+    float pitch = m_rotationX * 0.0174532925f;
+    float yaw = m_rotationY * 0.0174532925f;
+    float roll = m_rotationZ * 0.0174532925f;
 
-CameraClass::~CameraClass()
-{
+    XMMATRIX rotationMatrix = XMMatrixRotationRollPitchYaw(pitch, yaw, roll);
+
+    XMVECTOR forward = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+    forward = XMVector3TransformNormal(forward, rotationMatrix);
+    forward = XMVector3Normalize(forward);
+
+    XMFLOAT3 result;
+    XMStoreFloat3(&result, forward);
+    return result;
 }
 
 void CameraClass::SetPosition(float x, float y, float z)
@@ -34,12 +35,12 @@ void CameraClass::SetRotation(float x, float y, float z)
     return;
 }
 
-XMFLOAT3 CameraClass::GetPosition()
+XMFLOAT3 CameraClass::GetPosition() const
 {
     return XMFLOAT3(m_positionX, m_positionY, m_positionZ);
 }
 
-XMFLOAT3 CameraClass::GetRotation()
+XMFLOAT3 CameraClass::GetRotation() const
 {
     return XMFLOAT3(m_rotationX, m_rotationY, m_rotationZ);
 }

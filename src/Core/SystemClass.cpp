@@ -9,21 +9,20 @@
 // Объявляем обработчик ImGui, определённый в imgui_impl_win32.cpp
 extern LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
+namespace
+{
+    SystemClass* g_applicationHandle = nullptr;
+}
+static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
+
 // ============================================================================
 // Конструктор
 // Обнуляем все указатели явно.
 // Если этого не сделать и Initialize() упадёт на середине —
 // Shutdown() попытается удалить мусорные адреса → краш.
 // ============================================================================
-SystemClass::SystemClass()
-{
-    m_Input = nullptr;
-    m_Application = nullptr;
-}
-
-// Пустые: копирование не поддерживается, очистка делается явно в Shutdown()
-SystemClass::SystemClass(const SystemClass& other) {}
-SystemClass::~SystemClass() {}
+SystemClass::SystemClass() = default;
+SystemClass::~SystemClass() { Shutdown(); }
 
 // ============================================================================
 // Initialize — запуск всего приложения
@@ -36,20 +35,32 @@ SystemClass::~SystemClass() {}
 // ============================================================================
 bool SystemClass::Initialize()
 {
+    // Make retrying initialization deterministic after either a successful
+    // run or a partial failure.
+    Shutdown();
+
     int screenWidth = 0, screenHeight = 0;
 
     // Шаг 1: создаём окно, screenWidth/screenHeight заполняются функцией
     InitializeWindows(screenWidth, screenHeight);
+    if (!m_hwnd)
+    {
+        Shutdown();
+        return false;
+    }
 
     // Шаг 2: подсистема ввода — хранит состояние всех клавиш и кнопок мыши
     m_Input = std::make_unique<InputClass>();
     m_Input->Initialize();
 
     // Шаг 3: графическая подсистема — Direct3D, шейдеры, сцена, редактор
-    m_Application = new ApplicationClass();
+    m_Application = std::make_unique<ApplicationClass>();
     bool result = m_Application->Initialize(screenWidth, screenHeight, m_hwnd);
     if (!result)
+    {
+        Shutdown();
         return false;
+    }
 
     // Шаг 4: ApplicationClass не владеет InputClass — передаём не-владеющий указатель
     m_Application->SetInput(m_Input.get());
@@ -73,14 +84,11 @@ void SystemClass::Shutdown()
 {
     if (m_Application)
     {
-        m_Application->Shutdown();
-        delete m_Application;
-        m_Application = nullptr;
+        m_Application.reset();
     }
 
     // unique_ptr очистится сам, но явно обнуляем для читаемости
-    if (m_Input)
-        m_Input = nullptr;
+    m_Input.reset();
 
     ShutdownWindows();
 }
@@ -229,7 +237,7 @@ void SystemClass::InitializeWindows(int& screenWidth, int& screenHeight)
 
     // Сохраняем указатель на себя в глобальной переменной —
     // это «мост» между WinAPI (C-функции) и ООП (методы класса)
-    ApplicationHandle = this;
+    g_applicationHandle = this;
 
     m_hinstance = GetModuleHandle(nullptr);
     m_applicationName = L"Engine";
@@ -311,18 +319,31 @@ void SystemClass::InitializeWindows(int& screenWidth, int& screenHeight)
 // ============================================================================
 void SystemClass::ShutdownWindows()
 {
+    if (!m_hwnd && !m_hinstance && !m_applicationName)
+    {
+        if (g_applicationHandle == this)
+            g_applicationHandle = nullptr;
+        return;
+    }
+
     ShowCursor(true);
 
     if (FULL_SCREEN)
         ChangeDisplaySettings(nullptr, 0); // вернуть исходное разрешение дисплея
 
-    DestroyWindow(m_hwnd);
-    m_hwnd = nullptr;
+    if (m_hwnd)
+    {
+        DestroyWindow(m_hwnd);
+        m_hwnd = nullptr;
+    }
 
-    UnregisterClass(m_applicationName, m_hinstance);
+    if (m_applicationName && m_hinstance)
+        UnregisterClass(m_applicationName, m_hinstance);
+    m_applicationName = nullptr;
     m_hinstance = nullptr;
 
-    ApplicationHandle = nullptr; // обнуляем глобальный указатель
+    if (g_applicationHandle == this)
+        g_applicationHandle = nullptr;
 }
 
 // ============================================================================
@@ -332,7 +353,7 @@ void SystemClass::ShutdownWindows()
 // глобальный указатель ApplicationHandle в метод MessageHandler.
 // ImGui получает сообщения первым, чтобы обрабатывать клики по своим окнам.
 // ============================================================================
-LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     // Даём ImGui первым обработать сообщение (мышь, клавиатура)
     if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
@@ -347,6 +368,8 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
         return 0;
 
     default:
-        return ApplicationHandle->MessageHandler(hwnd, msg, wparam, lparam);
+        return g_applicationHandle
+            ? g_applicationHandle->MessageHandler(hwnd, msg, wparam, lparam)
+            : DefWindowProc(hwnd, msg, wparam, lparam);
     }
 }

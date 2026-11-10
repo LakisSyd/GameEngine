@@ -1,4 +1,4 @@
-﻿#include "applicationclass.h"
+#include "applicationclass.h"
 #include <algorithm>
 #include <cctype>
 #include <array>
@@ -12,24 +12,45 @@
 #include "FloodingSystem.h"
 
 #include "JointConnectionSystem.h"
-#include "../../SubmarineSystem.h"
+#include "SubmarineSystem.h"
 #include "PhysicsWorld.h"
-#include "../../Renderer.h"
-#include "../../SkyShaderClass.h"
+#include "Renderer.h"
+#include "SkyShaderClass.h"
 #include <stb_image.h>
-#include "../../CharacterSpawnSystem.h"
-#include "../../CharacterMovementSystem.h"
-#include "../../CharacterControllerSystem.h"
-#include "../../AnimationController.h"
-#include "../../CharacterFacingSystem.h"
+#include "CharacterSpawnSystem.h"
+#include "CharacterMovementSystem.h"
+#include "CharacterControllerSystem.h"
+#include "AnimationController.h"
+#include "CharacterFacingSystem.h"
 #include "../Render/Grass/GrassRenderer.h"
-#include "../../WorldAreaComponent.h"
+#include "WorldAreaComponent.h"
+#include "DWriteTextSystem.h"
+#include "../ECS/System/MeshCuttingTest.h"
+#include "Gameplay/Combat/WeaponSystem.h"
+#include "Gameplay/Player/FirstPersonViewSystem.h"
+#include "../../StateSystem.h"
+#include "Gameplay/AI/NpcNavMeshSystem.h"
 
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
 // ============================================================================
 
 
+std::wstring Utf8ToWide(const std::string& text)
+{
+    if (text.empty())
+        return {};
+
+    const int length = MultiByteToWideChar(
+        CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    if (length <= 0)
+        return {};
+
+    std::wstring result(static_cast<size_t>(length), L'\0');
+    MultiByteToWideChar(
+        CP_UTF8, 0, text.data(), static_cast<int>(text.size()), result.data(), length);
+    return result;
+}
 ID3D11ShaderResourceView* LoadEquirectangularHDR(
     ID3D11Device* device,
     ID3D11DeviceContext* context,
@@ -154,6 +175,15 @@ ID3D11ShaderResourceView* ApplicationClass::LoadSkyboxFromWorldSettings(
 // ============================================================================
 bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 {
+    Shutdown();
+    m_isShutdown = false;
+    struct InitializationGuard
+    {
+        ApplicationClass* owner = nullptr;
+        bool committed = false;
+        ~InitializationGuard() { if (!committed) owner->Shutdown(); }
+    } initializationGuard{ this };
+
     m_hwnd = hwnd;
     m_screenWidth = screenWidth;
     m_screenHeight = screenHeight;
@@ -200,6 +230,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_camera->SetRotation(0.0f, 0.0f, 0.0f);
     m_cameraController.SetCamera(m_camera.get());
     m_cameraController.SetInput(&m_inputManager, m_input, m_hwnd);
+    m_editorUI.SetCameraController(&m_cameraController);
 
     // -- Fallback модель (для SpawnObject без указания модели) -----------------
  
@@ -227,7 +258,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_normalMapShader = sm.Load<NormalMapShaderClass>("normalmap", m_direct3D->GetDevice(), hwnd);
     m_fogShader = sm.Load<FogShaderClass>("fog", m_direct3D->GetDevice(), hwnd);
     m_ClipPlaneShader = sm.Load<ClipPlaneShaderClass>("clip", m_direct3D->GetDevice(), hwnd);
-    m_ColorShader = sm.Load<ColorShaderClass>("color", m_direct3D->GetDevice(), hwnd);
+    m_colorShader = sm.Load<ColorShaderClass>("color", m_direct3D->GetDevice(), hwnd);
     m_WaterShader = sm.Load<WaterShaderClass>("water", m_direct3D->GetDevice(), hwnd);
     m_reflectionShader = sm.Load<ReflectionShaderClass>("reflection", m_direct3D->GetDevice(), hwnd);
     m_glassShader = sm.Load<GlassShaderClass>("glass", m_direct3D->GetDevice(), hwnd);
@@ -236,7 +267,18 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     m_pbrShader = sm.Load<PBRShaderClass>("pbr", m_direct3D->GetDevice(), hwnd);
     m_terrainBlendShader = sm.Load<TerrainBlendShaderClass>("terrain_blend", m_direct3D->GetDevice(), hwnd);
     m_SkyShader = sm.Load<SkyShaderClass>("sky",m_direct3D->GetDevice(), hwnd);
-  // m_fontShader = sm.Load<FontShaderClass>("font", m_direct3D->GetDevice(), hwnd);
+
+    if (!m_textureShader || !m_multiTextureShader || !m_lightMapShader ||
+        !m_normalMapShader || !m_fogShader || !m_ClipPlaneShader ||
+        !m_colorShader || !m_WaterShader || !m_reflectionShader ||
+        !m_glassShader || !m_projectionShader || !m_lightShader ||
+        !m_pbrShader || !m_terrainBlendShader || !m_SkyShader)
+    {
+        OutputDebugStringA(
+            "Application initialization aborted: one or more required shaders failed.\n");
+        return false;
+    }
+
     
 
     m_physicsDebugRenderer = new PhysicsDebugRenderer();
@@ -255,14 +297,6 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
         return false;
     }
 
-    m_colorShader = new ColorShaderClass();
-
-    if (!m_colorShader->Initialize(m_direct3D->GetDevice(), hwnd))
-    {
-        MessageBox(hwnd, L"Failed to initialize ColorShader", L"Error", MB_OK);
-        return false;
-    }
-
     if (!m_areaDebugRenderer.Initialize(m_direct3D->GetDevice()))
     {
         MessageBox(hwnd, L"Failed to initialize AreaDebugRenderer", L"Error", MB_OK);
@@ -277,7 +311,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 
 
     m_shadowMap = new ShadowMap();
-    if (!m_shadowMap->Initialize(m_direct3D->GetDevice(), 2048, 2048))
+    if (!m_shadowMap->Initialize(m_direct3D->GetDevice(), 1024, 1024))
     {
         MessageBox(hwnd, L"Failed to init ShadowMap", L"Error", MB_OK);
         return false;
@@ -304,8 +338,6 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     XMMATRIX lightProj = XMMatrixOrthographicLH(100, 100, 0.5f, 200.0f);
 
     m_shadowMap->SetLightViewProjection(lightView, lightProj);
-
-    m_shadowMap->SetLightViewProjection(lightView, lightProj);
     // Создаём тестовую физическую сцену
    // CreatePhysicsTestScene();
 
@@ -320,6 +352,22 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     {
         OutputDebugStringA("One or more critical shaders failed to load. Initialize() abort.\n");
         return false;
+    }
+    // Damage decals are data masks, so they must stay linear (forceSRGB=false).
+    m_crackDecalTexture = new TextureClass();
+    if (m_crackDecalTexture->Initialize(
+        m_direct3D->GetDevice(),
+        m_direct3D->GetDeviceContext(),
+        "assets/texture/hull_crack_decal.png",
+        false))
+    {
+        m_pbrShader->SetCrackTexture(m_crackDecalTexture->GetTexture());
+    }
+    else
+    {
+        OutputDebugStringA("[DamageDecal] Failed to load hull crack mask.\n");
+        delete m_crackDecalTexture;
+        m_crackDecalTexture = nullptr;
     }
     // -- Render-to-texture для отражения и преломления -------------------------
     m_reflectionTexture = new RenderTextureClass;
@@ -427,18 +475,7 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
     }
     m_renderQuad->SetRenderLocation(10, 10);
 
-    auto* mat = new MaterialClass();
-    mat->Initialize(m_direct3D->GetDevice(), L"ProjectorMat");
-    mat->SetShader(m_projectionShader);
-
-    // Устанавливаем основную текстуру (слот 0)
-    TextureClass* colorTex = new TextureClass();
-    colorTex->Initialize(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/stone.tga");
-    mat->SetTexture(0, colorTex);
-
-   
-
-    m_renderer = new Renderer(
+m_renderer = new Renderer(
         m_direct3D.get(),           // D3DClass*
         m_camera.get(),             // CameraClass*
         &m_sceneManager,            // SceneManager*
@@ -506,31 +543,20 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
    
 
   
+
+    dwrite_text.Initialize();
  
 
-    // ── Текст "Hello" ───────────────────────────────────────────────────────
-  /*  char helloText[32] = "Hello";
+    dwrite_text.InitializeRenderTarget(m_direct3D->GetSwapChain());
 
-    m_textHello = new TextClass();
-    if (!m_textHello->Initialize(
-        m_direct3D->GetDevice(),
-        m_direct3D->GetDeviceContext(),
-       m_screenWidth,
-       m_screenHeight, 10, m_font))
-       
-    {
-        MessageBox(hwnd, L"Failed to initialize TextClass 'Hello'", L"Error", MB_OK);
-        return false;
-    }*/
-   
-   // m_textHello->UpdateText(helloText, 960, 540, 0, 0, 0);
-
-	m_jobSystem.Initialize(4); // Инициализируем с 4 рабочими потоками (можно по количеству ядер)
+	if (!m_jobSystem.Initialize(4))
+		return false;
 
 
 	m_sceneManager.SpawnSprite(m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "assets/texture/sprite_test.png", 0, 0, 0, 1, 1);
 
 
+    initializationGuard.committed = true;
     return true;
 }
 
@@ -544,6 +570,10 @@ bool ApplicationClass::Initialize(int screenWidth, int screenHeight, HWND hwnd)
 // ============================================================================
 void ApplicationClass::Shutdown()
 {
+    if (m_isShutdown)
+        return;
+    m_isShutdown = true;
+
     m_jobSystem.Shutdown();
     m_jobSystem.ExecuteMainThreadJobs();
 
@@ -565,10 +595,10 @@ void ApplicationClass::Shutdown()
         m_direct3D->GetDeviceContext()->Flush();
     }
 
-    // Bullet keeps non-owning pointers to ECS physics components. Detach those
-    // registrations before clearing the registry and deleting the components.
-    PhysicsWorld::Get().Shutdown();
+    // ECS owns Bullet actions, constraints, bodies and shapes. Release them in
+    // dependency order while the world is still alive, then destroy the world.
     m_sceneManager.Clear();
+    PhysicsWorld::Get().Shutdown();
 
     if (m_lightSphereModel)
     {
@@ -578,6 +608,12 @@ void ApplicationClass::Shutdown()
     }
 
     ShaderManager::Get().Shutdown();
+    if (m_crackDecalTexture)
+    {
+        m_crackDecalTexture->Shutdown();
+        delete m_crackDecalTexture;
+        m_crackDecalTexture = nullptr;
+    }
 
     m_assetLoadSystem.Shutdown();
 
@@ -637,6 +673,19 @@ void ApplicationClass::Shutdown()
         m_renderQuad = nullptr;
     }
 
+    if (m_boxModel && m_boxModel != m_mainModel)
+    {
+        m_boxModel->Shutdown();
+        delete m_boxModel;
+    }
+    m_boxModel = nullptr;
+
+    if (m_capsuleModel)
+    {
+        m_capsuleModel->Shutdown();
+        delete m_capsuleModel;
+        m_capsuleModel = nullptr;
+    }
     if (m_mainModel)
     {
         m_mainModel->Shutdown();
@@ -671,6 +720,8 @@ void ApplicationClass::Shutdown()
         m_renderer = nullptr;  // Обязательно обнуляем!
     }
 
+    m_colorShader = nullptr;
+
     m_editorUI.Shutdown();
 
     if (m_skySRV)
@@ -685,9 +736,141 @@ void ApplicationClass::Shutdown()
         m_wireframeRS = nullptr;
     }
 
+    dwrite_text.Shutdown();
+
     if (m_direct3D)
         m_direct3D->Shutdown();
 
+    m_input = nullptr;
+
+}
+
+void ApplicationClass::RemoveTestRifleVisuals()
+{
+    if (m_worldRifleVisual != INVALID_ENTITY)
+        m_sceneManager.RemoveObject(m_worldRifleVisual);
+    if (m_firstPersonRifleVisual != INVALID_ENTITY)
+        m_sceneManager.RemoveObject(m_firstPersonRifleVisual);
+
+    m_worldRifleVisual = INVALID_ENTITY;
+    m_firstPersonRifleVisual = INVALID_ENTITY;
+    m_firstPersonArms = INVALID_ENTITY;
+}
+
+void ApplicationClass::SetupTestRifleVisuals()
+{
+    RemoveTestRifleVisuals();
+
+    const Entity player = m_gameplayController.GetPlayerEntity();
+    if (player == INVALID_ENTITY || !m_direct3D)
+        return;
+
+    auto& registry = m_sceneManager.GetECSRegistry();
+    const Entity weaponEntity = WeaponSystem::GetEquippedWeaponEntity(registry, player);
+    auto* weapon = registry.GetComponent<WeaponComponent>(weaponEntity);
+    if (!weapon)
+        return;
+
+    AssimpModelClass* rifleModel = m_sceneManager.GetOrCreateModel(
+        weapon->visualModelPath,
+        m_direct3D->GetDevice(),
+        m_direct3D->GetDeviceContext(),
+        "",
+        false);
+    if (!rifleModel)
+        return;
+
+    if (weapon->showWorldVisual)
+    {
+        SpawnObjectDesc worldDesc;
+        worldDesc.model = rifleModel;
+        worldDesc.name = "Weapon Visual (World)";
+        worldDesc.meshCastsShadow = true;
+        m_worldRifleVisual = m_sceneManager.SpawnObject(std::move(worldDesc));
+
+        BoneAttachmentComponent worldAttachment;
+        worldAttachment.parent = player;
+        worldAttachment.boneName = weapon->rightHandBone;
+        worldAttachment.localPosition = weapon->worldGrip.position;
+        worldAttachment.localRotation = weapon->worldGrip.rotation;
+        worldAttachment.localScale = weapon->worldGrip.scale;
+        registry.AddComponent<BoneAttachmentComponent>(m_worldRifleVisual, worldAttachment);
+        registry.AddComponent<WeaponOwnerComponent>(
+            m_worldRifleVisual, WeaponOwnerComponent{ player });
+    }
+
+    auto& viewModels = registry.GetComponents<FirstPersonViewComponent>();
+    for (const auto& [entity, viewModel] : viewModels)
+    {
+        if (viewModel.owner == player && viewModel.followCamera &&
+            registry.HasComponent<MeshRendererComponent>(entity))
+        {
+            m_firstPersonArms = entity;
+            break;
+        }
+    }
+
+    if (m_firstPersonArms == INVALID_ENTITY || !weapon->showFirstPersonVisual)
+        return;
+
+    SpawnObjectDesc fpDesc;
+    fpDesc.model = rifleModel;
+    fpDesc.name = "Weapon Visual (First Person)";
+    fpDesc.meshCastsShadow = false;
+    m_firstPersonRifleVisual = m_sceneManager.SpawnObject(std::move(fpDesc));
+
+    FirstPersonViewComponent fpVisual;
+    fpVisual.owner = player;
+    fpVisual.followCamera = false;
+    fpVisual.syncAnimation = false;
+    fpVisual.hideOwner = false;
+    registry.AddComponent<FirstPersonViewComponent>(m_firstPersonRifleVisual, fpVisual);
+
+    BoneAttachmentComponent fpAttachment;
+    fpAttachment.parent = m_firstPersonArms;
+    fpAttachment.boneName = weapon->rightHandBone;
+    fpAttachment.localPosition = weapon->firstPersonGrip.position;
+    fpAttachment.localRotation = weapon->firstPersonGrip.rotation;
+    fpAttachment.localScale = weapon->firstPersonGrip.scale;
+    registry.AddComponent<BoneAttachmentComponent>(m_firstPersonRifleVisual, fpAttachment);
+    registry.AddComponent<WeaponOwnerComponent>(
+        m_firstPersonRifleVisual, WeaponOwnerComponent{ player });
+}
+
+void ApplicationClass::UpdateTestRifleVisuals()
+{
+    const Entity player = m_gameplayController.GetPlayerEntity();
+    if (player == INVALID_ENTITY)
+        return;
+
+    auto& registry = m_sceneManager.GetECSRegistry();
+    const Entity weaponEntity = WeaponSystem::GetEquippedWeaponEntity(registry, player);
+    auto* weapon = registry.GetComponent<WeaponComponent>(weaponEntity);
+    if (!weapon)
+        return;
+
+    auto applyGrip = [&](Entity visual, const WeaponGripTransform& grip)
+    {
+        if (visual == INVALID_ENTITY)
+            return;
+        if (auto* attachment = registry.GetComponent<BoneAttachmentComponent>(visual))
+        {
+            attachment->boneName = weapon->rightHandBone;
+            attachment->localPosition = grip.position;
+            attachment->localRotation = grip.rotation;
+            attachment->localScale = grip.scale;
+        }
+    };
+
+    applyGrip(m_worldRifleVisual, weapon->worldGrip);
+    applyGrip(m_firstPersonRifleVisual, weapon->firstPersonGrip);
+
+    if (auto* armsView =
+        registry.GetComponent<FirstPersonViewComponent>(m_firstPersonArms))
+    {
+        armsView->pitchScale = weapon->firstPersonPitchScale;
+        armsView->pitchOffset = weapon->firstPersonPitchOffset;
+    }
 }
 
 bool ApplicationClass::Frame(float dt)
@@ -696,6 +879,7 @@ bool ApplicationClass::Frame(float dt)
     // 0. Input
     // =====================================================
     m_inputManager.Update(m_input);
+    m_events.Clear();
 
     
     // =====================================================
@@ -703,12 +887,41 @@ bool ApplicationClass::Frame(float dt)
     // =====================================================
     const bool f5Down = m_input && m_input->IsKeyDown(VK_F5);
     const bool f1Down = m_input && m_input->IsKeyDown(VK_F1);
+    const bool f2Down = m_input && m_input->IsKeyDown(VK_F2);
+    const bool f6Down = m_input && m_input->IsKeyDown(VK_F6);
 
     if (f1Down && !m_wasF1Down)
     {
         m_editorUI.ToggleObjectDebugWindow();
     }
     m_wasF1Down = f1Down;
+
+    if (f6Down && !m_wasF6Down)
+    {
+        if (m_camera && m_direct3D)
+        {
+            m_camera->Render();
+            XMMATRIX cutView;
+            XMMATRIX cutProjection;
+            m_camera->GetViewMatrix(cutView);
+            m_direct3D->GetProjectionMatrix(cutProjection);
+
+            CameraClass::Ray cutRay = m_camera->CreatePickingRay(
+                m_inputManager.GetMouseX(),
+                m_inputManager.GetMouseY(),
+                m_screenWidth,
+                m_screenHeight,
+                cutView,
+                cutProjection);
+
+            MeshCuttingTest::CutByRayAsync(
+                m_sceneManager.GetECSRegistry(),
+                m_direct3D->GetDevice(),
+                m_jobSystem,
+                cutRay);
+        }
+    }
+    m_wasF6Down = f6Down;
 
    if (f5Down && !m_wasF5Down)
 {
@@ -718,10 +931,46 @@ bool ApplicationClass::Frame(float dt)
         {
             m_engineMode = EngineMode::Play;
             m_cameraController.EnterPlayMode();
+            auto& registry = m_sceneManager.GetECSRegistry();
+            const Entity player = m_gameplayController.GetPlayerEntity();
+            const Entity weaponEntity =
+                WeaponSystem::GetEquippedWeaponEntity(registry, player);
+            if (auto* weapon = registry.GetComponent<WeaponComponent>(weaponEntity))
+                m_sceneManager.LoadWeaponProfile(*weapon);
+            SetupTestRifleVisuals();
         }
     }
     else
     {
+        // AI/controller systems do not run in Editor mode, but PhysicsSystem
+        // continues stepping the world. Without explicitly clearing the last
+        // Play-frame intent, btKinematicCharacterController keeps applying the
+        // cached displacement forever (and can appear to reverse if the final
+        // portal frame happened to contain the opposite alignment command).
+        auto& registry = m_sceneManager.GetECSRegistry();
+        registry.ForEach<CharacterMovement>(
+            [&](Entity, CharacterMovement& movement)
+            {
+                movement.walkDirection = { 0.0f, 0.0f, 0.0f };
+                movement.currentSpeed = 0.0f;
+                movement.isMoving = false;
+                movement.wantsRun = false;
+                movement.isRunning = false;
+                movement.wantJump = false;
+                movement.locomotionState = PlayerLocomotionState::Idle;
+            });
+        registry.ForEach<CharacterController>(
+            [&](Entity, CharacterController& controller)
+            {
+                if (controller.controller)
+                {
+                    controller.controller->setWalkDirection(
+                        btVector3(0.0f, 0.0f, 0.0f));
+                    controller.controller->setVelocityForTimeInterval(
+                        btVector3(0.0f, 0.0f, 0.0f), btScalar(0.0f));
+                }
+            });
+        RemoveTestRifleVisuals();
         m_engineMode = EngineMode::Editor;
         m_cameraController.ExitPlayMode();
     }
@@ -732,9 +981,34 @@ bool ApplicationClass::Frame(float dt)
     const bool isEditorMode = m_engineMode == EngineMode::Editor;
     const bool isPlayMode = m_engineMode == EngineMode::Play;
 
+    // В обычном Play Mode мышь постоянно захвачена камерой и спрятана. F2
+    // временно отдаёт её ImGui, чтобы можно было нажимать кнопки NPC debug,
+    // инспектора и других runtime-окон. Повторное F2 возвращает управление.
+    if (isPlayMode && f2Down && !m_wasF2Down)
+    {
+        m_playUiCursorActive = !m_playUiCursorActive;
+        if (m_playUiCursorActive)
+            m_cameraController.ReleaseMouseCapture();
+    }
+    else if (!isPlayMode)
+    {
+        m_playUiCursorActive = false;
+    }
+    m_wasF2Down = f2Down;
+
+  
     m_jobSystem.ExecuteMainThreadJobs();
 
     m_assetLoadSystem.Update(m_direct3D->GetDevice());
+    m_sceneManager.UpdateAsyncShipImport(
+        m_direct3D->GetDevice(),
+        m_direct3D->GetDeviceContext(),
+        4.0f);
+
+    if (m_physicsDebugRenderer)
+    {
+        m_physicsDebugRenderer->UpdateInteractionRays(dt);
+    }
 
     // =====================================================
     // 2. Editor input / camera
@@ -762,6 +1036,49 @@ bool ApplicationClass::Frame(float dt)
         }
     
     }
+
+    if (m_engineMode == EngineMode::Play)
+    {
+        timer.Update(dt);
+
+        m_interactionSystem.Update(
+            m_camera.get(),
+            &m_inputManager,
+            &m_sceneManager.GetECSRegistry(),
+            PhysicsWorld::Get().GetWorld(),
+            m_input,
+            m_physicsDebugRenderer,
+            m_physicsDebugSettings,
+            m_events
+        );
+
+        auto& registry = m_sceneManager.GetECSRegistry();
+        m_doorSystem.ProcessEvents(registry, m_events);
+        m_doorSystem.Update(registry, dt);
+        // ЛКМ в режиме UI должен нажимать ImGui, а не одновременно стрелять или
+        // ремонтировать объект за окном. Остальные world-системы продолжают жить.
+        if (!m_playUiCursorActive)
+        {
+            WeaponSystem::Update(
+                m_sceneManager.GetECSRegistry(),
+                m_damageSystem,
+                m_input,
+                m_camera.get(),
+                PhysicsWorld::Get().GetWorld(),
+                m_direct3D->GetDevice(),
+                m_jobSystem,
+                dt);
+
+            m_repairSystem.Update(
+                m_sceneManager.GetECSRegistry(),
+                dt,
+                m_input,
+                m_camera.get(),
+                PhysicsWorld::Get().GetWorld(),
+                m_jobSystem, m_worldEventLog, timer.GetTotalSeconds());
+        }
+        UpdateTestRifleVisuals();
+    }
     
 
     // =====================================================
@@ -773,13 +1090,33 @@ bool ApplicationClass::Frame(float dt)
             m_sceneManager.GetECSRegistry(),
             dt,
             m_input,
-            false,
+            m_playUiCursorActive,
             m_cameraController.GetFollowYaw()
         );
+
+        // =====================================================================
+        // NPC AI PIPELINE — порядок вызовов является частью архитектуры.
+        // =====================================================================
+        // 1. Utility: решает, ЧТО делать автоматически (например, чинить дыру).
+        //    При активной debug-команде считает score только для отображения и
+        //    не имеет права перехватывать управление.
+        m_npcUtilitySystem.Update(m_sceneManager.GetECSRegistry(), dt);
+
+        // 2. StateSystem: исполняет ручную команду или решение Utility AI. Здесь
+        //    строится маршрут через комнаты/двери и заполняется CharacterMovement.
+		StateSystem::Update(m_sceneManager.GetECSRegistry(), dt, m_jobSystem);
+
+        // 3. Facing: разворачивает модель в сторону walkDirection, записанного AI.
         CharacterFacingSystem::Update(m_sceneManager.GetECSRegistry(), dt);
+
+        // 4. Controller: применяет желаемое движение к Bullet capsule с коллизиями.
         CharacterControllerSystem::Update(m_sceneManager.GetECSRegistry(), dt);
+
+        // 5. Animation: читает итоговые isMoving/isRunning/locomotionState и
+        //    выбирает Idle, Walk или Run. Поэтому AI не запускает клипы напрямую.
         AnimationController::Update(m_sceneManager.GetECSRegistry(), dt);
-        
+        m_damageSystem.Update(m_sceneManager.GetECSRegistry(), m_particleSystem, m_worldEventLog, timer.GetTotalSeconds(), dt);
+        m_particleSystem.Update(dt, m_physicsDebugRenderer);	
        
     }
 
@@ -812,7 +1149,14 @@ bool ApplicationClass::Frame(float dt)
 
             if (transform)
             {
-                m_cameraController.UpdateFollow(dt, transform);
+                const Entity openedEntity = m_interactionSystem.GetOpenedEntity();
+                const bool deviceUiOpen =
+                    registry.HasComponent<GeneratorComponent>(openedEntity) ||
+                    registry.HasComponent<OxygenGeneratorComponent>(openedEntity);
+                m_cameraController.UpdateFollow(
+                    dt,
+                    transform,
+                    deviceUiOpen || m_playUiCursorActive);
             }
         }
     }
@@ -820,7 +1164,14 @@ bool ApplicationClass::Frame(float dt)
     // =====================================================
     // 6. Scene update
     // =====================================================
-    m_sceneManager.UpdateAll(dt);
+    if (isPlayMode)
+    {
+        FirstPersonViewSystem::UpdateCameraAnchors(
+            m_sceneManager.GetECSRegistry(),
+            m_camera.get(),
+            m_gameplayController.GetPlayerEntity());
+    }
+    m_sceneManager.UpdateAll(dt, m_gameplayController.GetPlayerEntity());
     m_sceneManager.UpdateLights();
 
     m_camera->Render();
@@ -872,12 +1223,123 @@ bool ApplicationClass::Frame(float dt)
         selectedEntity = m_editorUI.GetSelectedEntity();
     }
 
+    PhysicsDebugSettings framePhysicsDebugSettings = m_physicsDebugSettings;
+    if (isPlayMode)
+    {
+        framePhysicsDebugSettings.showColliders = false;
+        framePhysicsDebugSettings.showContacts = false;
+        framePhysicsDebugSettings.showAABB = false;
+        framePhysicsDebugSettings.showCenterOfMass = false;
+        framePhysicsDebugSettings.showVelocity = false;
+        framePhysicsDebugSettings.showInteractionRays = false;
+        framePhysicsDebugSettings.showComplexMeshWireframes = false;
+    }
+
+    // ---------------------------------------------------------------------
+    // NAVMESH WORLD DEBUG
+    // ---------------------------------------------------------------------
+    // Линии живут один кадр и каждый кадр берутся из актуального кеша Detour.
+    // Поэтому после Force repath/Rebuild визуализация меняется сразу и никогда
+    // не остаётся висеть в мире от предыдущего маршрута.
+    NpcNavMeshDebugDrawSettings& navDraw =
+        NpcNavMeshSystem::GetDebugDrawSettings();
+    if (navDraw.enabled && m_physicsDebugRenderer)
+    {
+        const Entity debugNpc = m_editorUI.GetSelectedEntity();
+        const NpcNavMeshDebugInfo navInfo =
+            NpcNavMeshSystem::GetDebugInfo(debugNpc);
+        const float yOffset = navDraw.heightOffset;
+        constexpr float oneFrameLifetime = 0.001f;
+
+        auto drawLinePairs = [&](const std::vector<XMFLOAT3>& lines, const XMFLOAT4& color)
+        {
+            if (lines.size() < 2)
+                return;
+            std::vector<XMFLOAT3> lifted = lines;
+            for (XMFLOAT3& point : lifted)
+                point.y += yOffset;
+            m_physicsDebugRenderer->AddNavigationLines(
+                lifted, color, oneFrameLifetime);
+        };
+
+        if (navDraw.drawMesh)
+        {
+            // Оранжевый сразу выдаёт аварийную сетку "только пол". Голубой
+            // означает, что препятствия действительно вошли в NavMesh.
+            const XMFLOAT4 meshColor = navInfo.floorOnlyFallback
+                ? XMFLOAT4{ 1.0f, 0.42f, 0.05f, 1.0f }
+                : XMFLOAT4{ 0.05f, 0.90f, 1.0f, 1.0f };
+            drawLinePairs(navInfo.meshEdges, meshColor);
+        }
+
+        if (navDraw.drawObstacleAabbs)
+            drawLinePairs(navInfo.obstacleEdges, XMFLOAT4{ 1.0f, 0.08f, 0.08f, 0.65f });
+
+        if (navDraw.drawPath && !navInfo.path.empty())
+        {
+            const XMFLOAT4 pathColor{ 1.0f, 0.92f, 0.05f, 1.0f };
+            std::vector<XMFLOAT3> pathLines;
+            pathLines.reserve((navInfo.path.size() - 1) * 2);
+            for (size_t i = 1; i < navInfo.path.size(); ++i)
+            {
+                pathLines.push_back(navInfo.path[i - 1]);
+                pathLines.push_back(navInfo.path[i]);
+            }
+            drawLinePairs(pathLines, pathColor);
+
+            // Крест на текущем waypoint — пурпурный; последний target — красный.
+            auto makeCross = [&](const XMFLOAT3& point, float radius)
+            {
+                return std::vector<XMFLOAT3>{
+                    { point.x - radius, point.y, point.z },
+                    { point.x + radius, point.y, point.z },
+                    { point.x, point.y, point.z - radius },
+                    { point.x, point.y, point.z + radius }
+                };
+            };
+            const size_t next = (std::min)(
+                static_cast<size_t>((std::max)(0, navInfo.currentWaypoint)),
+                navInfo.path.size() - 1);
+            drawLinePairs(
+                makeCross(navInfo.path[next], 0.28f),
+                XMFLOAT4{ 1.0f, 0.05f, 1.0f, 1.0f });
+            drawLinePairs(
+                makeCross(navInfo.path.back(), 0.38f),
+                XMFLOAT4{ 1.0f, 0.12f, 0.05f, 1.0f });
+        }
+
+        if (navDraw.drawPath && navInfo.dynamicAvoidanceActive)
+        {
+            // Оранжевая стрелка - кратковременный steering поверх жёлтого
+            // Detour-пути. Красный AABB рядом принадлежит динамическому телу и
+            // не является частью запечённого NavMesh.
+            drawLinePairs(
+                std::vector<XMFLOAT3>{ navInfo.avoidanceStart, navInfo.avoidancePoint },
+                XMFLOAT4{ 1.0f, 0.45f, 0.05f, 1.0f });
+            drawLinePairs(
+                std::vector<XMFLOAT3>{
+                    { navInfo.avoidancePoint.x - 0.25f, navInfo.avoidancePoint.y,
+                        navInfo.avoidancePoint.z },
+                    { navInfo.avoidancePoint.x + 0.25f, navInfo.avoidancePoint.y,
+                        navInfo.avoidancePoint.z },
+                    { navInfo.avoidancePoint.x, navInfo.avoidancePoint.y,
+                        navInfo.avoidancePoint.z - 0.25f },
+                    { navInfo.avoidancePoint.x, navInfo.avoidancePoint.y,
+                        navInfo.avoidancePoint.z + 0.25f }
+                },
+                XMFLOAT4{ 1.0f, 0.45f, 0.05f, 1.0f });
+        }
+    }
+
+    m_renderer->SetFirstPersonView(
+        isPlayMode && m_cameraController.IsFirstPerson(),
+        m_gameplayController.GetPlayerEntity());
     m_renderer->RenderFrame(
         m_direct3D->GetDeviceContext(),
         m_viewMatrix,
         m_projMatrix,
         selectedEntity,
-        m_physicsDebugSettings
+        framePhysicsDebugSettings
     );
 
     auto& areas =
@@ -925,34 +1387,68 @@ bool ApplicationClass::Frame(float dt)
             m_sceneManager.GetWorldSettings().skyboxReloadPending = false;
         }
     }
-    else if (m_editorUI.IsObjectDebugWindowVisible())
+    else
     {
-        m_editorUI.UpdateDebugOverlay(m_sceneManager);
+        m_editorUI.UpdatePlayOverlay(m_sceneManager);
+        if (m_editorUI.ConsumeWeaponVisualReloadRequest())
+            SetupTestRifleVisuals();
         m_editorUI.Render();
     }
-
-
+    if (isPlayMode && !m_interactionSystem.GetPrompt().empty())
     {
-        XMMATRIX worldMatrix, viewMatrix, orthoMatrix;
-
-        worldMatrix = XMMatrixIdentity();
-        viewMatrix = XMMatrixIdentity();
-        orthoMatrix = XMMatrixOrthographicLH(
-            static_cast<float>(m_screenWidth),
-            static_cast<float>(m_screenHeight),
-            0.0f,
-            1.0f);
-
-        // Отключаем Z-буфер и включаем альфа-смешивание для 2D-текста
-        m_direct3D->TurnZBufferOff();
-        m_direct3D->TurnAlphaBlendingOn();
-
-       
-
-        // Возвращаем состояние для 3D
-        m_direct3D->TurnZBufferOn();
-        m_direct3D->TurnAlphaBlendingOff();
+        const std::wstring prompt = Utf8ToWide("E: " + m_interactionSystem.GetPrompt());
+        if (!prompt.empty())
+            dwrite_text.DrawSmallTextLineColor(
+                prompt.c_str(),
+                (std::max)(20.0f, static_cast<float>(m_screenWidth) * 0.5f - 120.0f),
+                (std::max)(20.0f, static_cast<float>(m_screenHeight) - 126.0f),
+                240.0f,
+                D2D1::ColorF(0.82f, 0.92f, 0.94f, 1.0f));
     }
+
+    // Панель устройства появляется только при взгляде на кислородный генератор.
+    if (isPlayMode)
+    {
+        m_oxygenGeneratorHud.Render(
+            dwrite_text,
+            m_sceneManager.GetECSRegistry(),
+            m_interactionSystem.GetOpenedEntity(),
+            static_cast<float>(m_screenWidth));
+
+        m_generatorHud.Render(
+            dwrite_text,
+            m_sceneManager.GetECSRegistry(),
+            m_interactionSystem.GetOpenedEntity(),
+            static_cast<float>(m_screenWidth),
+            m_inputManager);
+    }
+
+
+	/////======GAMEHUD======/////
+    GameHudStats hudStats;
+   
+    hudStats.frameMs = dt > 0.0f ? dt * 1000.0f : 0.0f;
+    if (m_renderer)
+    {
+        const auto& renderStats = m_renderer->GetLastFrameStats();
+        hudStats.renderCpuMs = renderStats.renderCpuMs;
+        hudStats.activeMeshObjects = renderStats.activeMeshObjects;
+        hudStats.mainRenderedObjects = renderStats.mainRenderedObjects;
+        hudStats.shadowRenderedObjects = renderStats.shadowRenderedObjects;
+    }
+   
+
+    m_gameHud.Render(
+        dwrite_text,
+        m_sceneManager.GetECSRegistry(),
+        m_gameplayController.GetPlayerEntity(),
+        dt,
+        static_cast<float>(m_screenWidth),
+        static_cast<float>(m_screenHeight),
+        m_inputManager, m_worldEventLog,
+        hudStats);
+    
+
 
     // =====================================================
     // 10. Present
@@ -1146,6 +1642,30 @@ void ApplicationClass::ProcessEditorRequests()
             SpawnObjectFromRequest(req);
     }
 
+    // Ship import request
+    {
+        auto req = m_editorUI.ConsumeImportShipRequest();
+        if (req.pending)
+        {
+            if (m_sceneManager.HasImportedShip())
+            {
+                OutputDebugStringA("[ImportShip] Ship already exists. Ignoring duplicate SpawnShip request.\n");
+            }
+            else
+            {
+                const bool submitted = m_sceneManager.RequestShipImportAsync(
+                    req.path
+
+                );
+
+                if (!submitted)
+                {
+                    OutputDebugStringA(
+                        "[ImportShip] Async import request was rejected.\n");
+                }
+            }
+        }
+    }
     // Save request
     {
         auto req = m_editorUI.ConsumeSaveRequest();
@@ -1199,8 +1719,13 @@ void ApplicationClass::SpawnObjectFromRequest(const EditorUI::SpawnRequest& req)
     std::transform(modelPathLower.begin(), modelPathLower.end(),
         modelPathLower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-    const bool isGlb = modelPathLower.ends_with(".glb") || modelPathLower.ends_with(".gltf");
-    const bool useAsyncMesh = !isGlb && !req.modelPath.empty();
+    const bool isGlb =
+        modelPathLower.ends_with(".glb") ||
+        modelPathLower.ends_with(".gltf");
+
+    // Keep editor Spawn deterministic: the object the user selected must be the
+    // object that appears immediately. Heavy ship loading has its own async path.
+    const bool useAsyncMesh = false;
 
     AssimpModelClass* model = nullptr;
     if (useAsyncMesh)
@@ -1253,9 +1778,13 @@ void ApplicationClass::SpawnObjectFromRequest(const EditorUI::SpawnRequest& req)
         return;
     }
 
-    ShaderBaseClass* initShader = isGlb
-        ? static_cast<ShaderBaseClass*>(m_pbrShader)
-        : static_cast<ShaderBaseClass*>(m_lightShader);
+    // The flattened asynchronous mesh currently has one material slot. Use the
+    // regular light shader until per-material GLB streaming is implemented.
+    ShaderBaseClass* initShader = useAsyncMesh
+        ? static_cast<ShaderBaseClass*>(m_lightShader)
+        : (isGlb
+            ? static_cast<ShaderBaseClass*>(m_pbrShader)
+            : static_cast<ShaderBaseClass*>(m_lightShader));
     if (!initShader)
     {
         OutputDebugStringA("SpawnObjectFromRequest: initial shader is NULL!\n");
@@ -1264,50 +1793,52 @@ void ApplicationClass::SpawnObjectFromRequest(const EditorUI::SpawnRequest& req)
     }
 
     mat->SetShader(initShader);
-
-    if (!req.texturePath.empty())
+    if (!isGlb)
     {
-        TextureClass* tex = new TextureClass();
-        if (tex->Initialize(device, context, req.texturePath.c_str()))
+        if (!req.texturePath.empty())
         {
-            mat->SetMainTexture(tex);
-        }
-        else
-        {
-            delete tex;
-            if (!isGlb && m_defaultTexture)
+            auto tex = std::make_unique<TextureClass>();
+
+            if (tex->Initialize(
+                device,
+                context,
+                req.texturePath.c_str()))
+            {
+                mat->AdoptTexture(0, std::move(tex));
+                mat->SetTexturePath(0, req.texturePath);
+            }
+            else if (m_defaultTexture)
+            {
                 mat->SetMainTexture(m_defaultTexture);
+            }
+        }
+        else if (m_defaultTexture)
+        {
+            mat->SetMainTexture(m_defaultTexture);
         }
     }
-    else if (!isGlb && m_defaultTexture)
-    {
-        mat->SetMainTexture(m_defaultTexture);
-    }
 
-    Entity newEntity = m_sceneManager.SpawnObject(model, req.posX, req.posY, req.posZ);
+    SpawnObjectDesc desc;
+    desc.model = model;
+    desc.material = mat;
+    desc.name = "Object";
+    desc.position = { req.posX, req.posY, req.posZ };
+
+    desc.addInteraction = false;
+    desc.interaction = InteractionComponent{ true, 3.0f, "Interact" };
 
     if (req.useSeparateCollisionMesh)
     {
-        auto& registry = m_sceneManager.GetECSRegistry();
-
-        RigidBodyComponent rb;
-        rb.collisionModel = collisionModel;
-        rb.collisionModelPath = req.collisionModelPath;
-        rb.useSeparateCollisionMesh = true;
-
-        // Для террайна:
-        rb.shapeType = RigidBodyComponent::TriangleMesh;
-        rb.mass = 0.0f;
-        rb.isDynamic = false;
-
-        registry.AddComponent<RigidBodyComponent>(
-            newEntity,
-            std::move(rb)
-        );
-
-        PhysicsSystem::CreateRigidBody(registry, newEntity);
+        desc.addRigidBody = true;
+        desc.rigidBody.collisionModel = collisionModel;
+        desc.rigidBody.collisionModelPath = req.collisionModelPath;
+        desc.rigidBody.useSeparateCollisionMesh = true;
+        desc.rigidBody.shapeType = RigidBodyComponent::TriangleMesh;
+        desc.rigidBody.mass = 0.0f;
+        desc.rigidBody.isDynamic = false;
     }
-    m_sceneManager.SetObjectMaterial(newEntity, mat);
+
+    Entity newEntity = m_sceneManager.SpawnObject(std::move(desc));
 
     if (useAsyncMesh)
     {
@@ -1366,7 +1897,7 @@ void ApplicationClass::HandleDragDrop()
             case PickingSystem::PickedType::Object:
                 if (auto* t = m_sceneManager.GetObjectTransform(
                     static_cast<Entity>(m_pendingPickResult.index)))
-                    StartDraggingObject(m_pendingPickResult.index, ray, t->position);
+                    StartDraggingObject(m_pendingPickResult.index, ray, t->position, m_pendingPickResult.worldPosition);
                 break;
             case PickingSystem::PickedType::Sprite:
                 if (auto* spr = m_sceneManager.GetSprite(m_pendingPickResult.index))
@@ -1444,18 +1975,26 @@ void ApplicationClass::StartDraggingSprite(int index,
 }
 
 void ApplicationClass::StartDraggingObject(int index,
-    const CameraClass::Ray& pickRay, const XMFLOAT3& objPos)
+    const CameraClass::Ray& pickRay,
+    const XMFLOAT3& objPos,
+    const XMFLOAT3& hitPos)
 {
     m_isDragging = true;
     m_draggedObjectIndex = index;
     m_draggedLightIndex = -1;
     m_draggedSpriteIndex = -1;
 
-    XMVECTOR toObj = XMVectorSubtract(XMLoadFloat3(&objPos), XMLoadFloat3(&pickRay.origin));
-    m_dragDistance = max(1.0f, XMVectorGetX(XMVector3Length(toObj)));
-    m_dragOffset = { 0, 0, 0 };
-}
+    // Drag считается от точки попадания луча, а не от origin объекта.
+    // Для ShipRoot это критично: кликаем по комнате, но двигаем весь root.
+    XMVECTOR toHit = XMVectorSubtract(XMLoadFloat3(&hitPos), XMLoadFloat3(&pickRay.origin));
+    m_dragDistance = max(1.0f, XMVectorGetX(XMVector3Length(toHit)));
 
+    m_dragOffset = {
+        objPos.x - hitPos.x,
+        objPos.y - hitPos.y,
+        objPos.z - hitPos.z
+    };
+}
 void ApplicationClass::UpdateDraggedPosition(const CameraClass::Ray& ray)
 {
     XMFLOAT3 newPos = {

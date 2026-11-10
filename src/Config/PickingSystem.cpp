@@ -1,7 +1,9 @@
-п»ї#include "PickingSystem.h"
+#include "PickingSystem.h"
 #include "GameSettings.h"
+#include "Gameplay/Power/OxygenGeneratorComponent.h"
 #include <DirectXCollision.h>
 #include <cmath>
+#include <limits>
 using namespace DirectX;
 
 bool PickingSystem::RayIntersectsSphere(
@@ -23,6 +25,93 @@ bool PickingSystem::RayIntersectsSphere(
 
     return distance <= radius;
 }
+
+bool PickingSystem::RayIntersectsModelBounds(
+    const CameraClass::Ray& ray,
+    const XMMATRIX& world,
+    const XMFLOAT3& localMin,
+    const XMFLOAT3& localMax,
+    float& outDistance) const
+{
+    const XMMATRIX inverseWorld = XMMatrixInverse(nullptr, world);
+    const XMVECTOR worldOrigin = XMLoadFloat3(&ray.origin);
+    const XMVECTOR localOrigin = XMVector3TransformCoord(worldOrigin, inverseWorld);
+    const XMVECTOR localDirection = XMVector3Normalize(
+        XMVector3TransformNormal(XMLoadFloat3(&ray.direction), inverseWorld));
+
+    BoundingBox bounds;
+    bounds.Center = {
+        (localMin.x + localMax.x) * 0.5f,
+        (localMin.y + localMax.y) * 0.5f,
+        (localMin.z + localMax.z) * 0.5f
+    };
+    bounds.Extents = {
+        (localMax.x - localMin.x) * 0.5f,
+        (localMax.y - localMin.y) * 0.5f,
+        (localMax.z - localMin.z) * 0.5f
+    };
+
+    float localDistance = 0.0f;
+    if (!bounds.Intersects(localOrigin, localDirection, localDistance))
+        return false;
+
+    const XMVECTOR localHit = XMVectorAdd(
+        localOrigin,
+        XMVectorScale(localDirection, localDistance));
+    const XMVECTOR worldHit = XMVector3TransformCoord(localHit, world);
+
+    outDistance = XMVectorGetX(XMVector3Length(
+        XMVectorSubtract(worldHit, worldOrigin)));
+    return true;
+}
+
+bool PickingSystem::RayIntersectsModelTriangles(
+    const CameraClass::Ray& ray,
+    const XMMATRIX& world,
+    const AssimpModelClass& model,
+    float& outDistance) const
+{
+    // Сначала луч переносится в локальное пространство модели: вершины меша
+    // там уже лежат, поэтому поворот и масштаб объекта учитываются корректно.
+    const XMMATRIX inverseWorld = XMMatrixInverse(nullptr, world);
+    const XMVECTOR worldOrigin = XMLoadFloat3(&ray.origin);
+    const XMVECTOR localOrigin = XMVector3TransformCoord(worldOrigin, inverseWorld);
+    const XMVECTOR localDirection = XMVector3Normalize(
+        XMVector3TransformNormal(XMLoadFloat3(&ray.direction), inverseWorld));
+
+    std::vector<XMFLOAT3> triangles;
+    model.GetRawTriangles(triangles);
+
+    float closestLocalDistance = (std::numeric_limits<float>::max)();
+    for (size_t i = 0; i + 2 < triangles.size(); i += 3)
+    {
+        float localDistance = 0.0f;
+        if (TriangleTests::Intersects(
+                localOrigin,
+                localDirection,
+                XMLoadFloat3(&triangles[i]),
+                XMLoadFloat3(&triangles[i + 1]),
+                XMLoadFloat3(&triangles[i + 2]),
+                localDistance) &&
+            localDistance < closestLocalDistance)
+        {
+            closestLocalDistance = localDistance;
+        }
+    }
+
+    if (closestLocalDistance == (std::numeric_limits<float>::max)())
+        return false;
+
+    const XMVECTOR localHit = XMVectorAdd(
+        localOrigin,
+        XMVectorScale(localDirection, closestLocalDistance));
+    const XMVECTOR worldHit = XMVector3TransformCoord(localHit, world);
+
+    outDistance = XMVectorGetX(XMVector3Length(
+        XMVectorSubtract(worldHit, worldOrigin)));
+    return true;
+}
+
 float PickingSystem::CalculateSpriteRadius(const WorldSpriteClass* sprite) const
 {
     if (!sprite) return 0.0f;
@@ -34,8 +123,8 @@ float PickingSystem::CalculateSpriteRadius(const WorldSpriteClass* sprite) const
 PickingSystem::PickResult PickingSystem::PickAt(
     int screenX, int screenY,
     CameraClass& camera,
-    const XMMATRIX& viewMatrix,      // в†ђ РџСЂРёРЅРёРјР°РµРј РІРёРґ
-    const XMMATRIX& projectionMatrix,// в†ђ РџСЂРёРЅРёРјР°РµРј РїСЂРѕРµРєС†РёСЋ
+    const XMMATRIX& viewMatrix,      // < Принимаем вид
+    const XMMATRIX& projectionMatrix,// < Принимаем проекцию
     SceneManager& scene,
     const std::vector<GameObject>& lightSpheres,
     int screenWidth,
@@ -43,17 +132,17 @@ PickingSystem::PickResult PickingSystem::PickAt(
 {
     PickResult result;
 
-    // рџ”Ґ РЎРѕР·РґР°С‘Рј Р»СѓС‡, РёСЃРїРѕР»СЊР·СѓСЏ РїРµСЂРµРґР°РЅРЅС‹Рµ РјР°С‚СЂРёС†С‹
+    // ?? Создаём луч, используя переданные матрицы
     auto ray = camera.CreatePickingRay(
         screenX, screenY,
         screenWidth, screenHeight,
-        viewMatrix,          // в†ђ РџРµСЂРµРґР°С‘Рј РІРёРґ
-        projectionMatrix     // в†ђ РџРµСЂРµРґР°С‘Рј РїСЂРѕРµРєС†РёСЋ
+        viewMatrix,          // < Передаём вид
+        projectionMatrix     // < Передаём проекцию
     );
 
 
 
-    // 1. РСЃС‚РѕС‡РЅРёРєРё СЃРІРµС‚Р° (РїСЂРёРѕСЂРёС‚РµС‚ 1) вЂ” РѕСЃС‚Р°СЋС‚СЃСЏ РЅР° int index
+    // 1. Источники света (приоритет 1) — остаются на int index
     for (size_t i = 0; i < lightSpheres.size(); ++i)
     {
         if (RayIntersectsSphere(ray, lightSpheres[i].GetPosition(), Settings::LIGHT_SPHERE_RADIUS))
@@ -65,7 +154,7 @@ PickingSystem::PickResult PickingSystem::PickAt(
         }
     }
 
-    // 2. РЎРїСЂР°Р№С‚С‹ (РїСЂРёРѕСЂРёС‚РµС‚ 2) вЂ” РѕСЃС‚Р°СЋС‚СЃСЏ РЅР° int index
+    // 2. Спрайты (приоритет 2) — остаются на int index
     for (size_t i = 0; i < scene.GetSpriteCount(); ++i)
     {
         auto* sprite = scene.GetSprite(static_cast<int>(i));
@@ -81,46 +170,163 @@ PickingSystem::PickResult PickingSystem::PickAt(
         }
     }
 
-    // 3. РћР±СЉРµРєС‚С‹ (РїСЂРёРѕСЂРёС‚РµС‚ 3)
-    // РќР•Р”Р•Р›РЇ 4: РёС‚РµСЂРёСЂСѓРµРј ECS РЅР°РїСЂСЏРјСѓСЋ вЂ” РЅРµ РІС‹Р·С‹РІР°РµРј GetObject(int)
-    // result.index = Entity РїСЂРёРІРµРґС‘РЅРЅС‹Р№ Рє int (РґР»СЏ EditorUI / ApplicationClass)
+    // 3. Объекты (приоритет 3)
+    // НЕДЕЛЯ 4: итерируем ECS напрямую — не вызываем GetObject(int)
+    // result.index = Entity приведённый к int (для EditorUI / ApplicationClass)
     auto& registry = scene.GetECSRegistry();
     auto& meshPool = registry.GetComponents<MeshRendererComponent>();
 
+    float closestDistance = (std::numeric_limits<float>::max)();
+    float closestVolume = (std::numeric_limits<float>::max)();
+    constexpr float distanceTieEpsilon = 0.01f;
+
     for (auto& [entity, mesh] : meshPool)
     {
-        // РўРѕР»СЊРєРѕ Р°РєС‚РёРІРЅС‹Рµ РѕР±СЉРµРєС‚С‹ СѓС‡Р°СЃС‚РІСѓСЋС‚ РІ picking
+        // Только активные объекты участвуют в picking
         if (!scene.IsObjectActive(entity)) continue;
 
         auto* transform = scene.GetObjectTransform(entity);
         if (!transform) continue;
 
-        XMFLOAT3 localCenter = { 0.0f, 0.0f, 0.0f };
-        float localRadius = Settings::OBJECT_PICK_RADIUS;
+        const XMMATRIX world = transform->GetWorldMatrix();
+
+        float hitDistance = 0.0f;
+        float volume = Settings::OBJECT_PICK_RADIUS * Settings::OBJECT_PICK_RADIUS * Settings::OBJECT_PICK_RADIUS;
+        bool hit = false;
 
         if (mesh.model)
         {
-            mesh.model->GetBoundingSphere(&localCenter, &localRadius);
+            XMFLOAT3 localMin;
+            XMFLOAT3 localMax;
+            mesh.model->GetBoundingBox(&localMin, &localMax);
+
+            // AABB - только быстрая предварительная проверка. После неё луч
+            // проверяется по реальным треугольникам: террейн больше не
+            // «накрывает» лежащий на нём небольшой объект при взгляде сверху.
+            if (RayIntersectsModelBounds(ray, world, localMin, localMax, hitDistance))
+            {
+                hit = RayIntersectsModelTriangles(ray, world, *mesh.model, hitDistance);
+
+                const float sx = XMVectorGetX(XMVector3Length(world.r[0]));
+                const float sy = XMVectorGetX(XMVector3Length(world.r[1]));
+                const float sz = XMVectorGetX(XMVector3Length(world.r[2]));
+                volume = fabsf((localMax.x - localMin.x) * sx *
+                               (localMax.y - localMin.y) * sy *
+                               (localMax.z - localMin.z) * sz);
+            }
+        }
+        else
+        {
+            hit = RayIntersectsSphere(
+                ray, transform->position, Settings::OBJECT_PICK_RADIUS);
+
+            XMVECTOR toObject = XMVectorSubtract(
+                XMLoadFloat3(&transform->position), XMLoadFloat3(&ray.origin));
+            hitDistance = XMVectorGetX(
+                XMVector3Dot(toObject, XMLoadFloat3(&ray.direction)));
         }
 
-        const XMMATRIX world = transform->GetWorldMatrix();
-        XMVECTOR worldCenterVec = XMVector3TransformCoord(XMLoadFloat3(&localCenter), world);
-        XMFLOAT3 worldCenter;
-        XMStoreFloat3(&worldCenter, worldCenterVec);
+        const bool isCloser = hitDistance < closestDistance - distanceTieEpsilon;
+        const bool sameSurfaceButSmaller =
+            fabsf(hitDistance - closestDistance) <= distanceTieEpsilon &&
+            volume < closestVolume;
 
-        const float maxScale = fmaxf(
-            fmaxf(fabsf(transform->scale.x), fabsf(transform->scale.y)),
-            fabsf(transform->scale.z));
-        const float worldRadius = fmaxf(localRadius * maxScale, Settings::OBJECT_PICK_RADIUS);
-
-        if (RayIntersectsSphere(ray, worldCenter, worldRadius))
+        if (hit && (isCloser || sameSurfaceButSmaller))
         {
+            closestDistance = hitDistance;
+            closestVolume = volume;
             result.type = PickedType::Object;
-            result.index = static_cast<int>(entity); // Entity в†’ int РґР»СЏ legacy
-            result.worldPosition = worldCenter;
-            return result;
+            result.index = static_cast<int>(entity); // Entity -> int for legacy
+            result.worldPosition = {
+                ray.origin.x + ray.direction.x * hitDistance,
+                ray.origin.y + ray.direction.y * hitDistance,
+                ray.origin.z + ray.direction.z * hitDistance
+            };
         }
     }
 
-    return result; // РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ
+    if (result.type == PickedType::Object)
+    {
+        Entity picked = static_cast<Entity>(result.index);
+
+        // Resolve visual panel batch picks back to the real physical panel entity.
+        if (auto* batch = registry.GetComponent<ShipPanelVisualBatchComponent>(picked))
+        {
+            Entity closestPanel = INVALID_ENTITY;
+            float closestPanelDistance = (std::numeric_limits<float>::max)();
+            XMFLOAT3 closestPanelWorldPosition = result.worldPosition;
+
+            auto& rigidBodies = registry.GetComponents<RigidBodyComponent>();
+            for (auto& [panelEntity, rb] : rigidBodies)
+            {
+                if (!registry.HasComponent<HullPanelComponent>(panelEntity))
+                    continue;
+
+                auto* part = registry.GetComponent<ShipPartComponent>(panelEntity);
+                if (!part || part->root != batch->shipRoot)
+                    continue;
+
+                auto* transform = registry.GetComponent<TransformComponent>(panelEntity);
+                if (!transform)
+                    continue;
+
+                AssimpModelClass* pickModel = nullptr;
+                if (rb.useSeparateCollisionMesh && rb.collisionModel)
+                    pickModel = rb.collisionModel;
+                else if (auto* mesh = registry.GetComponent<MeshRendererComponent>(panelEntity))
+                    pickModel = mesh->model;
+
+                if (!pickModel)
+                    continue;
+
+                XMFLOAT3 localMin{};
+                XMFLOAT3 localMax{};
+                pickModel->GetBoundingBox(&localMin, &localMax);
+
+                const XMMATRIX panelWorld = transform->GetWorldMatrix();
+                float panelDistance = 0.0f;
+                if (!RayIntersectsModelBounds(ray, panelWorld, localMin, localMax, panelDistance))
+                    continue;
+
+                if (!RayIntersectsModelTriangles(ray, panelWorld, *pickModel, panelDistance))
+                    continue;
+
+                if (panelDistance < closestPanelDistance)
+                {
+                    closestPanelDistance = panelDistance;
+                    closestPanel = panelEntity;
+                    closestPanelWorldPosition = {
+                        ray.origin.x + ray.direction.x * panelDistance,
+                        ray.origin.y + ray.direction.y * panelDistance,
+                        ray.origin.z + ray.direction.z * panelDistance
+                    };
+                }
+            }
+
+            if (closestPanel != INVALID_ENTITY)
+            {
+                picked = closestPanel;
+                result.index = static_cast<int>(closestPanel);
+                result.worldPosition = closestPanelWorldPosition;
+            }
+        }
+        if (auto* selection = registry.GetComponent<EditorSelectionComponent>(picked))
+        {
+            const bool editableShipPart =
+                registry.HasComponent<HullPanelComponent>(picked) ||
+                registry.HasComponent<HullBreachComponent>(picked) ||
+                registry.HasComponent<DoorComponent>(picked) ||
+                registry.HasComponent<RoomComponent>(picked) ||
+                registry.HasComponent<OxygenGeneratorComponent>(picked);
+
+            // ShipRoot is still selectable from the outliner, but direct viewport
+            // clicks on editable ship parts select the actual part for tuning.
+            if (selection->redirectTo != INVALID_ENTITY && !editableShipPart)
+                result.index = static_cast<int>(selection->redirectTo);
+            else if (!selection->selectable && !editableShipPart)
+                result = {};
+        }
+    }
+
+    return result; // Ничего не найдено
 }

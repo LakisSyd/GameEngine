@@ -1,4 +1,4 @@
-﻿#include "FloodingSystem.h"
+#include "FloodingSystem.h"
 #include "Components.h"
 #include <algorithm>
 
@@ -10,34 +10,34 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
 
     for (auto& [entity, comp] : compartmentPool)
     {
-        // ✅ Проверяем, это отсек подлодки (не корень!)
+        // ? ���������, ��� ����� �������� (�� ������!)
         auto* subLink = subPool.Get(entity);
         if (!subLink || subLink->submarineRoot == INVALID_ENTITY) continue;
-        if (entity == subLink->submarineRoot) continue;  // ← Пропускаем корень!
+        if (entity == subLink->submarineRoot) continue;  // < ���������� ������!
 
-        // 🔥 КРИТИЧЕСКИ ВАЖНО: Используем трансформ ОТСЕКА, а не подлодки!
+        // ?? ���������� �����: ���������� ��������� ������, � �� ��������!
         auto* compartmentTransform = transformPool.Get(entity);
         if (!compartmentTransform) continue;
 
         XMMATRIX compartmentWorldMatrix = compartmentTransform->GetWorldMatrix();
 
-        // ══════════════════════════════════════════════════════════════════════
-        // 1. РАССЧИТЫВАЕМ ПРИТОК ВОДЫ ЧЕРЕЗ ПРОБОИНЫ
-        // ══════════════════════════════════════════════════════════════════════
+        // ======================================================================
+        // 1. ������������ ������ ���� ����� ��������
+        // ======================================================================
         float totalInflow = 0.0f;
 
         for (auto& breach : comp.breaches)
         {
             if (breach.isSealed) continue;
 
-            // 🔥 Преобразуем локальную позицию пробоины в мировую
-            // breach.localPosition - это в координатах самого отсека!
+            // ?? ����������� ��������� ������� �������� � �������
+            // breach.localPosition - ��� � ����������� ������ ������!
             XMVECTOR localPos = XMLoadFloat3(&breach.localPosition);
             XMVECTOR worldPos = XMVector3TransformCoord(localPos, compartmentWorldMatrix);
             XMFLOAT3 breachWorldPos;
             XMStoreFloat3(&breachWorldPos, worldPos);
 
-            // 🔥 Проверяем, под ли водой пробоина
+            // ?? ���������, ��� �� ����� ��������
             float breachDepth = globalWaterLevel - breachWorldPos.y;
 
             if (breachDepth > 0.0f)
@@ -53,11 +53,11 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
             }
         }
 
-        // 🔥 Проверка: НИЖНЯЯ граница отсека под водой?
-        // Это критично для определения, может ли вода течь внутрь
+        // ?? ��������: ������ ������� ������ ��� �����?
+        // ��� �������� ��� �����������, ����� �� ���� ���� ������
         XMFLOAT3 localBottomCenter = {
             (comp.localMin.x + comp.localMax.x) * 0.5f,
-            comp.localMin.y,  // 🔥 НИЖНЯЯ точка!
+            comp.localMin.y,  // ?? ������ �����!
             (comp.localMin.z + comp.localMax.z) * 0.5f
         };
 
@@ -67,27 +67,27 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
         float worldBottomY = XMVectorGetY(worldBottomV);
         float bottomDepth = globalWaterLevel - worldBottomY;
 
-        // ══════════════════════════════════════════════════════════════════════
-        // 2. ОТКАЧКА НАСОСАМИ (если есть питание)
-        // ══════════════════════════════════════════════════════════════════════
+        // ======================================================================
+        // 2. ������� �������� (���� ���� �������)
+        // ======================================================================
         float totalOutflow = 0.0f;
         if (comp.hasPower && comp.waterVolume > 0.0f)
         {
-            totalOutflow = comp.pumpRate;  // м³/с
+            totalOutflow = comp.pumpRate;  // �?/�
         }
 
       
 
-        // ══════════════════════════════════════════════════════════════════════
-        // 4. ОБНОВЛЯЕМ ОБЪЕМ ВОДЫ
-        // ══════════════════════════════════════════════════════════════════════
+        // ======================================================================
+        // 4. ��������� ����� ����
+        // ======================================================================
         float netFlow = (totalInflow - totalOutflow) * deltaTime;
         comp.waterVolume += netFlow;
         comp.waterVolume = fmaxf(0.0f, fminf(comp.waterVolume, comp.volume));
 
-        // ══════════════════════════════════════════════════════════════════════
-        // 5. ВЫЧИСЛЯЕМ УРОВЕНЬ ВОДЫ (от дна отсека)
-        // ══════════════════════════════════════════════════════════════════════
+        // ======================================================================
+        // 5. ��������� ������� ���� (�� ��� ������)
+        // ======================================================================
         float height = comp.localMax.y - comp.localMin.y;
         if (height > 0.0f)
         {
@@ -98,7 +98,7 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
             comp.waterLevel = 0.0f;
         }
 
-        // ── Синхронизируем DamageDecalComponent с пробоинами ─────────────────
+        // -- �������������� DamageDecalComponent � ���������� -----------------
         if (!registry.HasComponent<DamageDecalComponent>(entity))
             registry.AddComponent<DamageDecalComponent>(entity, DamageDecalComponent{});
 
@@ -106,54 +106,24 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
         decal->SyncFromBreaches(comp);
     }
 
-    auto& doorPool = registry.GetComponents<DoorComponent>();
 
-    for (auto& [doorEntity, door] : doorPool)
-    {
-        // Анимируем openProgress
-        if (door.isOpen || door.isBroken)
-            door.openProgress = min(1.0f, door.openProgress + door.openSpeed * deltaTime);
-        else
-            door.openProgress = max(0.0f, door.openProgress - door.openSpeed * deltaTime);
 
-        // Если дверь закрыта — пропускаем
-        if (door.openProgress <= 0.0f) continue;
-
-        // Берём оба отсека
-        auto* compA = registry.GetComponent<CompartmentComponent>(door.compartmentA);
-        auto* compB = registry.GetComponent<CompartmentComponent>(door.compartmentB);
-        if (!compA || !compB) continue;
-
-        // Сообщающиеся сосуды
-        float levelDiff = compA->waterLevel - compB->waterLevel;
-        if (std::fabs(levelDiff) < 0.001f) continue;
-
-        float flow = door.GetEffectiveFlowRate() * levelDiff * deltaTime;
-
-        // Защита от переполнения и отрицательных значений
-        flow = std::clamp(flow, 0.0f, compA->waterVolume);
-        flow = std::min(flow, compB->volume - compB->waterVolume);
-
-        compA->waterVolume -= flow;
-        compB->waterVolume += flow;
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-   // 6. ОБНОВЛЯЕМ ПЛАВУЧЕСТЬ КОРНЯ ПОДЛОДКИ
-   //    Вода в отсеках вытесняет воздух → уменьшается выталкивающая сила
-   //    buoy.volume = базовый объём - суммарный объём воды в отсеках
-   // ══════════════════════════════════════════════════════════════════════
+    // ======================================================================
+   // 6. ��������� ���������� ����� ��������
+   //    ���� � ������� ��������� ������ > ����������� ������������� ����
+   //    buoy.volume = ������� ����� - ��������� ����� ���� � �������
+   // ======================================================================
     auto& subRootPool = registry.GetComponents<SubmarineComponent>();
 
     for (auto& [entity, subComp] : subRootPool)
     {
-        // Берём только корни подлодок
+        // ���� ������ ����� ��������
         if (subComp.submarineRoot != entity) continue;
 
         auto* buoy = registry.GetComponent<BuoyancyComponent>(entity);
         if (!buoy) continue;
 
-        // Суммируем воду во всех отсеках
+        // ��������� ���� �� ���� �������
         float totalWaterVolume = 0.0f;
         for (Entity compEntity : subComp.allCompartments)
         {
@@ -162,19 +132,19 @@ void FloodingSystem::Update(ECSRegistry& registry, float deltaTime, float global
                 totalWaterVolume += comp->waterVolume;
         }
 
-        // Базовый объём кэшируем при первом кадре
+        // ������� ����� �������� ��� ������ �����
         if (buoy->lastCalculatedVolume > 0.0f)
         {
-            // Эффективный объём = базовый - вода (не меньше 0)
+            // ����������� ����� = ������� - ���� (�� ������ 0)
             buoy->volume = fmaxf(0.0f, buoy->lastCalculatedVolume - totalWaterVolume);
         }
 
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Создание пробоины (в локальных координатах отсека!)
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
+// �������� �������� (� ��������� ����������� ������!)
+// ==============================================================================
 void FloodingSystem::CreateBreach(ECSRegistry& registry, Entity compartment,
     const XMFLOAT3& localPosition, float size)
 {
@@ -182,7 +152,7 @@ void FloodingSystem::CreateBreach(ECSRegistry& registry, Entity compartment,
     auto* transform = registry.GetComponent<TransformComponent>(compartment);
     if (!comp) return;
 
-    // 🔥 Проверяем, что пробоина в пределах отсека!
+    // ?? ���������, ��� �������� � �������� ������!
     if (localPosition.x < comp->localMin.x || localPosition.x > comp->localMax.x ||
         localPosition.y < comp->localMin.y || localPosition.y > comp->localMax.y ||
         localPosition.z < comp->localMin.z || localPosition.z > comp->localMax.z)
@@ -199,9 +169,9 @@ void FloodingSystem::CreateBreach(ECSRegistry& registry, Entity compartment,
 
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Создание пробоины по мировой позиции (для удобства)
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
+// �������� �������� �� ������� ������� (��� ��������)
+// ==============================================================================
 void FloodingSystem::CreateBreachAtWorldPosition(ECSRegistry& registry, Entity compartment,
     const XMFLOAT3& worldPosition, float size)
 {
@@ -212,7 +182,7 @@ void FloodingSystem::CreateBreachAtWorldPosition(ECSRegistry& registry, Entity c
         return;
     }
 
-    // 🔥 Конвертируем world -> local через матрицу ОТСЕКА
+    // ?? ������������ world -> local ����� ������� ������
     XMVECTOR worldV = XMLoadFloat3(&worldPosition);
     XMMATRIX invWorld = XMMatrixInverse(nullptr, transform->GetWorldMatrix());
     XMVECTOR localV = XMVector3TransformCoord(worldV, invWorld);
@@ -222,9 +192,9 @@ void FloodingSystem::CreateBreachAtWorldPosition(ECSRegistry& registry, Entity c
     CreateBreach(registry, compartment, localPos, size);
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Ремонт пробоины
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
+// ������ ��������
+// ==============================================================================
 void FloodingSystem::SealBreach(ECSRegistry& registry, Entity compartment, size_t breachIndex)
 {
     auto* comp = registry.GetComponent<CompartmentComponent>(compartment);
@@ -233,9 +203,9 @@ void FloodingSystem::SealBreach(ECSRegistry& registry, Entity compartment, size_
     comp->breaches[breachIndex].isSealed = true;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Поиск отсека, содержащего мировую позицию
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
+// ����� ������, ����������� ������� �������
+// ==============================================================================
 Entity FloodingSystem::FindCompartmentForObject(ECSRegistry& registry, const XMFLOAT3& worldPos)
 {
     auto& compartmentPool = registry.GetComponents<CompartmentComponent>();
@@ -251,18 +221,18 @@ Entity FloodingSystem::FindCompartmentForObject(ECSRegistry& registry, const XMF
     return INVALID_ENTITY;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Расчет скорости потока через пробоину (закон Торричелли)
-// ══════════════════════════════════════════════════════════════════════════════
+// ==============================================================================
+// ������ �������� ������ ����� �������� (����� ����������)
+// ==============================================================================
 float FloodingSystem::CalculateFlowRate(const BreachData& breach, float waterPressure)
 {
-    // Площадь пробоины (круглая)
+    // ������� �������� (�������)
     float area = 3.14159f * breach.size * breach.size;
 
-    // Скорость потока: v = √(2·P/ρ)
-    // P - давление, ρ - плотность воды 1000 кг/м³
+    // �������� ������: v = v(2�P/?)
+    // P - ��������, ? - ��������� ���� 1000 ��/�?
     float velocity = sqrtf(2.0f * waterPressure / 1000.0f);
 
-    // Расход: Q = A × v (м³/с)
+    // ������: Q = A ? v (�?/�)
     return area * velocity;
 }
