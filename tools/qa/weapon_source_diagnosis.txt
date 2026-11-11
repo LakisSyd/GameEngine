@@ -1,0 +1,2446 @@
+00:01.906  blend            | Read blend: "C:\Users\karin\OneDrive\Desktop\Kevin_Main_Switchable.blend"
+
+========================================================================
+FILE
+========================================================================
+C:\Users\karin\OneDrive\Desktop\Kevin_Main_Switchable.blend
+
+========================================================================
+OBJECTS
+========================================================================
+Armature                             type=ARMATURE parent=<none>                       loc=(0.0000, -1.8265, 3.6661) rot=(1.5708, -0.0000, 0.0000) scale=(0.0026, 0.0026, 0.0026) action=Kevin_Aim_Rifle
+Armature.001                         type=ARMATURE parent=<none>                       loc=(0.5709, -1.8545, 3.7320) rot=(1.5708, -0.0000, 0.0000) scale=(0.0026, 0.0026, 0.0026) action=mixamo.com.005
+Kevin_Arm_Mode                       type=EMPTY    parent=<none>                       loc=(1.0000, 1.0000, 0.0000) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+magazine                             type=MESH     parent=REF_TestRifle                loc=(0.0000, 0.0340, -0.0355) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+MaleBaseMesh LowPoly                 type=MESH     parent=Armature                     loc=(0.5052, -1.8511, 4.2795) rot=(1.5708, -0.0000, 0.0000) scale=(0.2617, 0.2617, 0.2617) action=<none>
+MaleBaseMesh LowPoly.001             type=MESH     parent=Armature.001                 loc=(0.5052, -1.8511, 4.2795) rot=(1.5708, -0.0000, 0.0000) scale=(0.2617, 0.2617, 0.2617) action=<none>
+REF_TestRifle                        type=MESH     parent=Armature                     loc=(-0.8191, -1.9099, 3.5312) rot=(0.0000, 0.0000, 0.0000) scale=(2.1134, 1.8285, 1.9358) action=<none>
+WGT_Kevin_Circle                     type=MESH     parent=<none>                       loc=(0.0000, 0.0000, 0.0000) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+WGT_Kevin_Cube                       type=MESH     parent=<none>                       loc=(0.0000, 0.0000, 0.0000) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+WGT_Kevin_Finger                     type=MESH     parent=<none>                       loc=(0.0000, 0.0000, 0.0000) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+WGT_Kevin_Foot                       type=MESH     parent=<none>                       loc=(0.0000, 0.0000, 0.0000) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+WGT_Kevin_Hand                       type=MESH     parent=<none>                       loc=(0.0000, 0.0000, 0.0000) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+WGT_Kevin_Pole                       type=MESH     parent=<none>                       loc=(0.0000, 0.0000, 0.0000) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+WGT_Kevin_Root                       type=MESH     parent=<none>                       loc=(0.0000, 0.0000, 0.0000) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+WGT_Kevin_Sphere                     type=MESH     parent=<none>                       loc=(0.0000, 0.0000, 0.0000) rot=(0.0000, 0.0000, 0.0000) scale=(1.0000, 1.0000, 1.0000) action=<none>
+
+========================================================================
+ACTIONS WITH LOCATION KEYS
+========================================================================
+Action: Kevin_Aim_Rifle
+  pose.bones["CTRL_COG"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Chest"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["CTRL_Elbow_Pole.L"].location
+    axis 0: 113.5985..113.5985 d=0.0000
+    axis 1: -130.8669..-130.8669 d=0.0000
+    axis 2: 270.8307..270.8307 d=0.0000
+  pose.bones["CTRL_Elbow_Pole.R"].location
+    axis 0: -356.3671..-356.3671 d=0.0000
+    axis 1: -239.7981..-239.7981 d=0.0000
+    axis 2: 40.5316..40.5316 d=0.0000
+  pose.bones["CTRL_Foot_IK.L"].location
+    axis 0: -22.9840..-22.9840 d=0.0000
+    axis 1: -149.6303..-149.6303 d=0.0000
+    axis 2: -64.9018..-64.9018 d=0.0000
+  pose.bones["CTRL_Foot_IK.R"].location
+    axis 0: -10.0686..-10.0686 d=0.0000
+    axis 1: 156.2017..156.2017 d=0.0000
+    axis 2: 213.0500..213.0500 d=0.0000
+  pose.bones["CTRL_Hand_IK.L"].location
+    axis 0: -588.7859..-588.7859 d=0.0000
+    axis 1: -608.4504..-608.4504 d=0.0000
+    axis 2: 263.6239..263.6239 d=0.0000
+  pose.bones["CTRL_Hand_IK.R"].location
+    axis 0: 356.7906..356.7906 d=0.0000
+    axis 1: -620.2114..-620.2114 d=0.0000
+    axis 2: 166.8011..166.8011 d=0.0000
+  pose.bones["CTRL_Head"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Index_01.L"].location
+    axis 0: -0.0001..-0.0001 d=0.0000
+    axis 1: 0.0002..0.0002 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Index_01.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Index_02.L"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Index_02.R"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Index_03.L"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["CTRL_Index_03.R"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: 0.0001..0.0001 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Knee_Pole.L"].location
+    axis 0: -135.4787..-135.4787 d=0.0000
+    axis 1: -3.1423..-3.1423 d=0.0000
+    axis 2: 33.6003..33.6003 d=0.0000
+  pose.bones["CTRL_Knee_Pole.R"].location
+    axis 0: 321.8083..321.8083 d=0.0000
+    axis 1: -12.4099..-12.4099 d=0.0000
+    axis 2: 74.4730..74.4730 d=0.0000
+  pose.bones["CTRL_Middle_01.L"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Middle_01.R"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: -0.0001..-0.0001 d=0.0000
+  pose.bones["CTRL_Middle_02.L"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["CTRL_Middle_02.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0001..-0.0001 d=0.0000
+  pose.bones["CTRL_Middle_03.L"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0001..0.0001 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Middle_03.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0001..0.0001 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Neck"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0001..0.0001 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Pinky_01.L"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: -0.0002..-0.0002 d=0.0000
+  pose.bones["CTRL_Pinky_01.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Pinky_02.L"].location
+    axis 0: -0.0001..-0.0001 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Pinky_02.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0001..0.0001 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Pinky_03.L"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Pinky_03.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Ring_01.L"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["CTRL_Ring_01.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Ring_02.L"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Ring_02.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: -0.0001..-0.0001 d=0.0000
+  pose.bones["CTRL_Ring_03.L"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["CTRL_Ring_03.R"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0001..0.0001 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Root"].location
+    axis 0: 13.2440..13.2440 d=0.0000
+    axis 1: 106.2445..106.2445 d=0.0000
+    axis 2: -35.0089..-35.0089 d=0.0000
+  pose.bones["CTRL_Shoulder.L"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Shoulder.R"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Spine"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["CTRL_Spine_01"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0002..0.0002 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Thumb_01.L"].location
+    axis 0: -0.0001..-0.0001 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Thumb_01.R"].location
+    axis 0: -0.0001..-0.0001 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Thumb_02.L"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: 0.0001..0.0001 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Thumb_02.R"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Thumb_03.L"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: 0.0001..0.0001 d=0.0000
+    axis 2: 0.0001..0.0001 d=0.0000
+  pose.bones["CTRL_Thumb_03.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Toe.L"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Toe.R"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Head"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:HeadTop_End"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Hips"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftArm"].location
+    axis 0: 0.0001..0.0001 d=0.0000
+    axis 1: -0.0001..-0.0001 d=0.0000
+    axis 2: -0.0001..-0.0001 d=0.0000
+  pose.bones["mixamorig:LeftFoot"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftForeArm"].location
+    axis 0: 135.1907..135.1907 d=0.0000
+    axis 1: -25.3914..-25.3914 d=0.0000
+    axis 2: 20.2754..20.2754 d=0.0000
+  pose.bones["mixamorig:LeftHand"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftShoulder"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftToeBase"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftToe_End"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Neck"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightFoot"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightForeArm"].location
+    axis 0: -22.9491..-22.9491 d=0.0000
+    axis 1: -26.8306..-26.8306 d=0.0000
+    axis 2: -3.8480..-3.8480 d=0.0000
+  pose.bones["mixamorig:RightHand"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb4"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightShoulder"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightToeBase"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightToe_End"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+Action: Kevin_Idle
+  pose.bones["CTRL_COG"].location  <-- BIG MOVE
+    axis 0: -43.9787..-42.4111 d=1.5676
+    axis 1: 4.6852..4.9373 d=0.2521
+    axis 2: -2.1300..1.5532 d=3.6832
+  pose.bones["CTRL_Chest"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0004..0.0004 d=0.0007
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Elbow_Pole.L"].location  <-- BIG MOVE
+    axis 0: -64.4196..-53.0917 d=11.3279
+    axis 1: -354.3595..-351.2872 d=3.0723
+    axis 2: -138.9372..-131.4281 d=7.5091
+  pose.bones["CTRL_Elbow_Pole.R"].location  <-- BIG MOVE
+    axis 0: -237.2085..-234.2749 d=2.9336
+    axis 1: -84.2200..-78.2014 d=6.0186
+    axis 2: 97.1758..103.3535 d=6.1777
+  pose.bones["CTRL_Foot_IK.L"].location  <-- BIG MOVE
+    axis 0: 16.1474..16.2272 d=0.0798
+    axis 1: 115.7015..115.7652 d=0.0637
+    axis 2: 98.0069..98.2610 d=0.2541
+  pose.bones["CTRL_Foot_IK.R"].location  <-- BIG MOVE
+    axis 0: -45.7461..-45.5652 d=0.1809
+    axis 1: 14.0055..14.1019 d=0.0964
+    axis 2: 21.2093..21.2953 d=0.0860
+  pose.bones["CTRL_Hand_IK.L"].location  <-- BIG MOVE
+    axis 0: -84.9478..-77.8570 d=7.0908
+    axis 1: -7.3447..-6.4470 d=0.8977
+    axis 2: 258.7618..261.4200 d=2.6583
+  pose.bones["CTRL_Hand_IK.R"].location  <-- BIG MOVE
+    axis 0: 53.0921..56.1003 d=3.0082
+    axis 1: 25.1227..25.8707 d=0.7480
+    axis 2: 200.4301..204.7667 d=4.3367
+  pose.bones["CTRL_Head"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0002..0.0002 d=0.0005
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Index_01.L"].location
+    axis 0: -0.0001..-0.0000 d=0.0001
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Index_01.R"].location
+    axis 0: -0.0001..-0.0000 d=0.0001
+    axis 1: -0.0001..0.0003 d=0.0004
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Index_02.L"].location
+    axis 0: 0.0000..0.0001 d=0.0001
+    axis 1: -0.0002..0.0001 d=0.0002
+    axis 2: -0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Index_02.R"].location
+    axis 0: -0.0001..-0.0000 d=0.0000
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: 0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Index_03.L"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Index_03.R"].location
+    axis 0: -0.0001..-0.0000 d=0.0000
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Knee_Pole.L"].location  <-- BIG MOVE
+    axis 0: -363.6534..-362.5727 d=1.0807
+    axis 1: 187.2385..188.7480 d=1.5095
+    axis 2: 228.0603..231.4730 d=3.4127
+  pose.bones["CTRL_Knee_Pole.R"].location  <-- BIG MOVE
+    axis 0: 144.5701..147.0890 d=2.5189
+    axis 1: -26.0707..-23.7244 d=2.3463
+    axis 2: 17.3853..22.2698 d=4.8845
+  pose.bones["CTRL_Middle_01.L"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Middle_01.R"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0003..0.0000 d=0.0003
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Middle_02.L"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0002..0.0001 d=0.0002
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Middle_02.R"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0002..0.0000 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Middle_03.L"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0002..0.0000 d=0.0002
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Middle_03.R"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0002 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Neck"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0002..0.0004 d=0.0006
+    axis 2: -0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Pinky_01.L"].location
+    axis 0: -0.0002..-0.0001 d=0.0001
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Pinky_01.R"].location
+    axis 0: 0.0000..0.0001 d=0.0001
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Pinky_02.L"].location
+    axis 0: -0.0001..0.0001 d=0.0001
+    axis 1: 0.0000..0.0003 d=0.0003
+    axis 2: 0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Pinky_02.R"].location
+    axis 0: -0.0000..0.0001 d=0.0001
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0002..-0.0000 d=0.0001
+  pose.bones["CTRL_Pinky_03.L"].location
+    axis 0: -0.0001..0.0001 d=0.0001
+    axis 1: -0.0002..0.0000 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Pinky_03.R"].location
+    axis 0: -0.0001..0.0000 d=0.0001
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Ring_01.L"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: 0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Ring_01.R"].location
+    axis 0: 0.0000..0.0001 d=0.0000
+    axis 1: -0.0002..0.0001 d=0.0002
+    axis 2: -0.0001..-0.0000 d=0.0001
+  pose.bones["CTRL_Ring_02.L"].location
+    axis 0: 0.0000..0.0001 d=0.0001
+    axis 1: 0.0000..0.0002 d=0.0002
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Ring_02.R"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0002..0.0000 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Ring_03.L"].location
+    axis 0: 0.0000..0.0001 d=0.0000
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: 0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Ring_03.R"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Root"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Shoulder.L"].location
+    axis 0: -0.0000..0.0001 d=0.0001
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0004..0.0002 d=0.0006
+  pose.bones["CTRL_Shoulder.R"].location
+    axis 0: -0.0001..0.0001 d=0.0001
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0002..0.0002 d=0.0005
+  pose.bones["CTRL_Spine"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0004..0.0004 d=0.0007
+    axis 2: -0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Spine_01"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0004..0.0002 d=0.0006
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Thumb_01.L"].location
+    axis 0: -0.0000..0.0001 d=0.0002
+    axis 1: -0.0001..0.0003 d=0.0004
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Thumb_01.R"].location
+    axis 0: -0.0002..-0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Thumb_02.L"].location
+    axis 0: -0.0000..0.0001 d=0.0001
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Thumb_02.R"].location
+    axis 0: -0.0002..-0.0000 d=0.0001
+    axis 1: 0.0000..0.0002 d=0.0002
+    axis 2: 0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Thumb_03.L"].location
+    axis 0: -0.0001..0.0000 d=0.0001
+    axis 1: 0.0000..0.0002 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Thumb_03.R"].location
+    axis 0: -0.0000..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0002
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Toe.L"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0001..0.0000 d=0.0001
+    axis 2: -0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Toe.R"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..0.0000 d=0.0000
+Action: Kevin_Run
+  pose.bones["CTRL_COG"].location  <-- BIG MOVE
+    axis 0: -58.8352..-49.4333 d=9.4020
+    axis 1: -171.7547..-132.1164 d=39.6383
+    axis 2: -213.0578..-187.8299 d=25.2280
+  pose.bones["CTRL_Chest"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0003..0.0001 d=0.0004
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Elbow_Pole.L"].location  <-- BIG MOVE
+    axis 0: -206.9023..156.7084 d=363.6107
+    axis 1: -437.8392..87.8159 d=525.6552
+    axis 2: -524.6423..-121.7344 d=402.9079
+  pose.bones["CTRL_Elbow_Pole.R"].location  <-- BIG MOVE
+    axis 0: -288.1792..-3.5626 d=284.6166
+    axis 1: -50.0495..271.1348 d=321.1842
+    axis 2: -152.2144..168.3698 d=320.5841
+  pose.bones["CTRL_Foot_IK.L"].location  <-- BIG MOVE
+    axis 0: 118.4874..279.9368 d=161.4494
+    axis 1: -699.1656..203.6777 d=902.8433
+    axis 2: -340.3550..115.8629 d=456.2180
+  pose.bones["CTRL_Foot_IK.R"].location  <-- BIG MOVE
+    axis 0: -209.1530..-88.4527 d=120.7003
+    axis 1: -603.3505..192.6591 d=796.0096
+    axis 2: -360.0294..151.4347 d=511.4641
+  pose.bones["CTRL_Hand_IK.L"].location  <-- BIG MOVE
+    axis 0: -314.6861..42.3736 d=357.0597
+    axis 1: -259.6885..70.5718 d=330.2603
+    axis 2: 279.3953..370.2261 d=90.8309
+  pose.bones["CTRL_Hand_IK.R"].location  <-- BIG MOVE
+    axis 0: -97.3635..186.2847 d=283.6482
+    axis 1: -161.4267..135.0496 d=296.4763
+    axis 2: 166.7099..299.1060 d=132.3961
+  pose.bones["CTRL_Head"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0004..0.0003 d=0.0007
+    axis 2: -0.0000..0.0002 d=0.0002
+  pose.bones["CTRL_Index_01.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Index_01.R"].location
+    axis 0: -0.0000..0.0002 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Index_02.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Index_02.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0001
+  pose.bones["CTRL_Index_03.L"].location
+    axis 0: -0.0000..0.0002 d=0.0002
+    axis 1: -0.0002..-0.0000 d=0.0002
+    axis 2: -0.0001..0.0002 d=0.0002
+  pose.bones["CTRL_Index_03.R"].location
+    axis 0: -0.0000..0.0001 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0003
+    axis 2: -0.0000..0.0001 d=0.0002
+  pose.bones["CTRL_Knee_Pole.L"].location  <-- BIG MOVE
+    axis 0: -541.9996..-421.7543 d=120.2453
+    axis 1: -504.4668..211.0003 d=715.4671
+    axis 2: -263.1972..309.6215 d=572.8187
+  pose.bones["CTRL_Knee_Pole.R"].location  <-- BIG MOVE
+    axis 0: 201.2177..356.4962 d=155.2784
+    axis 1: -481.2444..10.2942 d=491.5386
+    axis 2: -435.1012..220.1181 d=655.2193
+  pose.bones["CTRL_Middle_01.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0002..0.0001 d=0.0002
+  pose.bones["CTRL_Middle_01.R"].location
+    axis 0: -0.0001..0.0001 d=0.0001
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0003
+  pose.bones["CTRL_Middle_02.L"].location
+    axis 0: -0.0001..0.0001 d=0.0003
+    axis 1: -0.0003..0.0001 d=0.0004
+    axis 2: -0.0002..0.0001 d=0.0002
+  pose.bones["CTRL_Middle_02.R"].location
+    axis 0: -0.0001..0.0001 d=0.0001
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0002..0.0000 d=0.0002
+  pose.bones["CTRL_Middle_03.L"].location
+    axis 0: -0.0002..0.0000 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Middle_03.R"].location
+    axis 0: -0.0000..0.0001 d=0.0002
+    axis 1: -0.0000..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Neck"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0001..0.0002 d=0.0004
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Pinky_01.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0002..0.0000 d=0.0003
+  pose.bones["CTRL_Pinky_01.R"].location
+    axis 0: -0.0001..0.0002 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Pinky_02.L"].location
+    axis 0: -0.0002..0.0001 d=0.0002
+    axis 1: -0.0001..0.0003 d=0.0004
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Pinky_02.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0000..0.0003 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Pinky_03.L"].location
+    axis 0: -0.0001..0.0001 d=0.0003
+    axis 1: -0.0001..0.0001 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Pinky_03.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Ring_01.L"].location
+    axis 0: -0.0001..0.0002 d=0.0003
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0002..0.0001 d=0.0003
+  pose.bones["CTRL_Ring_01.R"].location
+    axis 0: -0.0000..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Ring_02.L"].location
+    axis 0: -0.0000..0.0002 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Ring_02.R"].location
+    axis 0: -0.0001..0.0001 d=0.0001
+    axis 1: -0.0003..-0.0000 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Ring_03.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0000..0.0002 d=0.0002
+    axis 2: -0.0002..0.0000 d=0.0002
+  pose.bones["CTRL_Ring_03.R"].location
+    axis 0: -0.0001..0.0000 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0000..0.0001 d=0.0002
+  pose.bones["CTRL_Root"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Shoulder.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0002..0.0001 d=0.0003
+  pose.bones["CTRL_Shoulder.R"].location
+    axis 0: -0.0001..0.0000 d=0.0001
+    axis 1: -0.0001..0.0001 d=0.0001
+    axis 2: -0.0002..0.0002 d=0.0004
+  pose.bones["CTRL_Spine"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0002..0.0002 d=0.0004
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Spine_01"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0002..0.0002 d=0.0004
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Thumb_01.L"].location
+    axis 0: -0.0002..-0.0000 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_01.R"].location
+    axis 0: -0.0002..0.0001 d=0.0004
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_02.L"].location
+    axis 0: -0.0000..0.0001 d=0.0002
+    axis 1: -0.0000..0.0002 d=0.0002
+    axis 2: -0.0000..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_02.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0000..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_03.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_03.R"].location
+    axis 0: -0.0002..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Toe.L"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Toe.R"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+Action: Kevin_Walk
+  pose.bones["CTRL_COG"].location  <-- BIG MOVE
+    axis 0: -54.3467..18.9709 d=73.3176
+    axis 1: -85.7522..2.4097 d=88.1619
+    axis 2: -15.8266..46.8127 d=62.6392
+  pose.bones["CTRL_Chest"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0004..0.0004 d=0.0007
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Elbow_Pole.L"].location  <-- BIG MOVE
+    axis 0: -306.7792..261.6358 d=568.4150
+    axis 1: -441.4957..-161.5837 d=279.9119
+    axis 2: -342.2155..342.0719 d=684.2874
+  pose.bones["CTRL_Elbow_Pole.R"].location  <-- BIG MOVE
+    axis 0: -319.3727..31.2372 d=350.6099
+    axis 1: -69.8124..36.0000 d=105.8124
+    axis 2: -174.0756..338.7255 d=512.8011
+  pose.bones["CTRL_Foot_IK.L"].location  <-- BIG MOVE
+    axis 0: 44.5633..159.7369 d=115.1736
+    axis 1: -377.1494..413.7910 d=790.9403
+    axis 2: -182.6410..416.4169 d=599.0579
+  pose.bones["CTRL_Foot_IK.R"].location  <-- BIG MOVE
+    axis 0: -102.3537..-4.3609 d=97.9928
+    axis 1: -381.2416..417.4406 d=798.6822
+    axis 2: -193.4929..379.7290 d=573.2219
+  pose.bones["CTRL_Hand_IK.L"].location  <-- BIG MOVE
+    axis 0: -526.3468..178.5784 d=704.9252
+    axis 1: -163.4280..110.2267 d=273.6547
+    axis 2: 169.3146..323.9880 d=154.6734
+  pose.bones["CTRL_Hand_IK.R"].location  <-- BIG MOVE
+    axis 0: -207.8842..390.6357 d=598.5199
+    axis 1: -10.3774..116.0212 d=126.3986
+    axis 2: 103.1377..263.4690 d=160.3313
+  pose.bones["CTRL_Head"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0006..0.0005 d=0.0011
+    axis 2: -0.0002..0.0002 d=0.0004
+  pose.bones["CTRL_Index_01.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Index_01.R"].location
+    axis 0: -0.0000..0.0001 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0001
+  pose.bones["CTRL_Index_02.L"].location
+    axis 0: -0.0001..0.0002 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Index_02.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0001
+  pose.bones["CTRL_Index_03.L"].location
+    axis 0: -0.0001..0.0002 d=0.0002
+    axis 1: -0.0002..-0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Index_03.R"].location
+    axis 0: -0.0000..0.0001 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: 0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Knee_Pole.L"].location  <-- BIG MOVE
+    axis 0: -444.0269..-353.3513 d=90.6756
+    axis 1: -283.6472..356.1813 d=639.8285
+    axis 2: -31.5110..456.5492 d=488.0602
+  pose.bones["CTRL_Knee_Pole.R"].location  <-- BIG MOVE
+    axis 0: 187.9481..309.7573 d=121.8092
+    axis 1: -368.5690..164.2278 d=532.7969
+    axis 2: -186.0729..446.9366 d=633.0095
+  pose.bones["CTRL_Middle_01.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0001..0.0000 d=0.0002
+  pose.bones["CTRL_Middle_01.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Middle_02.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0003..0.0001 d=0.0004
+    axis 2: -0.0002..0.0001 d=0.0002
+  pose.bones["CTRL_Middle_02.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0001..0.0000 d=0.0001
+  pose.bones["CTRL_Middle_03.L"].location
+    axis 0: -0.0001..0.0000 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Middle_03.R"].location
+    axis 0: -0.0001..0.0001 d=0.0001
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0001
+  pose.bones["CTRL_Neck"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0006..0.0006 d=0.0012
+    axis 2: -0.0001..0.0002 d=0.0003
+  pose.bones["CTRL_Pinky_01.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0002
+    axis 2: -0.0002..0.0001 d=0.0003
+  pose.bones["CTRL_Pinky_01.R"].location
+    axis 0: -0.0001..0.0002 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0001
+  pose.bones["CTRL_Pinky_02.L"].location
+    axis 0: -0.0002..0.0000 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0004
+    axis 2: -0.0001..0.0001 d=0.0001
+  pose.bones["CTRL_Pinky_02.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: 0.0000..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Pinky_03.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Pinky_03.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0001
+  pose.bones["CTRL_Ring_01.L"].location
+    axis 0: 0.0000..0.0002 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Ring_01.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Ring_02.L"].location
+    axis 0: -0.0001..0.0002 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Ring_02.R"].location
+    axis 0: -0.0001..0.0001 d=0.0001
+    axis 1: -0.0002..0.0000 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0001
+  pose.bones["CTRL_Ring_03.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Ring_03.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: 0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Root"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["CTRL_Shoulder.L"].location
+    axis 0: -0.0001..0.0000 d=0.0002
+    axis 1: -0.0002..0.0002 d=0.0003
+    axis 2: -0.0004..0.0004 d=0.0007
+  pose.bones["CTRL_Shoulder.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0002..0.0002 d=0.0004
+    axis 2: -0.0002..0.0004 d=0.0006
+  pose.bones["CTRL_Spine"].location
+    axis 0: -0.0000..0.0000 d=0.0001
+    axis 1: -0.0004..0.0004 d=0.0007
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Spine_01"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0005..0.0004 d=0.0009
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_01.L"].location
+    axis 0: -0.0002..0.0001 d=0.0003
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_01.R"].location
+    axis 0: -0.0002..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0002
+    axis 2: -0.0000..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_02.L"].location
+    axis 0: 0.0000..0.0001 d=0.0001
+    axis 1: 0.0000..0.0002 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_02.R"].location
+    axis 0: 0.0000..0.0001 d=0.0001
+    axis 1: -0.0001..0.0002 d=0.0003
+    axis 2: 0.0000..0.0001 d=0.0001
+  pose.bones["CTRL_Thumb_03.L"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0001..0.0001 d=0.0002
+  pose.bones["CTRL_Thumb_03.R"].location
+    axis 0: -0.0001..0.0001 d=0.0002
+    axis 1: -0.0002..0.0001 d=0.0003
+    axis 2: -0.0001..0.0001 d=0.0001
+  pose.bones["CTRL_Toe.L"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0001
+  pose.bones["CTRL_Toe.R"].location
+    axis 0: -0.0000..0.0000 d=0.0000
+    axis 1: -0.0001..0.0001 d=0.0002
+    axis 2: -0.0000..0.0000 d=0.0000
+Action: mixamo.com
+  pose.bones["mixamorig:Head"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Hips"].location  <-- BIG MOVE
+    axis 0: -0.5126..4.0924 d=4.6050
+    axis 1: -3.3739..5.5669 d=8.9409
+    axis 2: -0.8849..2.2091 d=3.0940
+  pose.bones["mixamorig:LeftArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftFoot"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftForeArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHand"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftShoulder"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftToeBase"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Neck"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightArm"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightFoot"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightForeArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHand"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightLeg"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightShoulder"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightToeBase"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+Action: mixamo.com.001
+  pose.bones["mixamorig:Head"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Hips"].location  <-- BIG MOVE
+    axis 0: -52.0436..-40.3167 d=11.7269
+    axis 1: 4.0624..5.6534 d=1.5911
+    axis 2: -4.8714..9.1123 d=13.9837
+  pose.bones["mixamorig:LeftArm"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftFoot"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftForeArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHand"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftShoulder"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftToeBase"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Neck"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightFoot"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightForeArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHand"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightLeg"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightShoulder"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightToeBase"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+Action: mixamo.com.002
+  pose.bones["mixamorig:Head"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Hips"].location
+    axis 0: -42.2953..-42.2953 d=0.0000
+    axis 1: 12.0265..12.0265 d=0.0000
+    axis 2: -1.1408..-1.1408 d=0.0000
+  pose.bones["mixamorig:LeftArm"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftFoot"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftForeArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHand"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftShoulder"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftToeBase"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Neck"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightFoot"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightForeArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHand"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightLeg"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightShoulder"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightToeBase"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+Action: mixamo.com.003
+  pose.bones["mixamorig:Head"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Hips"].location  <-- BIG MOVE
+    axis 0: -52.0436..-40.3167 d=11.7269
+    axis 1: 4.0624..5.6534 d=1.5911
+    axis 2: -4.8714..9.1123 d=13.9837
+  pose.bones["mixamorig:LeftArm"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftFoot"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftForeArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHand"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftShoulder"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftToeBase"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Neck"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightFoot"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightForeArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHand"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightLeg"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightShoulder"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightToeBase"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+Action: mixamo.com.004
+  pose.bones["mixamorig:Head"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Hips"].location  <-- BIG MOVE
+    axis 0: -54.3467..18.9709 d=73.3176
+    axis 1: -85.7522..2.4097 d=88.1619
+    axis 2: -15.8266..46.8127 d=62.6392
+  pose.bones["mixamorig:LeftArm"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftFoot"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftForeArm"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHand"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftShoulder"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftToeBase"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftUpLeg"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Neck"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightArm"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightFoot"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightForeArm"].location
+    axis 0: 0.0544..0.0544 d=0.0000
+    axis 1: 0.0544..0.0544 d=0.0000
+    axis 2: 0.0544..0.0544 d=0.0000
+  pose.bones["mixamorig:RightHand"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightShoulder"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightToeBase"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Spine2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+Action: mixamo.com.005
+  pose.bones["mixamorig:Head"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:Hips"].location  <-- BIG MOVE
+    axis 0: -58.8353..-49.4332 d=9.4020
+    axis 1: -171.7547..-132.1165 d=39.6383
+    axis 2: -213.0578..-187.8299 d=25.2280
+  pose.bones["mixamorig:LeftArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftFoot"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftForeArm"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHand"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandIndex3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandMiddle3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandPinky3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandRing3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftHandThumb3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftLeg"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftShoulder"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:LeftToeBase"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:LeftUpLeg"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Neck"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightArm"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightFoot"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightForeArm"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHand"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex2"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandIndex3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandMiddle3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandPinky3"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandRing3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb1"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightHandThumb3"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightLeg"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:RightShoulder"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightToeBase"].location
+    axis 0: -0.0000..-0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+  pose.bones["mixamorig:RightUpLeg"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: -0.0000..-0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine1"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: -0.0000..-0.0000 d=0.0000
+  pose.bones["mixamorig:Spine2"].location
+    axis 0: 0.0000..0.0000 d=0.0000
+    axis 1: 0.0000..0.0000 d=0.0000
+    axis 2: 0.0000..0.0000 d=0.0000
+
+========================================================================
+ARMATURE POSE BONE CONSTRAINTS
+========================================================================
+Armature: Armature
+  Bone: mixamorig:Hips
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_COG
+  Bone: mixamorig:Spine
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Spine
+  Bone: mixamorig:Spine1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Spine_01
+  Bone: mixamorig:Spine2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Chest
+  Bone: mixamorig:Neck
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Neck
+  Bone: mixamorig:Head
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Head
+  Bone: mixamorig:LeftShoulder
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Shoulder.L
+  Bone: mixamorig:LeftArm
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_UpperArm_FK.L
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_UpperArm_IK.L
+  Bone: mixamorig:LeftForeArm
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Forearm_FK.L
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Forearm_IK.L
+  Bone: mixamorig:LeftHand
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Hand_FK.L
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Hand_IK.L
+  Bone: mixamorig:LeftHandThumb1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Thumb_01.L
+  Bone: mixamorig:LeftHandThumb2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Thumb_02.L
+  Bone: mixamorig:LeftHandThumb3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Thumb_03.L
+  Bone: mixamorig:LeftHandIndex1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Index_01.L
+  Bone: mixamorig:LeftHandIndex2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Index_02.L
+  Bone: mixamorig:LeftHandIndex3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Index_03.L
+  Bone: mixamorig:LeftHandMiddle1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Middle_01.L
+  Bone: mixamorig:LeftHandMiddle2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Middle_02.L
+  Bone: mixamorig:LeftHandMiddle3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Middle_03.L
+  Bone: mixamorig:LeftHandRing1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Ring_01.L
+  Bone: mixamorig:LeftHandRing2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Ring_02.L
+  Bone: mixamorig:LeftHandRing3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Ring_03.L
+  Bone: mixamorig:LeftHandPinky1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Pinky_01.L
+  Bone: mixamorig:LeftHandPinky2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Pinky_02.L
+  Bone: mixamorig:LeftHandPinky3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Pinky_03.L
+  Bone: mixamorig:RightShoulder
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Shoulder.R
+  Bone: mixamorig:RightArm
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_UpperArm_FK.R
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_UpperArm_IK.R
+  Bone: mixamorig:RightForeArm
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Forearm_FK.R
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Forearm_IK.R
+  Bone: mixamorig:RightHand
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Hand_FK.R
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Hand_IK.R
+  Bone: mixamorig:RightHandThumb1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Thumb_01.R
+  Bone: mixamorig:RightHandThumb2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Thumb_02.R
+  Bone: mixamorig:RightHandThumb3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Thumb_03.R
+  Bone: mixamorig:RightHandIndex1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Index_01.R
+  Bone: mixamorig:RightHandIndex2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Index_02.R
+  Bone: mixamorig:RightHandIndex3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Index_03.R
+  Bone: mixamorig:RightHandMiddle1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Middle_01.R
+  Bone: mixamorig:RightHandMiddle2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Middle_02.R
+  Bone: mixamorig:RightHandMiddle3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Middle_03.R
+  Bone: mixamorig:RightHandRing1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Ring_01.R
+  Bone: mixamorig:RightHandRing2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Ring_02.R
+  Bone: mixamorig:RightHandRing3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Ring_03.R
+  Bone: mixamorig:RightHandPinky1
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Pinky_01.R
+  Bone: mixamorig:RightHandPinky2
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Pinky_02.R
+  Bone: mixamorig:RightHandPinky3
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Pinky_03.R
+  Bone: mixamorig:LeftUpLeg
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Thigh_FK.L
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Thigh_IK.L
+  Bone: mixamorig:LeftLeg
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Shin_FK.L
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Shin_IK.L
+  Bone: mixamorig:LeftFoot
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Foot_FK.L
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Foot_Roll.L
+  Bone: mixamorig:LeftToeBase
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Toe_Offset.L
+  Bone: mixamorig:RightUpLeg
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Thigh_FK.R
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Thigh_IK.R
+  Bone: mixamorig:RightLeg
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Shin_FK.R
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Shin_IK.R
+  Bone: mixamorig:RightFoot
+    constraint COPY_TRANSFORMS    target=Armature subtarget=CTRL_Foot_FK.R
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Foot_Roll.R
+  Bone: mixamorig:RightToeBase
+    constraint COPY_TRANSFORMS    target=Armature subtarget=MCH_Toe_Offset.R
+  Bone: CTRL_COG
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:Hips
+  Bone: CTRL_Spine
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:Spine
+  Bone: CTRL_Spine_01
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:Spine1
+  Bone: CTRL_Chest
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:Spine2
+  Bone: CTRL_Neck
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:Neck
+  Bone: CTRL_Head
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:Head
+  Bone: CTRL_Shoulder.L
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:LeftShoulder
+  Bone: MCH_Forearm_IK.L
+    constraint IK                 target=Armature subtarget=CTRL_Hand_IK.L
+  Bone: MCH_Hand_IK.L
+    constraint COPY_ROTATION      target=Armature subtarget=CTRL_Hand_IK.L
+  Bone: CTRL_Shoulder.R
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:RightShoulder
+  Bone: MCH_Forearm_IK.R
+    constraint IK                 target=Armature subtarget=CTRL_Hand_IK.R
+  Bone: MCH_Hand_IK.R
+    constraint COPY_ROTATION      target=Armature subtarget=CTRL_Hand_IK.R
+  Bone: MCH_Shin_IK.L
+    constraint IK                 target=Armature subtarget=CTRL_Foot_IK.L
+  Bone: MCH_Foot_IK.L
+    constraint COPY_ROTATION      target=Armature subtarget=CTRL_Foot_IK.L
+  Bone: MCH_Shin_IK.R
+    constraint IK                 target=Armature subtarget=CTRL_Foot_IK.R
+  Bone: MCH_Foot_IK.R
+    constraint COPY_ROTATION      target=Armature subtarget=CTRL_Foot_IK.R
+  Bone: CTRL_Hand_IK.L
+    constraint COPY_LOCATION      target=Armature.001 subtarget=mixamorig:LeftHand
+    constraint COPY_ROTATION      target=Armature.001 subtarget=mixamorig:LeftHand
+  Bone: CTRL_Elbow_Pole.L
+    constraint COPY_LOCATION      target=Armature.001 subtarget=Bone.002
+  Bone: CTRL_Foot_IK.L
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:LeftFoot
+  Bone: CTRL_Knee_Pole.L
+    constraint COPY_LOCATION      target=Armature.001 subtarget=Bone.004
+  Bone: CTRL_Hand_IK.R
+    constraint COPY_LOCATION      target=Armature.001 subtarget=mixamorig:RightHand
+    constraint COPY_ROTATION      target=Armature.001 subtarget=mixamorig:RightHand
+  Bone: CTRL_Elbow_Pole.R
+    constraint COPY_LOCATION      target=Armature.001 subtarget=RETARGET_Elbow.L
+  Bone: CTRL_Foot_IK.R
+    constraint COPY_TRANSFORMS    target=Armature.001 subtarget=mixamorig:RightFoot
+  Bone: CTRL_Knee_Pole.R
+    constraint COPY_LOCATION      target=Armature.001 subtarget=Bone.005
+Armature: Armature.001
+
+========================================================================
+LIKELY ROOT BONES
+========================================================================
+Armature: Armature
+  mixamorig:Hips                   parent=<none>
+  CTRL_Root                        parent=<none>
+Armature: Armature.001
+  mixamorig:Hips                   parent=<none>
+  Bone                             parent=<none>
+  Bone.001                         parent=<none>
+  Bone.003                         parent=<none>
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

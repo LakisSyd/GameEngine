@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "source_blend": "Kevin_Main_Switchable.blend",
+  "source_action": "Kevin_Aim_Rifle",
+  "source_frame": 0,
+  "weapons": [
+    {
+      "profile_name": "Kevin_M4",
+      "visual_model": "assets/model/Rifle_M4_CC0.glb",
+      "right_hand_bone": "mixamorig:RightHand",
+      "world_position": [
+        0.0359721,
+        0.0437902,
+        0.0796419
+      ],
+      "world_rotation": [
+        0.0016452,
+        -0.0756503,
+        -1.5348811
+      ],
+      "world_scale": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "left_hand_grip": [
+        -0.365106,
+        0.0318,
+        -0.3067821
+      ],
+      "left_hand_rotation": [
+        2.067765,
+        -0.4732284,
+        -0.1169026
+      ],
+      "muzzle_position": [
+        -1e-07,
+        0.1099998,
+        0.6070001
+      ]
+    }
+  ]
+}

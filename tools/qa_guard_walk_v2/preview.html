@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="ru"><meta charset="utf-8"><title>Kevin — combat walk v2</title>
+<style>body{margin:24px;background:#202226;color:#eee;font:16px system-ui;text-align:center}img{width:min(640px,90vw);display:block;margin:12px auto}button,input{margin:10px}input{width:280px}</style>
+<h2>Kevin_Melee_Guard_Walk — v2</h2>
+<p>Полный цикл, 30 кадров превью при 15 кадрах/с.</p>
+<img id="pose" src="preview_000.png" alt="Боевая ходьба Kevin">
+<button id="toggle">Пауза</button><input id="frame" type="range" min="0" max="29" value="0"><span id="number">1 / 30</span>
+<script>
+const frames=Array.from({length:30},(_,i)=>{const im=new Image();im.src=`preview_${String(i).padStart(3,'0')}.png`;return im});
+let playing=true,index=0;
+const image=document.getElementById('pose'),slider=document.getElementById('frame'),number=document.getElementById('number'),toggle=document.getElementById('toggle');
+function show(){image.src=frames[index].src;slider.value=index;number.textContent=`${index+1} / 30`}
+toggle.onclick=()=>{playing=!playing;toggle.textContent=playing?'Пауза':'Играть'};
+slider.oninput=()=>{index=Number(slider.value);show()};
+setInterval(()=>{if(playing){index=(index+1)%30;show()}},1000/15);
+</script></html>

@@ -1,0 +1,22 @@
+const fs=require('fs');const p='src/Scene/SceneManager.cpp';let s=fs.readFileSync(p,'utf8');
+s=s.replace('profile["left_hand_grip"] = vec3(weapon.leftHandGrip);',`profile["left_hand_grip"] = vec3(weapon.leftHandGrip);
+    profile["left_hand_rotation"] = vec3(weapon.leftHandRotation);
+    profile["left_upper_arm_bone"] = weapon.leftUpperArmBone;
+    profile["left_forearm_bone"] = weapon.leftForearmBone;
+    profile["left_hand_bone"] = weapon.leftHandBone;`);
+s=s.replace('readVec3("left_hand_grip", weapon.leftHandGrip);',`readVec3("left_hand_grip", weapon.leftHandGrip);
+    readVec3("left_hand_rotation", weapon.leftHandRotation);
+    weapon.leftUpperArmBone = profile.value("left_upper_arm_bone", weapon.leftUpperArmBone);
+    weapon.leftForearmBone = profile.value("left_forearm_bone", weapon.leftForearmBone);
+    weapon.leftHandBone = profile.value("left_hand_bone", weapon.leftHandBone);`);
+s=s.replace('objJson["weapon_enable_left_hand_ik"] = weapon->enableLeftHandIK;',`objJson["weapon_enable_left_hand_ik"] = weapon->enableLeftHandIK;
+        objJson["weapon_left_hand_rotation"] = { weapon->leftHandRotation.x, weapon->leftHandRotation.y, weapon->leftHandRotation.z };
+        objJson["weapon_left_upper_arm_bone"] = weapon->leftUpperArmBone;
+        objJson["weapon_left_forearm_bone"] = weapon->leftForearmBone;
+        objJson["weapon_left_hand_bone"] = weapon->leftHandBone;`);
+s=s.replace('weapon.enableLeftHandIK = j.value(',`if (j.contains("weapon_left_hand_rotation"))
+            weapon.leftHandRotation = readVec3Array(j["weapon_left_hand_rotation"], weapon.leftHandRotation);
+        weapon.leftUpperArmBone = j.value("weapon_left_upper_arm_bone", weapon.leftUpperArmBone);
+        weapon.leftForearmBone = j.value("weapon_left_forearm_bone", weapon.leftForearmBone);
+        weapon.leftHandBone = j.value("weapon_left_hand_bone", weapon.leftHandBone);
+        weapon.enableLeftHandIK = j.value(`);fs.writeFileSync(p,s);

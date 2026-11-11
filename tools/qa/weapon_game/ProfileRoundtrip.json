@@ -1,0 +1,70 @@
+{
+    "ballistics": {
+        "ammo_in_magazine": 30,
+        "flash_enabled": true,
+        "flash_scale": 1.0,
+        "magazine_size": 30,
+        "max_recoil": 3.0,
+        "moving_multiplier": 2.5,
+        "recoil_per_shot": 0.3499999940395355,
+        "recoil_recovery": 4.0,
+        "reload_duration": 2.200000047683716,
+        "reserve_ammo": 90,
+        "spread_degrees": 1.5
+    },
+    "enable_left_hand_ik": false,
+    "left_forearm_bone": "mixamorig:LeftForeArm",
+    "left_hand_bone": "mixamorig:LeftHand",
+    "left_hand_grip": [
+        0.11999999731779099,
+        0.23000000417232513,
+        0.3400000035762787
+    ],
+    "left_hand_rotation": [
+        1.7256410121917725,
+        2.108236312866211,
+        0.8078575134277344
+    ],
+    "left_upper_arm_bone": "mixamorig:LeftArm",
+    "muzzle_position": [
+        0.0,
+        0.10999999940395355,
+        0.6069999933242798
+    ],
+    "pistol_pose": false,
+    "profile_name": "Kevin_M4_3P",
+    "render_distance": 15.0,
+    "rifle_gun_animation": "Kevin_Aim_Shoot_R",
+    "rifle_idle_animation": "Kevin_Aim_Rifle",
+    "right_hand_bone": "mixamorig:RightHand",
+    "show_world_visual": true,
+    "third_person_distance": 7.25,
+    "third_person_target_offset": [
+        0.20999999344348907,
+        1.7300000190734863,
+        0.3100000023841858
+    ],
+    "version": 4,
+    "view": "third_person",
+    "visual_model": "assets/model/Rifle_M4_CC0.glb",
+    "world_pivot": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "world_position": [
+        0.10999999940395355,
+        0.2199999988079071,
+        0.33000001311302185
+    ],
+    "world_rotation": [
+        -1.4013092517852783,
+        2.861553430557251,
+        1.5676206350326538
+    ],
+    "world_scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+    ]
+}
