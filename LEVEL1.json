@@ -12,6 +12,7 @@
                 "z": 0.0
             },
             "rb_angular_damping": 0.800000011920929,
+            "rb_collision_model_path": "",
             "rb_compound_elements": [],
             "rb_enable_ccd": false,
             "rb_friction": 0.0,
@@ -28,6 +29,7 @@
             ],
             "rb_shape_type": 6,
             "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
             "rotation": {
                 "x": 0.0,
                 "y": 0.0,
@@ -86,7 +88,7 @@
             "texture_path": "assets/texture/stone.tga"
         },
         {
-            "entity_id": 3,
+            "entity_id": 2,
             "id": 2,
             "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\House\\Untitled.glb",
             "object_name": "Object",
@@ -109,7 +111,7 @@
             "texture_path": "assets/texture/stone.tga"
         },
         {
-            "entity_id": 4,
+            "entity_id": 3,
             "has_rigidbody": true,
             "id": 3,
             "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\House\\Untitled.glb",
@@ -120,6 +122,7 @@
                 "z": 2.0999999046325684
             },
             "rb_angular_damping": 0.800000011920929,
+            "rb_collision_model_path": "",
             "rb_compound_elements": [],
             "rb_enable_ccd": false,
             "rb_friction": 0.0,
@@ -136,6 +139,7 @@
             ],
             "rb_shape_type": 6,
             "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
             "rotation": {
                 "x": 0.0,
                 "y": 0.0,
@@ -150,18 +154,18 @@
             "texture_path": "assets/texture/stone.tga"
         },
         {
-            "entity_id": 6,
+            "entity_id": 4,
             "id": 4,
             "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\Player.glb",
             "object_name": "Object",
             "position": {
-                "x": 49.87869644165039,
+                "x": 28.23868179321289,
                 "y": 2.656704902648926,
-                "z": -4.425988674163818
+                "z": -1.1353330612182617
             },
             "rotation": {
                 "x": 0.0,
-                "y": 1.6728988885879517,
+                "y": -7.992729187011719,
                 "z": 0.0
             },
             "scale": {
@@ -173,7 +177,7 @@
             "texture_path": "assets/texture/stone.tga"
         },
         {
-            "entity_id": 7,
+            "entity_id": 5,
             "has_rigidbody": true,
             "id": 5,
             "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\House\\Untitled_collision.glb",
@@ -184,6 +188,7 @@
                 "z": 0.0
             },
             "rb_angular_damping": 0.800000011920929,
+            "rb_collision_model_path": "",
             "rb_compound_elements": [],
             "rb_enable_ccd": false,
             "rb_friction": 0.0,
@@ -200,6 +205,7 @@
             ],
             "rb_shape_type": 6,
             "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
             "rotation": {
                 "x": 0.0,
                 "y": 0.0,
@@ -214,9 +220,52 @@
             "texture_path": "assets/texture/stone.tga"
         },
         {
-            "entity_id": 5,
+            "entity_id": 7,
             "has_rigidbody": true,
             "id": 6,
+            "model_path": "assets/model/cube.obj",
+            "object_name": "Object",
+            "position": {
+                "x": 39.29814529418945,
+                "y": 3.696702241897583,
+                "z": -8.649617195129395
+            },
+            "rb_angular_damping": 0.800000011920929,
+            "rb_collision_model_path": "",
+            "rb_compound_elements": [],
+            "rb_enable_ccd": false,
+            "rb_friction": 0.0,
+            "rb_is_compound": false,
+            "rb_is_dynamic": true,
+            "rb_is_kinematic": false,
+            "rb_linear_damping": 0.699999988079071,
+            "rb_mass": 1.0,
+            "rb_shape_radius": 0.5,
+            "rb_shape_size": [
+                0.9999995231628418,
+                1.0,
+                0.9999995231628418
+            ],
+            "rb_shape_type": 0,
+            "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
+            "rotation": {
+                "x": 90.0002670288086,
+                "y": 7.877336545418872e-23,
+                "z": 1.0142246509064225e-29
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shader_type": 3,
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "entity_id": 6,
+            "has_rigidbody": true,
+            "id": 7,
             "model_path": "",
             "object_name": "Collision",
             "position": {
@@ -225,6 +274,7 @@
                 "z": 3.299999952316284
             },
             "rb_angular_damping": 0.800000011920929,
+            "rb_collision_model_path": "",
             "rb_compound_elements": [],
             "rb_enable_ccd": false,
             "rb_friction": 0.0,
@@ -241,6 +291,7 @@
             ],
             "rb_shape_type": 0,
             "rb_use_manual_size": true,
+            "rb_use_separate_collision_mesh": false,
             "rotation": {
                 "x": 0.0,
                 "y": 0.0,

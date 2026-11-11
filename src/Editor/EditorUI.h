@@ -25,7 +25,10 @@ public:
     void RenderMainMenu(SceneManager& sceneManager);
     void Update(SceneManager& sceneManager);
     void UpdateDebugOverlay(SceneManager& sceneManager);
-    void UpdatePlayOverlay(SceneManager& sceneManager);
+    void UpdatePlayOverlay(SceneManager& sceneManager, bool uiCursorActive);
+    void CloseSocketStudio(SceneManager& sceneManager);
+    void RenderSocketStudioGizmo(SceneManager& sceneManager,
+        const DirectX::XMMATRIX& view, const DirectX::XMMATRIX& projection);
     void BeginMainMenuBar(SceneManager& sceneManager);
     void Render();
 
@@ -132,6 +135,11 @@ public:
 
 
     bool WantCaptureMouse() const;
+    bool WantTextInput() const;
+    Entity GetAnimationStudioTarget() const
+    {
+        return m_socketStudioOpen ? m_animationStudioTarget : INVALID_ENTITY;
+    }
     void ToggleObjectDebugWindow() { m_showObjectDebugWindow = !m_showObjectDebugWindow; }
     bool IsObjectDebugWindowVisible() const { return m_showObjectDebugWindow; }
     bool ConsumeWeaponVisualReloadRequest()
@@ -144,6 +152,22 @@ public:
     void SetCameraController(CameraController* controller) { m_cameraController = controller; }
 
 private:
+    enum class QuickCreateKind
+    {
+        EmptyEntity,
+        InteractionPoint,
+        PointLight,
+        CrewNpc,
+        CoverPoint,
+        PatrolPoint,
+        RiflePickup,
+        GrassArea,
+        NoGrassArea,
+        ForestArea,
+        SpawnArea,
+        TriggerArea
+    };
+
     // -- Состояние выделения ---------------------------------------------------
     SelectedType m_selectedType = SelectedType::None;
     Entity       m_selectedEntity = INVALID_ENTITY;
@@ -151,9 +175,55 @@ private:
     bool         m_showObjectDebugWindow = false;
     bool         m_weaponVisualReloadRequested = false;
     std::string  m_weaponProfileStatus;
+    bool         m_socketStudioOpen = false;
+    bool         m_socketStudioClipPreview = false;
+    Entity       m_animationStudioTarget = INVALID_ENTITY;
+    std::string  m_animationStudioProfileName = "Kevin";
+    std::string  m_animationStudioBone;
+    char         m_animationStudioControlSearch[96] = {};
+    int          m_animationStudioControllerView = 0; // 0: world character, 1: first-person arms.
+    int          m_animationStudioKeyLayer = 0; // 0: base clip, 1: upper-body clip.
+    bool         m_animationStudioFullRuntimePreview = true;
+    bool         m_animationStudioControllersActive = false;
+    bool         m_animationStudioSnapEnabled = false;
+    float        m_animationStudioPositionSnap = 0.01f;
+    float        m_animationStudioRotationSnap = 5.0f;
+    bool         m_animationStudioCopiedTransform = false;
+    DirectX::XMFLOAT3 m_animationStudioCopiedPosition = {};
+    DirectX::XMFLOAT3 m_animationStudioCopiedRotation = {};
+    int          m_punchStudioVariant = 0;
+    bool         m_socketStudioPreviewGameCamera = false;
+    bool         m_socketStudioFreezeFirstPersonArms = true;
+    bool         m_socketStudioPreviewWorldClipInFirstPerson = true;
+    bool         m_socketStudioUiCursorActive = false;
+    int          m_socketStudioSocket = 0;
+    int          m_socketStudioGizmoMode = 0;
+    bool         m_socketStudioKeepLeftHandInPlace = true;
+
+    // General editor authoring state. These options intentionally live in the
+    // UI layer: they improve the no-code workflow without changing runtime
+    // scene or component contracts.
+    char m_outlinerSearch[128] = {};
+    char m_componentSearch[96] = {};
+    std::string m_componentJumpTarget;
+    Entity m_componentJumpEntity = INVALID_ENTITY;
+    bool m_showInactiveEntities = false;
+    bool m_transformSnapEnabled = false;
+    float m_positionSnap = 0.25f;
+    float m_rotationSnapDegrees = 15.0f;
+    float m_scaleSnap = 0.10f;
+
+    bool m_openDeleteConfirmation = false;
+    SelectedType m_pendingDeleteType = SelectedType::None;
+    Entity m_pendingDeleteEntity = INVALID_ENTITY;
+    int m_pendingDeleteLegacyIndex = -1;
+
+    std::string m_editorStatus;
+    double m_editorStatusUntil = 0.0;
 
     void RenderPhysicsDebugPanel();
-    void RenderCameraPanel();
+    void RenderComponentNavigation(SceneManager& sceneManager, Entity entity);
+    void RenderCameraPanel(SceneManager& sceneManager);
     void CreateNewCompartment(ECSRegistry& registry, Entity submarineRoot);
     ID3D11ShaderResourceView* m_scenePreviewSRV = nullptr;
 
@@ -238,8 +308,17 @@ private:
     void RenderSidebar(SceneManager& sceneManager);
     void RenderSceneOutliner(SceneManager& sceneManager);
     void RenderDetailsPanel(SceneManager& sceneManager);
+    void RenderEditorToolbar(SceneManager& sceneManager);
+    void RenderQuickCreateMenu(SceneManager& sceneManager);
+    void RenderDeleteConfirmation(SceneManager& sceneManager);
+    void RenderEntityIdentity(SceneManager& sceneManager, Entity entity);
+    void HandleEditorShortcuts(SceneManager& sceneManager);
+    Entity CreateEditorTemplate(SceneManager& sceneManager, QuickCreateKind kind);
+    XMFLOAT3 GetAuthoringPosition(SceneManager& sceneManager) const;
+    void RequestDeleteSelection();
+    void SetEditorStatus(const std::string& message);
     void RenderObjectDebugWindow(SceneManager& sceneManager);
-    void RenderWeaponGripPlayWindow(SceneManager& sceneManager);
+    void RenderWeaponGripPlayWindow(SceneManager& sceneManager, bool uiCursorActive);
     void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity entity);
     void RenderSpawnPanel(SceneManager& sceneManager);
     void RenderParticleEditor();

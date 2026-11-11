@@ -1,0 +1,38 @@
+{
+    "enable_left_hand_ik": true,
+    "first_person_pitch_offset": 0.0,
+    "first_person_pitch_scale": 1.0,
+    "first_person_pivot": [
+        0.0,
+        -0.0020000000949949026,
+        -0.004000000189989805
+    ],
+    "first_person_position": [
+        0.09099999815225601,
+        -0.09399999678134918,
+        -0.041999999433755875
+    ],
+    "first_person_rotation": [
+        -1.5707963705062866,
+        -1.867501139640808,
+        -0.06544984877109528
+    ],
+    "first_person_scale": [
+        1.0,
+        1.0,
+        1.0
+    ],
+    "left_hand_grip": [
+        -0.13300000131130219,
+        0.0820000022649765,
+        0.2070000022649765
+    ],
+    "left_hand_rotation": [
+        1.4897481203079224,
+        -0.925914466381073,
+        -2.056007146835327
+    ],
+    "profile_name": "Rifle_B_M4",
+    "version": 1,
+    "view": "first_person"
+}

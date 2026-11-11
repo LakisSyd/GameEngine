@@ -114,6 +114,9 @@ public:
     void GetBoundingBox(XMFLOAT3* min, XMFLOAT3* max) const;
     bool IsEmbeddedFormat() const { return m_isEmbeddedFormat; }
     int FindAnimationIndexByName(const std::string& name) const;
+    // Exact names are preferred. If an asset author prefixes a standard clip
+    // (for example Kevin_Walk), this also recognizes the final _Walk token.
+    int FindAnimationIndexBySemanticName(const std::string& name) const;
 
     // Prototype mesh cutting. Removes whole triangles inside a local-space sphere
     // and rebuilds the first mesh part buffers. This is intentionally rough.
@@ -171,6 +174,26 @@ public:
         const AnimationComponent& animComp,
         const std::string& boneName,
         DirectX::XMMATRIX& outTransform) const;
+    // Returns the animated node in model space and the same node before its own
+    // additive pose correction. Parent corrections are preserved, which lets
+    // Animation Studio convert a viewport gizmo back into a stable local key.
+    // Unlike TryGetBoneModelTransform this also works for animated helper nodes
+    // that do not carry skin weights.
+    bool TryGetAnimationNodeEditTransforms(
+        const AnimationComponent& animComp,
+        const std::string& nodeName,
+        DirectX::XMMATRIX& outCurrentTransform,
+        DirectX::XMMATRIX& outUncorrectedTransform) const;
+    bool ApplyTwoBoneIK(AnimationComponent& animation,
+        const std::string& upperArm, const std::string& forearm, const std::string& hand,
+        const DirectX::XMMATRIX& target,
+        const DirectX::XMVECTOR* poleTarget = nullptr) const;
+    bool TryGetArmIKChain(bool rightHand, std::string& upperArm,
+        std::string& forearm, std::string& hand) const;
+    bool TryGetHeadIKBone(std::string& head) const;
+    bool ApplyHeadLookIK(AnimationComponent& animation,
+        const std::string& head, const DirectX::XMVECTOR& modelTarget,
+        float maxAngleDegrees = 75.0f) const;
 
   
     
@@ -192,7 +215,12 @@ public:
         const DirectX::XMMATRIX& parentTransform,
         const AnimationClip& anim,              // < const ref
         float animTime,
-        std::vector<DirectX::XMFLOAT4X4>& outMatrices) const;  // < БЕЗ const!
+        std::vector<DirectX::XMFLOAT4X4>& outMatrices,
+        const AnimationClip* upperClip = nullptr, float upperTime = 0.0f,
+        const std::string& upperRoot = "", bool inUpperBody = false,
+        const std::vector<AnimationPoseKey>* poseKeys = nullptr,
+        const std::vector<AnimationFistKey>* fistKeys = nullptr,
+        int poseVariant = -1) const;
 
     void ComputeBoneMatrices(int animIndex, float animTime, std::vector<XMFLOAT4X4>& outMatrices) const;
 

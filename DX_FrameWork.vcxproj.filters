@@ -82,11 +82,11 @@
     <Filter Include="Gameplay\Effects">
       <UniqueIdentifier>{ad3f6c26-0d0f-4936-b104-c332afcf7a7d}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Gameplay\Lighting">
-      <UniqueIdentifier>{c30b6c36-958a-447e-8b27-e6ec685a3a4a}</UniqueIdentifier>
-    </Filter>
     <Filter Include="Gameplay\Interaction">
       <UniqueIdentifier>{fa726630-b90b-4ac3-9f37-e20e058fc28d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Inventory">
+      <UniqueIdentifier>{3c3fb98d-d3b0-4cb9-83ed-d3e049d067db}</UniqueIdentifier>
     </Filter>
     <Filter Include="Gameplay\Ship">
       <UniqueIdentifier>{af005f5c-4244-4d27-a074-4d4bc872a5f3}</UniqueIdentifier>
@@ -115,13 +115,46 @@
     <Filter Include="Gameplay\WorldEvent">
       <UniqueIdentifier>{5153c210-9d95-4ffa-ac69-e9d71cbcc18e}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Gameplay\NPC\AI">
+      <UniqueIdentifier>{c399e297-8cb2-4095-bf3d-1bf488eced1d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Gameplay\Lighting">
+      <UniqueIdentifier>{c30b6c36-958a-447e-8b27-e6ec685a3a4a}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DebugHud.h">
+      <Filter>Debug</Filter>
+    </ClInclude>
     <ClCompile Include="src\Gameplay\AI\NpcNavMeshSystem.cpp">
       <Filter>Gameplay\NPC</Filter>
     </ClCompile>
     <ClInclude Include="src\Gameplay\AI\NpcNavMeshSystem.h">
       <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\AI\CrewTaskCoordinator.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\AI\NpcCombatDecisionRules.h">
+      <Filter>Gameplay\NPC\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\AI\NpcCombatMath.h">
+      <Filter>Gameplay\NPC\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\AI\NpcCombatModules.h">
+      <Filter>Gameplay\NPC\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\AI\NpcCombatModuleSystem.h">
+      <Filter>Gameplay\NPC\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\AI\NpcCombatDebugCommandSystem.h">
+      <Filter>Gameplay\NPC\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\AI\NpcCoverLifecycle.h">
+      <Filter>Gameplay\NPC\AI</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\AI\NpcSimulationStudio.h">
+      <Filter>Gameplay\NPC\AI</Filter>
     </ClInclude>
     <ClInclude Include="src\Gameplay\Lighting\SpotLightComponent.h">
       <Filter>Gameplay\Lighting</Filter>
@@ -306,6 +339,9 @@
     <ClCompile Include="src\Gameplay\Player\GameplayController.cpp">
       <Filter>Gameplay\Player</Filter>
     </ClCompile>
+    <ClCompile Include="src\Gameplay\Player\GameplayInputSystem.cpp">
+      <Filter>Gameplay\Player</Filter>
+    </ClCompile>
     <ClCompile Include="src\Editor\ObjectDebugWindow.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -333,6 +369,9 @@
     <ClInclude Include="NPCComponents.h">
       <Filter>Gameplay\NPC</Filter>
     </ClInclude>
+    <ClInclude Include="CharacterVitalsComponent.h">
+      <Filter>Gameplay</Filter>
+    </ClInclude>
     <ClInclude Include="NpcCommandSystem.h">
       <Filter>Gameplay\NPC</Filter>
     </ClInclude>
@@ -341,6 +380,21 @@
     </ClInclude>
     <ClInclude Include="StateSystem.h">
       <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcCombatSystem.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcCoverSystem.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcCoverQuery.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="NpcTacticalDecisionSystem.h">
+      <Filter>Gameplay\NPC</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\AI\NpcSquadCombatSystem.h">
+      <Filter>Gameplay\NPC\AI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -551,6 +605,9 @@
     <ClInclude Include="src\Animation\AnimationComponent.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
+    <ClInclude Include="src\Animation\MeleeActionJson.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
     <ClInclude Include="src\Animation\AnimationSystem.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
@@ -576,6 +633,9 @@
       <Filter>Gameplay\Player</Filter>
     </ClInclude>
     <ClInclude Include="src\Gameplay\Player\GameplayController.h">
+      <Filter>Gameplay\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Player\GameplayInputSystem.h">
       <Filter>Gameplay\Player</Filter>
     </ClInclude>
     <ClInclude Include="src\Gameplay\Player\CharacterControllerSystem.h">
@@ -626,6 +686,9 @@
     <ClInclude Include="src\Gameplay\Combat\WeaponSystem.h">
       <Filter>Gameplay\Combat</Filter>
     </ClInclude>
+    <ClInclude Include="src\Gameplay\Combat\PlayerPunchSystem.h">
+      <Filter>Gameplay\Combat</Filter>
+    </ClInclude>
     <ClInclude Include="src\Gameplay\Effects\ParticleSystem.h">
       <Filter>Gameplay\Effects</Filter>
     </ClInclude>
@@ -652,6 +715,24 @@
     </ClInclude>
     <ClInclude Include="src\Gameplay\Interaction\EventSystem.h">
       <Filter>Gameplay\Interaction</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Interaction\TriggerZoneComponent.h">
+      <Filter>Gameplay\Interaction</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Interaction\TriggerZoneSystem.h">
+      <Filter>Gameplay\Interaction</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Interaction\TriggerActionSystem.h">
+      <Filter>Gameplay\Interaction</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Inventory\InventoryComponent.h">
+      <Filter>Gameplay\Inventory</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Inventory\InventorySystem.h">
+      <Filter>Gameplay\Inventory</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Inventory\WeaponPickupSystem.h">
+      <Filter>Gameplay\Inventory</Filter>
     </ClInclude>
     <ClInclude Include="src\Gameplay\Ship\RoomEnvironmentSystem.h">
       <Filter>Gameplay\Ship</Filter>
@@ -718,6 +799,9 @@
     </ClInclude>
     <ClInclude Include="WorldEventLog.h">
       <Filter>Gameplay\WorldEvent</Filter>
+    </ClInclude>
+    <ClInclude Include="src\Gameplay\Player\FirstPersonViewSystem.h">
+      <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

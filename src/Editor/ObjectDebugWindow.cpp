@@ -527,8 +527,8 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
             DebugBoolLine("Running", movement->isRunning);
             DebugBoolLine("Grounded", movement->isGrounded);
             ImGui::Text("Current speed: %.3f", movement->currentSpeed);
-            if (auto* player = registry.GetComponent<PlayerComponent>(entity))
-                ImGui::Text("Stamina: %.1f / %.1f", player->stamina, player->maxStamina);
+            if (auto* vitals = registry.GetComponent<CharacterVitalsComponent>(entity))
+                ImGui::Text("Stamina: %.1f / %.1f", vitals->stamina, vitals->maxStamina);
         }
     }
 

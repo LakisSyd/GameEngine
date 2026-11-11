@@ -43,6 +43,11 @@
     <OutDir>$(ProjectDir)..\x64\$(Configuration)\tests\</OutDir>
     <IntDir>$(ProjectDir)..\x64\$(Configuration)\tests-obj\</IntDir>
     <TargetName>DXFrameworkCoreTests</TargetName>
+    <EngineRoot>$(ProjectDir)..\</EngineRoot>
+    <BulletRoot Condition="'$(BulletRoot)'=='' and '$(VCPKG_ROOT)'!=''">$(VCPKG_ROOT)\installed\x64-windows</BulletRoot>
+    <BulletRoot Condition="'$(BulletRoot)'=='' and Exists('C:\vcpkg\installed\x64-windows\include\bullet\btBulletDynamicsCommon.h')">C:\vcpkg\installed\x64-windows</BulletRoot>
+    <BulletRoot Condition="'$(BulletRoot)'==''">$(ProjectDir)..\..\..\vcpkg\installed\x64-windows</BulletRoot>
+    <EngineIncludeDirectories>$(EngineRoot);$(EngineRoot)src;$(EngineRoot)src\Animation;$(EngineRoot)src\Assets;$(EngineRoot)src\Config;$(EngineRoot)src\Core;$(EngineRoot)src\Debug;$(EngineRoot)src\ECS;$(EngineRoot)src\ECS\Components;$(EngineRoot)src\ECS\System;$(EngineRoot)src\Editor;$(EngineRoot)src\Gameplay\Combat;$(EngineRoot)src\Gameplay\Interaction;$(EngineRoot)src\Gameplay\Player;$(EngineRoot)src\Gameplay\Ship;$(EngineRoot)src\Gameplay\UI;$(EngineRoot)src\HelpFunc;$(EngineRoot)src\Input;$(EngineRoot)src\Render;$(EngineRoot)src\Render\BitMap;$(EngineRoot)src\Render\Camera;$(EngineRoot)src\Render\Grass;$(EngineRoot)src\Render\Material;$(EngineRoot)src\Render\Model;$(EngineRoot)src\Render\Shader;$(EngineRoot)src\Render\Text;$(EngineRoot)src\Render\Texture;$(EngineRoot)src\Scene;$(EngineRoot)src\Scene\Light;$(EngineRoot)lib;$(EngineRoot)lib\assimp;$(EngineRoot)lib\imgui-master</EngineIncludeDirectories>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -51,7 +56,7 @@
       <SDLCheck>true</SDLCheck>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)..\src\Core;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(EngineIncludeDirectories);$(BulletRoot)\include;$(BulletRoot)\include\bullet;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>

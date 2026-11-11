@@ -11,7 +11,7 @@ void InputClass::Initialize()
     for (int i = 0; i < 256; ++i) m_keys[i] = false;
     m_mouseX = m_mouseY = 0;
     m_mouseDeltaX = m_mouseDeltaY = 0;
-    m_leftButtonDown = m_rightButtonDown = false;
+    m_leftButtonDown = m_rightButtonDown = m_middleButtonDown = false;
     m_mouseCaptured = false;
 }
 

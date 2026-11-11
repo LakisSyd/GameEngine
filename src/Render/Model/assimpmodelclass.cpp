@@ -46,6 +46,177 @@ static std::string NormalizeBoneName(std::string name) {
     return name;
 }
 
+struct FistBoneRotation
+{
+    const char* bone;
+    bool rightHand;
+    XMFLOAT4 rotation; // DirectX order: x, y, z, w.
+};
+
+// Captured from Kevin_Main_Switchable.blend by comparing the evaluated deform
+// skeleton with CTRL_Fist.L/R at identity and at the authored closed value.
+static constexpr FistBoneRotation kFistBoneRotations[] = {
+    { "mixamorig:LeftHandThumb2", false, { 0.5774817f, -0.0702033f, -0.3133351f, 0.7506047f } },
+    { "mixamorig:LeftHandThumb3", false, { 0.0698593f,  0.1749494f, -0.4934925f, 0.8491040f } },
+    { "mixamorig:LeftHandIndex1", false, { 0.7876519f, 0.0f, 0.0f, 0.6161205f } },
+    { "mixamorig:LeftHandIndex2", false, { 0.6933677f, 0.0f, 0.0f, 0.7205840f } },
+    { "mixamorig:LeftHandIndex3", false, { 0.6300752f, 0.0f, 0.0f, 0.7765342f } },
+    { "mixamorig:LeftHandMiddle1", false, { 0.7876519f, 0.0f, 0.0f, 0.6161205f } },
+    { "mixamorig:LeftHandMiddle2", false, { 0.7699874f, 0.0f, 0.0f, 0.6380591f } },
+    { "mixamorig:LeftHandMiddle3", false, { 0.6300752f, 0.0f, 0.0f, 0.7765342f } },
+    { "mixamorig:LeftHandRing1", false, { 0.7876519f, 0.0f, 0.0f, 0.6161205f } },
+    { "mixamorig:LeftHandRing2", false, { 0.6300752f, 0.0f, 0.0f, 0.7765342f } },
+    { "mixamorig:LeftHandRing3", false, { 0.6300752f, 0.0f, 0.0f, 0.7765342f } },
+    { "mixamorig:LeftHandPinky1", false, { 0.7876519f, 0.0f, 0.0f, 0.6161205f } },
+    { "mixamorig:LeftHandPinky2", false, { 0.6300752f, 0.0f, 0.0f, 0.7765342f } },
+    { "mixamorig:LeftHandPinky3", false, { 0.6300752f, 0.0f, 0.0f, 0.7765342f } },
+    { "mixamorig:RightHandThumb2", true, { 0.4423940f, -0.0589448f, 0.4505921f, 0.7731622f } },
+    { "mixamorig:RightHandThumb3", true, { 0.2145435f, -0.2989273f, 0.5006011f, 0.7835893f } },
+    { "mixamorig:RightHandIndex1", true, { 0.7750560f, 0.0f, 0.0f, 0.6318925f } },
+    { "mixamorig:RightHandIndex2", true, { 0.6182232f, 0.0f, 0.0f, 0.7860025f } },
+    { "mixamorig:RightHandIndex3", true, { 0.3862690f, 0.0f, 0.0f, 0.9223862f } },
+    { "mixamorig:RightHandMiddle1", true, { 0.8307433f, 0.0f, 0.0f, 0.5566558f } },
+    { "mixamorig:RightHandMiddle2", true, { 0.6095273f, 0.0f, 0.0f, 0.7927651f } },
+    { "mixamorig:RightHandMiddle3", true, { 0.3862690f, 0.0f, 0.0f, 0.9223862f } },
+    { "mixamorig:RightHandRing1", true, { 0.7750560f, 0.0f, 0.0f, 0.6318926f } },
+    { "mixamorig:RightHandRing2", true, { 0.6182232f, 0.0f, 0.0f, 0.7860025f } },
+    { "mixamorig:RightHandRing3", true, { 0.3862690f, 0.0f, 0.0f, 0.9223862f } },
+    { "mixamorig:RightHandPinky1", true, { 0.6182232f, 0.0f, 0.0f, 0.7860025f } },
+    { "mixamorig:RightHandPinky2", true, { 0.6182232f, 0.0f, 0.0f, 0.7860025f } },
+    { "mixamorig:RightHandPinky3", true, { 0.3862690f, 0.0f, 0.0f, 0.9223862f } },
+};
+
+// The thumb controls use Blender Transform constraints that map one input axis
+// to three Euler axes with ADD mixing and a per-control influence. Slerping to
+// the final quaternion cuts across that mapped path, so keep the evaluated
+// Blender curve at 1/8 controller intervals. Values are x, y, z, w.
+static constexpr XMFLOAT4 kLeftThumb2Curve[] = {
+    { 0.0f, 0.0f, 0.0f, 1.0f },
+    { 0.09250893f, 0.02363555f, -0.04027343f, 0.99461627f },
+    { 0.18618682f, 0.03632610f, -0.08620033f, 0.97805130f },
+    { 0.27904594f, 0.03707414f, -0.13576256f, 0.94990915f },
+    { 0.36900008f, 0.02517897f, -0.18683858f, 0.91010785f },
+    { 0.45389247f, 0.00022307f, -0.23724328f, 0.85889298f },
+    { 0.53151488f, -0.03794977f, -0.28475875f, 0.79684639f },
+    { 0.57748175f, -0.07020326f, -0.31333506f, 0.75060469f },
+    { 0.57748175f, -0.07020326f, -0.31333506f, 0.75060469f },
+};
+static constexpr XMFLOAT4 kLeftThumb3Curve[] = {
+    { 0.0f, 0.0f, 0.0f, 1.0f },
+    { -0.00301321f, 0.02814999f, -0.08001261f, 0.99639177f },
+    { -0.00118190f, 0.05660750f, -0.15898590f, 0.98565602f },
+    { 0.00551534f, 0.08474633f, -0.23622051f, 0.96798116f },
+    { 0.01702757f, 0.11193839f, -0.31104562f, 0.94362628f },
+    { 0.03323150f, 0.13756144f, -0.38282439f, 0.91291732f },
+    { 0.05393222f, 0.16100876f, -0.45096278f, 0.87624204f },
+    { 0.06985933f, 0.17494938f, -0.49349248f, 0.84910399f },
+    { 0.06985933f, 0.17494938f, -0.49349248f, 0.84910399f },
+};
+static constexpr XMFLOAT4 kRightThumb2Curve[] = {
+    { 0.0f, 0.0f, 0.0f, 1.0f },
+    { 0.05730864f, -0.04442636f, 0.05590607f, 0.99579942f },
+    { 0.12066549f, -0.07806060f, 0.11867457f, 0.98247784f },
+    { 0.18795626f, -0.09959960f, 0.18628632f, 0.95919228f },
+    { 0.25699300f, -0.10815008f, 0.25660044f, 0.92542660f },
+    { 0.32557040f, -0.10319341f, 0.32741198f, 0.88099742f },
+    { 0.39151216f, -0.08454646f, 0.39649811f, 0.82605046f },
+    { 0.44239405f, -0.05894479f, 0.45059210f, 0.77316219f },
+    { 0.44239405f, -0.05894479f, 0.45059210f, 0.77316219f },
+};
+static constexpr XMFLOAT4 kRightThumb3Curve[] = {
+    { 0.0f, 0.0f, 0.0f, 1.0f },
+    { 0.00822268f, -0.05472275f, 0.08201542f, 0.99509364f },
+    { 0.02529619f, -0.10756713f, 0.16313009f, 0.98039681f },
+    { 0.05085097f, -0.15730642f, 0.24204037f, 0.95607811f },
+    { 0.08435325f, -0.20278037f, 0.31747234f, 0.92248362f },
+    { 0.12511627f, -0.24291688f, 0.38820729f, 0.88013208f },
+    { 0.17231423f, -0.27675205f, 0.45310465f, 0.82970613f },
+    { 0.21454346f, -0.29892731f, 0.50060105f, 0.78358930f },
+    { 0.21454346f, -0.29892731f, 0.50060105f, 0.78358930f },
+};
+
+static bool SampleMappedThumbRotation(const std::string& nodeName,
+    float amount, XMVECTOR& outRotation)
+{
+    const XMFLOAT4* curve = nullptr;
+    if (nodeName == "mixamorig:LeftHandThumb2") curve = kLeftThumb2Curve;
+    else if (nodeName == "mixamorig:LeftHandThumb3") curve = kLeftThumb3Curve;
+    else if (nodeName == "mixamorig:RightHandThumb2") curve = kRightThumb2Curve;
+    else if (nodeName == "mixamorig:RightHandThumb3") curve = kRightThumb3Curve;
+    if (!curve) return false;
+
+    const float position = std::clamp(std::abs(amount), 0.0f, 1.0f) * 8.0f;
+    const int first = (std::min)(static_cast<int>(position), 7);
+    const int second = first + 1;
+    const float alpha = position - static_cast<float>(first);
+    outRotation = XMQuaternionSlerp(XMLoadFloat4(&curve[first]),
+        XMLoadFloat4(&curve[second]), alpha);
+    if (amount < 0.0f) outRotation = XMQuaternionInverse(outRotation);
+    return true;
+}
+
+static float EvaluateFistAmount(const std::vector<AnimationFistKey>& keys,
+    const std::string& clip, bool rightHand, int variant, float seconds)
+{
+    bool hasVariantTrack = false;
+    if (variant >= 0)
+        for (const auto& key : keys)
+            if (key.variant == variant && key.clip == clip &&
+                key.rightHand == rightHand)
+            {
+                hasVariantTrack = true;
+                break;
+            }
+    const int activeVariant = hasVariantTrack ? variant : -1;
+    const AnimationFistKey* before = nullptr;
+    const AnimationFistKey* after = nullptr;
+    for (const auto& key : keys)
+    {
+        if (key.variant != activeVariant || key.clip != clip ||
+            key.rightHand != rightHand) continue;
+        if (key.time <= seconds && (!before || key.time > before->time)) before = &key;
+        if (key.time >= seconds && (!after || key.time < after->time)) after = &key;
+    }
+    if (!before) before = after;
+    if (!after) after = before;
+    if (!before || !after) return 0.0f;
+    const float span = after->time - before->time;
+    const float alpha = span > 0.00001f
+        ? std::clamp((seconds - before->time) / span, 0.0f, 1.0f) : 0.0f;
+    return std::clamp(before->amount + (after->amount - before->amount) * alpha,
+        -1.0f, 1.0f);
+}
+
+static XMMATRIX FistCorrectionForBone(const std::string& nodeName,
+    const std::vector<AnimationFistKey>* keys, const std::string& clip,
+    int variant, float seconds)
+{
+    if (!keys || keys->empty()) return XMMatrixIdentity();
+    for (const auto& captured : kFistBoneRotations)
+    {
+        if (NormalizeBoneName(captured.bone) != nodeName) continue;
+        const float amount = EvaluateFistAmount(*keys, clip,
+            captured.rightHand, variant, seconds);
+        if (std::abs(amount) <= 0.00001f) return XMMatrixIdentity();
+        XMVECTOR rotation;
+        if (SampleMappedThumbRotation(nodeName, amount, rotation))
+            return XMMatrixRotationQuaternion(rotation);
+
+        XMVECTOR target = XMLoadFloat4(&captured.rotation);
+        if (amount < 0.0f) target = XMQuaternionInverse(target);
+        // The source fist controls rotate farther than the 130-degree Map From
+        // range, so the constraint reaches its authored maximum before the UI
+        // slider reaches 1. Match that saturation for the single-axis fingers.
+        const float saturation = captured.rightHand ? 0.8530f : 0.8321f;
+        const float mappedAmount = std::clamp(
+            std::abs(amount) / saturation, 0.0f, 1.0f);
+        rotation = XMQuaternionSlerp(
+            XMQuaternionIdentity(), target, mappedAmount);
+        return XMMatrixRotationQuaternion(rotation);
+    }
+    return XMMatrixIdentity();
+}
+
 // ============================================================================
 // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
@@ -373,6 +544,9 @@ void AssimpModelClass::LoadBones(const aiScene* scene)
         for (unsigned int b = 0; b < mesh->mNumBones; ++b)
         {
             aiBone* bone = mesh->mBones[b];
+            // Controller and end bones may be exported as joints without skin weights.
+            // They still participate in the hierarchy, but do not consume GPU palette slots.
+            if (bone->mNumWeights == 0) continue;
             std::string boneName = NormalizeBoneName(bone->mName.C_Str());
             std::string originalName = bone->mName.C_Str();
 
@@ -782,6 +956,18 @@ bool AssimpModelClass::Initialize(
     for (unsigned int i = 0; i < m_scene->mNumMeshes; ++i)
     {
         aiMesh* mesh = m_scene->mMeshes[i];
+        // REF_ objects are Blender authoring references (e.g. a rifle preview).
+        // Runtime weapons are independent entities attached to the animated wrist.
+        auto isReference = [&](auto&& self, const aiNode* node, bool reference) -> bool {
+            reference = reference || std::string(node->mName.C_Str()).rfind("REF_", 0) == 0;
+            if (reference)
+                for (unsigned int n = 0; n < node->mNumMeshes; ++n)
+                    if (node->mMeshes[n] == i) return true;
+            for (unsigned int n = 0; n < node->mNumChildren; ++n)
+                if (self(self, node->mChildren[n], reference)) return true;
+            return false;
+        };
+        if (isReference(isReference, m_scene->mRootNode, false)) continue;
         if (mesh->mNumVertices == 0) continue;
 
 #if DEBUG_VERBOSE
@@ -1767,6 +1953,41 @@ int AssimpModelClass::FindAnimationIndexByName(const std::string& name) const
     return -1;
 }
 
+int AssimpModelClass::FindAnimationIndexBySemanticName(const std::string& name) const
+{
+    const int exactMatch = FindAnimationIndexByName(name);
+    if (exactMatch >= 0 || name.empty())
+        return exactMatch;
+
+    // GLB files commonly namespace clips with a character name. Match only a
+    // complete final token: Kevin_Walk matches Walk, but Walking does not.
+    std::string suffix = "_";
+    suffix += name;
+    std::transform(suffix.begin(), suffix.end(), suffix.begin(),
+        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+    int bestMatch = -1;
+    size_t bestLength = std::string::npos;
+    for (size_t i = 0; i < m_animations.size(); ++i)
+    {
+        std::string candidate = m_animations[i].name;
+        std::transform(candidate.begin(), candidate.end(), candidate.begin(),
+            [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+
+        if (candidate.size() > suffix.size() &&
+            candidate.ends_with(suffix) &&
+            candidate.size() < bestLength)
+        {
+            bestMatch = static_cast<int>(i);
+            bestLength = candidate.size();
+        }
+    }
+
+    // "Walk" should resolve to "Kevin_Walk" before a more specific
+    // "Kevin_Melee_Guard_Walk", regardless of the clips' import order.
+    return bestMatch;
+}
+
 
 void AssimpModelClass::GetBoundingSphere(XMFLOAT3* center, float* radius) const {
     if (!center || !radius) return;
@@ -1852,18 +2073,74 @@ void AssimpModelClass::GetRawTriangles(std::vector<XMFLOAT3>& out) const {
 // ============================================================================
 // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 // ============================================================================
+#include "Animation/TwoBoneIK.h"
+
+namespace
+{
+    bool EvaluateIKTargetCorrection(const AnimationComponent& animation,
+        const std::string& clip, const char* control, int variant, float time,
+        DirectX::XMFLOAT3& position, DirectX::XMFLOAT3& rotation)
+    {
+        bool hasVariantTrack = false;
+        if (variant >= 0)
+            for (const auto& key : animation.poseKeys)
+                if (key.variant == variant && key.clip == clip && key.bone == control)
+                {
+                    hasVariantTrack = true;
+                    break;
+                }
+
+        const int activeVariant = hasVariantTrack ? variant : -1;
+        const AnimationPoseKey* before = nullptr;
+        const AnimationPoseKey* after = nullptr;
+        for (const auto& key : animation.poseKeys)
+        {
+            if (key.variant != activeVariant || key.clip != clip ||
+                key.bone != control) continue;
+            if (key.time <= time && (!before || key.time > before->time))
+                before = &key;
+            if (key.time >= time && (!after || key.time < after->time))
+                after = &key;
+        }
+        if (!before) before = after;
+        if (!after) after = before;
+        if (!before || !after) return false;
+
+        const float span = after->time - before->time;
+        const float alpha = span > 0.00001f
+            ? std::clamp((time - before->time) / span, 0.0f, 1.0f) : 0.0f;
+        const auto lerp = [alpha](float a, float b)
+            { return a + (b - a) * alpha; };
+        const auto lerpAngle = [alpha](float a, float b)
+        {
+            float delta = std::fmod(b - a + 180.0f, 360.0f);
+            if (delta < 0.0f) delta += 360.0f;
+            return a + (delta - 180.0f) * alpha;
+        };
+        position = {
+            lerp(before->position.x, after->position.x),
+            lerp(before->position.y, after->position.y),
+            lerp(before->position.z, after->position.z) };
+        rotation = {
+            lerpAngle(before->rotation.x, after->rotation.x),
+            lerpAngle(before->rotation.y, after->rotation.y),
+            lerpAngle(before->rotation.z, after->rotation.z) };
+        return true;
+    }
+}
+
 void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float deltaTime)
 {
     if (!animComp.isPlaying) return;
     if (m_animations.empty() || animComp.animationIndex < 0 || animComp.animationIndex >= (int)m_animations.size()) return;
 
     const AnimationClip& anim = m_animations[animComp.animationIndex];
-    if (anim.duration <= 0.001f) return;
+    // A single-frame stance is a valid pose and must be sampled on every equip.
 
     float ticksPerSecond = (anim.ticksPerSecond > 0.0f) ? anim.ticksPerSecond : 24.0f;
 
     // 1. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ
-    animComp.currentTime += deltaTime;
+    animComp.currentTime += deltaTime * animComp.GetClipSpeed(anim.name);
 
     // 2. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     float animDurationSec = anim.duration / ticksPerSecond;
@@ -1877,7 +2154,7 @@ void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float delta
 
     // 3. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ (пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ!)
     float animTimeTicks = animComp.currentTime * ticksPerSecond;
-    animTimeTicks = fmodf(animTimeTicks, anim.duration);
+    animTimeTicks = anim.duration > 0.001f ? fmodf(animTimeTicks, anim.duration) : 0.0f;
     if (animTimeTicks < 0.0f) animTimeTicks += anim.duration;
 
     // 4. ?? пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ: пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
@@ -1894,7 +2171,113 @@ void AssimpModelClass::UpdateAnimation(AnimationComponent& animComp, float delta
 
     // 5. пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     if (m_scene && m_scene->mRootNode) {
-        ReadNodeHierarchyToComponent(m_scene->mRootNode, XMMatrixIdentity(), anim, animTimeTicks, animComp.finalBoneMatrices);
+        const AnimationClip* upper = GetAnimation(animComp.upperBodyAnimationIndex);
+        float upperTicks = 0.0f;
+        if (upper) {
+            animComp.upperBodyTime += deltaTime * animComp.GetClipSpeed(upper->name);
+            const float rate = upper->ticksPerSecond > 0.0f ? upper->ticksPerSecond : 24.0f;
+            const float duration = upper->duration / rate;
+            if (animComp.socketPreviewEnabled && !animComp.socketPreviewPlaying)
+                animComp.upperBodyTime = !animComp.socketPreviewPunch &&
+                    animComp.socketPreviewBlendEnabled
+                    ? animComp.socketPreviewUpperTime
+                    : animComp.socketPreviewTime;
+            animComp.upperBodyTime = duration > 0.00001f ? fmodf(animComp.upperBodyTime, duration) : 0.0f;
+            upperTicks = animComp.upperBodyTime * rate;
+        }
+        ReadNodeHierarchyToComponent(m_scene->mRootNode, XMMatrixIdentity(), anim,
+            animTimeTicks, animComp.finalBoneMatrices, upper, upperTicks,
+            animComp.upperBodyRoot, false, &animComp.poseKeys,
+            &animComp.fistKeys,
+            animComp.poseVariant);
+
+        // Apply authored hand and elbow targets after ordinary bone sampling.
+        // The hand target determines reach; the pole target determines which
+        // way the elbow points. Neither control translates a deform bone.
+        const AnimationClip& armClip = upper ? *upper : anim;
+        const float armTime = upper ? animComp.upperBodyTime : animComp.currentTime;
+        const auto applyArmIK = [&](bool rightHand)
+        {
+            const char* handControl = rightHand
+                ? kAnimationRightHandIKControl : kAnimationLeftHandIKControl;
+            const char* poleControl = rightHand
+                ? kAnimationRightElbowPoleControl : kAnimationLeftElbowPoleControl;
+            XMFLOAT3 handPosition{};
+            XMFLOAT3 handRotation{};
+            XMFLOAT3 polePosition{};
+            XMFLOAT3 poleRotation{};
+            const bool hasHandTarget = EvaluateIKTargetCorrection(animComp,
+                armClip.name, handControl, animComp.poseVariant, armTime,
+                handPosition, handRotation);
+            const bool hasPoleTarget = EvaluateIKTargetCorrection(animComp,
+                armClip.name, poleControl, animComp.poseVariant, armTime,
+                polePosition, poleRotation);
+            if (!hasHandTarget && !hasPoleTarget)
+                return;
+
+            std::string upperArm;
+            std::string forearm;
+            std::string hand;
+            XMMATRIX baseHand;
+            XMMATRIX baseElbow;
+            XMMATRIX ignored;
+            if (!TryGetArmIKChain(rightHand, upperArm, forearm, hand) ||
+                !TryGetAnimationNodeEditTransforms(animComp, hand, baseHand, ignored) ||
+                !TryGetAnimationNodeEditTransforms(animComp, forearm, baseElbow, ignored))
+                return;
+
+            XMMATRIX target = baseHand;
+            if (hasHandTarget)
+            {
+                const XMMATRIX correction = XMMatrixRotationRollPitchYaw(
+                    XMConvertToRadians(handRotation.x),
+                    XMConvertToRadians(handRotation.y),
+                    XMConvertToRadians(handRotation.z)) *
+                    XMMatrixTranslation(handPosition.x, handPosition.y,
+                        handPosition.z);
+                target = correction * baseHand;
+            }
+
+            XMVECTOR poleTarget{};
+            const XMVECTOR* pole = nullptr;
+            if (hasPoleTarget)
+            {
+                // Pole rotation is intentionally ignored: only its position
+                // defines the bend plane.
+                const XMMATRIX correction = XMMatrixTranslation(
+                    polePosition.x, polePosition.y, polePosition.z);
+                poleTarget = (correction * baseElbow).r[3];
+                pole = &poleTarget;
+            }
+            ApplyTwoBoneIK(animComp, upperArm, forearm, hand,
+                target, pole);
+        };
+        applyArmIK(false);
+        applyArmIK(true);
+
+        // A keyed virtual target turns the head after the composed base/upper
+        // pose has been sampled. The target is additive to the animated head,
+        // so the same keys remain useful on blended and full-body previews.
+        XMFLOAT3 headTargetOffset{};
+        XMFLOAT3 ignoredHeadRotation{};
+        if (EvaluateIKTargetCorrection(animComp, armClip.name,
+                kAnimationHeadLookIKControl, animComp.poseVariant, armTime,
+                headTargetOffset, ignoredHeadRotation))
+        {
+            std::string headBone;
+            XMMATRIX animatedHead;
+            XMMATRIX ignoredHead;
+            if (TryGetHeadIKBone(headBone) &&
+                TryGetAnimationNodeEditTransforms(animComp, headBone,
+                    animatedHead, ignoredHead))
+            {
+                const XMMATRIX targetTransform = XMMatrixTranslation(
+                    headTargetOffset.x, headTargetOffset.y,
+                    headTargetOffset.z) * animatedHead;
+                ApplyHeadLookIK(animComp, headBone,
+                    targetTransform.r[3]);
+            }
+        }
     }
     
 }
@@ -1933,7 +2316,11 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
     const DirectX::XMMATRIX& parentTransform,
     const AnimationClip& anim,
     float animTime,
-    std::vector<DirectX::XMFLOAT4X4>& outMatrices) const
+    std::vector<DirectX::XMFLOAT4X4>& outMatrices,
+    const AnimationClip* upperClip, float upperTime,
+    const std::string& upperRoot, bool inUpperBody,
+    const std::vector<AnimationPoseKey>* poseKeys,
+    const std::vector<AnimationFistKey>* fistKeys, int poseVariant) const
 {
     if (outMatrices.empty()) {
         return;
@@ -1949,7 +2336,10 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
 
     // пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     const BoneAnimationChannel* channel = nullptr;
-    for (const auto& ch : anim.channels) {
+    inUpperBody = inUpperBody || (upperClip && nodeName == NormalizeBoneName(upperRoot));
+    const auto& sampledClip = inUpperBody && upperClip ? *upperClip : anim;
+    const float sampleTime = inUpperBody && upperClip ? upperTime : animTime;
+    for (const auto& ch : sampledClip.channels) {
         if (ch.nodeName == nodeName) {
             channel = &ch;
             break;
@@ -1958,14 +2348,75 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
 
     // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     if (channel) {
-        XMMATRIX posMat = (channel->positions.size() >= 2) ? InterpolatePosition(channel->positions, animTime) :
+        XMMATRIX posMat = (channel->positions.size() >= 2) ? InterpolatePosition(channel->positions, sampleTime) :
             (channel->positions.empty() ? XMMatrixIdentity() : XMMatrixTranslation(channel->positions[0].position.x, channel->positions[0].position.y, channel->positions[0].position.z));
-        XMMATRIX rotMat = (channel->rotations.size() >= 2) ? InterpolateRotation(channel->rotations, animTime) :
+        XMMATRIX rotMat = (channel->rotations.size() >= 2) ? InterpolateRotation(channel->rotations, sampleTime) :
             (channel->rotations.empty() ? XMMatrixIdentity() : XMMatrixRotationQuaternion(XMLoadFloat4(&channel->rotations[0].orientation)));
-        XMMATRIX scaleMat = (channel->scales.size() >= 2) ? InterpolateScale(channel->scales, animTime) :
+        XMMATRIX scaleMat = (channel->scales.size() >= 2) ? InterpolateScale(channel->scales, sampleTime) :
             (channel->scales.empty() ? XMMatrixIdentity() : XMMatrixScaling(channel->scales[0].scale.x, channel->scales[0].scale.y, channel->scales[0].scale.z));
 
         nodeTransform = scaleMat * rotMat * posMat;
+    }
+
+    const float fistRate = sampledClip.ticksPerSecond > 0.0f
+        ? sampledClip.ticksPerSecond : 24.0f;
+    nodeTransform = FistCorrectionForBone(nodeName, fistKeys,
+        sampledClip.name, poseVariant, sampleTime / fistRate) * nodeTransform;
+
+    if (poseKeys && !poseKeys->empty())
+    {
+        // Ключи JSON добавляют поправку к исходному GLB; соседние ключи
+        // интерполируются линейно, вне диапазона держится крайнее значение.
+        const float rate = sampledClip.ticksPerSecond > 0.0f
+            ? sampledClip.ticksPerSecond : 24.0f;
+        const float seconds = sampleTime / rate;
+        bool hasVariantKeys = false;
+        if (poseVariant >= 0)
+            for (const auto& key : *poseKeys)
+                if (key.variant == poseVariant && key.clip == sampledClip.name &&
+                    NormalizeBoneName(key.bone) == nodeName)
+                {
+                    hasVariantKeys = true;
+                    break;
+                }
+        const AnimationPoseKey* before = nullptr;
+        const AnimationPoseKey* after = nullptr;
+        for (const auto& key : *poseKeys)
+        {
+            if (key.variant != (hasVariantKeys ? poseVariant : -1) ||
+                key.clip != sampledClip.name ||
+                NormalizeBoneName(key.bone) != nodeName) continue;
+            if (key.time <= seconds && (!before || key.time > before->time))
+                before = &key;
+            if (key.time >= seconds && (!after || key.time < after->time))
+                after = &key;
+        }
+        if (!before) before = after;
+        if (!after) after = before;
+        if (before && after)
+        {
+            const float span = after->time - before->time;
+            const float alpha = span > 0.00001f
+                ? std::clamp((seconds - before->time) / span, 0.0f, 1.0f) : 0.0f;
+            const auto lerp = [alpha](float a, float b)
+                { return a + (b - a) * alpha; };
+            const auto lerpAngle = [alpha](float a, float b)
+            {
+                float delta = std::fmod(b - a + 180.0f, 360.0f);
+                if (delta < 0.0f) delta += 360.0f;
+                return a + (delta - 180.0f) * alpha;
+            };
+            const auto& p = before->position;
+            const auto& q = after->position;
+            const auto& r = before->rotation;
+            const auto& s = after->rotation;
+            nodeTransform = DirectX::XMMatrixRotationRollPitchYaw(
+                DirectX::XMConvertToRadians(lerpAngle(r.x, s.x)),
+                DirectX::XMConvertToRadians(lerpAngle(r.y, s.y)),
+                DirectX::XMConvertToRadians(lerpAngle(r.z, s.z))) *
+                DirectX::XMMatrixTranslation(lerp(p.x, q.x),
+                    lerp(p.y, q.y), lerp(p.z, q.z)) * nodeTransform;
+        }
     }
 
     DirectX::XMMATRIX globalTransform = nodeTransform * parentTransform;
@@ -2000,7 +2451,9 @@ void AssimpModelClass::ReadNodeHierarchyToComponent(
 
     // пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
     for (unsigned int i = 0; i < node->mNumChildren; ++i) {
-        ReadNodeHierarchyToComponent(node->mChildren[i], globalTransform, anim, animTime, outMatrices);
+        ReadNodeHierarchyToComponent(node->mChildren[i], globalTransform, anim, animTime, outMatrices,
+            upperClip, upperTime, upperRoot, inUpperBody, poseKeys, fistKeys,
+            poseVariant);
     }
     
 }
@@ -2150,5 +2603,348 @@ bool AssimpModelClass::TryGetBoneModelTransform(
     const XMMATRIX skinning = XMLoadFloat4x4(
         &animComp.finalBoneMatrices[bone.boneIndex]);
     outTransform = XMMatrixInverse(nullptr, offset) * skinning;
+    return true;
+}
+
+bool AssimpModelClass::TryGetAnimationNodeEditTransforms(
+    const AnimationComponent& animComp,
+    const std::string& requestedNode,
+    DirectX::XMMATRIX& outCurrentTransform,
+    DirectX::XMMATRIX& outUncorrectedTransform) const
+{
+    if (!m_scene || !m_scene->mRootNode || requestedNode.empty() ||
+        animComp.animationIndex < 0 ||
+        animComp.animationIndex >= static_cast<int>(m_animations.size()))
+        return false;
+
+    const AnimationClip& baseClip = m_animations[animComp.animationIndex];
+    const AnimationClip* upperClip = GetAnimation(animComp.upperBodyAnimationIndex);
+    const std::string wanted = NormalizeBoneName(requestedNode);
+    const auto clipTicks = [](const AnimationClip& clip, float seconds)
+    {
+        const float rate = clip.ticksPerSecond > 0.0f ? clip.ticksPerSecond : 24.0f;
+        float ticks = seconds * rate;
+        if (clip.duration > 0.001f)
+            ticks = std::fmod(ticks, clip.duration);
+        return ticks < 0.0f ? ticks + clip.duration : ticks;
+    };
+    const float baseTime = clipTicks(baseClip, animComp.currentTime);
+    const float upperTime = upperClip
+        ? clipTicks(*upperClip, animComp.upperBodyTime) : 0.0f;
+
+    bool found = false;
+    auto visit = [&](auto&& self, const aiNode* node,
+        const XMMATRIX& parentTransform, bool inUpperBody) -> void
+    {
+        if (found || !node) return;
+        const std::string rawName = node->mName.length > 0
+            ? std::string(node->mName.C_Str(), node->mName.length) : std::string{};
+        const std::string nodeName = NormalizeBoneName(rawName);
+        inUpperBody = inUpperBody || (upperClip &&
+            nodeName == NormalizeBoneName(animComp.upperBodyRoot));
+        const AnimationClip& sampledClip = inUpperBody && upperClip
+            ? *upperClip : baseClip;
+        const float sampleTime = inUpperBody && upperClip ? upperTime : baseTime;
+
+        XMFLOAT4X4 localFloat = ConvertMatrix(node->mTransformation);
+        XMMATRIX baseLocal = XMLoadFloat4x4(&localFloat);
+        const BoneAnimationChannel* channel = nullptr;
+        for (const auto& candidate : sampledClip.channels)
+            if (candidate.nodeName == nodeName)
+            {
+                channel = &candidate;
+                break;
+            }
+        if (channel)
+        {
+            const XMMATRIX position = channel->positions.size() >= 2
+                ? InterpolatePosition(channel->positions, sampleTime)
+                : channel->positions.empty() ? XMMatrixIdentity()
+                : XMMatrixTranslation(channel->positions[0].position.x,
+                    channel->positions[0].position.y,
+                    channel->positions[0].position.z);
+            const XMMATRIX rotation = channel->rotations.size() >= 2
+                ? InterpolateRotation(channel->rotations, sampleTime)
+                : channel->rotations.empty() ? XMMatrixIdentity()
+                : XMMatrixRotationQuaternion(
+                    XMLoadFloat4(&channel->rotations[0].orientation));
+            const XMMATRIX scale = channel->scales.size() >= 2
+                ? InterpolateScale(channel->scales, sampleTime)
+                : channel->scales.empty() ? XMMatrixIdentity()
+                : XMMatrixScaling(channel->scales[0].scale.x,
+                    channel->scales[0].scale.y,
+                    channel->scales[0].scale.z);
+            baseLocal = scale * rotation * position;
+        }
+
+        XMMATRIX correction = XMMatrixIdentity();
+        const float rate = sampledClip.ticksPerSecond > 0.0f
+            ? sampledClip.ticksPerSecond : 24.0f;
+        const float seconds = sampleTime / rate;
+        bool hasVariantKeys = false;
+        if (animComp.poseVariant >= 0)
+            for (const auto& key : animComp.poseKeys)
+                if (key.variant == animComp.poseVariant &&
+                    key.clip == sampledClip.name &&
+                    NormalizeBoneName(key.bone) == nodeName)
+                {
+                    hasVariantKeys = true;
+                    break;
+                }
+        const int activeVariant = hasVariantKeys ? animComp.poseVariant : -1;
+        const AnimationPoseKey* before = nullptr;
+        const AnimationPoseKey* after = nullptr;
+        for (const auto& key : animComp.poseKeys)
+        {
+            if (key.variant != activeVariant || key.clip != sampledClip.name ||
+                NormalizeBoneName(key.bone) != nodeName) continue;
+            if (key.time <= seconds && (!before || key.time > before->time))
+                before = &key;
+            if (key.time >= seconds && (!after || key.time < after->time))
+                after = &key;
+        }
+        if (!before) before = after;
+        if (!after) after = before;
+        if (before && after)
+        {
+            const float span = after->time - before->time;
+            const float alpha = span > 0.00001f
+                ? std::clamp((seconds - before->time) / span, 0.0f, 1.0f) : 0.0f;
+            const auto lerp = [alpha](float a, float b)
+                { return a + (b - a) * alpha; };
+            const auto lerpAngle = [alpha](float a, float b)
+            {
+                float delta = std::fmod(b - a + 180.0f, 360.0f);
+                if (delta < 0.0f) delta += 360.0f;
+                return a + (delta - 180.0f) * alpha;
+            };
+            const auto& p = before->position;
+            const auto& q = after->position;
+            const auto& r = before->rotation;
+            const auto& s = after->rotation;
+            correction = XMMatrixRotationRollPitchYaw(
+                XMConvertToRadians(lerpAngle(r.x, s.x)),
+                XMConvertToRadians(lerpAngle(r.y, s.y)),
+                XMConvertToRadians(lerpAngle(r.z, s.z))) *
+                XMMatrixTranslation(lerp(p.x, q.x),
+                    lerp(p.y, q.y), lerp(p.z, q.z));
+        }
+
+        const XMMATRIX fistCorrection = FistCorrectionForBone(nodeName,
+            &animComp.fistKeys, sampledClip.name, animComp.poseVariant, seconds);
+        const XMMATRIX uncorrected = fistCorrection * baseLocal * parentTransform;
+        const XMMATRIX current = correction * uncorrected;
+        if (nodeName == wanted || rawName == requestedNode)
+        {
+            outCurrentTransform = current;
+            outUncorrectedTransform = uncorrected;
+            found = true;
+            return;
+        }
+        for (unsigned int i = 0; i < node->mNumChildren; ++i)
+            self(self, node->mChildren[i], current, inUpperBody);
+    };
+    visit(visit, m_scene->mRootNode, XMMatrixIdentity(), false);
+    return found;
+}
+
+bool AssimpModelClass::TryGetArmIKChain(bool rightHand,
+    std::string& upperArm, std::string& forearm, std::string& hand) const
+{
+    const char* side = rightHand ? "Right" : "Left";
+    const auto findBone = [&](const std::string& part, std::string& result)
+    {
+        const std::string plain = side + part;
+        const std::string mixamo = "mixamorig:" + plain;
+        auto exact = m_boneInfoMap.find(mixamo);
+        if (exact != m_boneInfoMap.end())
+        {
+            result = exact->first;
+            return true;
+        }
+        exact = m_boneInfoMap.find(plain);
+        if (exact != m_boneInfoMap.end())
+        {
+            result = exact->first;
+            return true;
+        }
+
+        // Importers may preserve a different namespace. Match only the final
+        // namespace component so LeftArm cannot be confused with LeftForeArm.
+        for (const auto& [name, info] : m_boneInfoMap)
+        {
+            (void)info;
+            const std::string normalized = NormalizeBoneName(name);
+            const size_t separator = normalized.find_last_of(':');
+            const std::string leaf = separator == std::string::npos
+                ? normalized : normalized.substr(separator + 1);
+            if (leaf == plain)
+            {
+                result = name;
+                return true;
+            }
+        }
+        return false;
+    };
+
+    return findBone("Arm", upperArm) &&
+        findBone("ForeArm", forearm) && findBone("Hand", hand);
+}
+
+bool AssimpModelClass::TryGetHeadIKBone(std::string& head) const
+{
+    const auto findLeaf = [&](const std::string& plain, std::string& result)
+    {
+        const std::string mixamo = "mixamorig:" + plain;
+        auto exact = m_boneInfoMap.find(mixamo);
+        if (exact != m_boneInfoMap.end())
+        {
+            result = exact->first;
+            return true;
+        }
+        exact = m_boneInfoMap.find(plain);
+        if (exact != m_boneInfoMap.end())
+        {
+            result = exact->first;
+            return true;
+        }
+        for (const auto& [name, info] : m_boneInfoMap)
+        {
+            (void)info;
+            const std::string normalized = NormalizeBoneName(name);
+            const size_t separator = normalized.find_last_of(':');
+            const std::string leaf = separator == std::string::npos
+                ? normalized : normalized.substr(separator + 1);
+            if (leaf == plain)
+            {
+                result = name;
+                return true;
+            }
+        }
+        return false;
+    };
+    return findLeaf("Head", head);
+}
+
+bool AssimpModelClass::ApplyHeadLookIK(AnimationComponent& animation,
+    const std::string& head, const XMVECTOR& modelTarget,
+    float maxAngleDegrees) const
+{
+    XMMATRIX headTransform;
+    if (!m_scene || !TryGetBoneModelTransform(animation, head, headTransform))
+        return false;
+
+    const XMVECTOR pivot = headTransform.r[3];
+    const XMVECTOR toTarget = XMVectorSubtract(modelTarget, pivot);
+    if (XMVectorGetX(XMVector3LengthSq(toTarget)) < 0.000001f)
+        return false;
+
+    // Kevin/Mixamo faces model -Z. Transforming that axis by the animated head
+    // preserves authored nods and turns before applying the additional look.
+    XMVECTOR currentForward = XMVector3TransformNormal(
+        XMVectorSet(0.0f, 0.0f, -1.0f, 0.0f), headTransform);
+    if (XMVectorGetX(XMVector3LengthSq(currentForward)) < 0.000001f)
+        currentForward = XMVectorSet(0.0f, 0.0f, -1.0f, 0.0f);
+    currentForward = XMVector3Normalize(currentForward);
+    const XMVECTOR desiredForward = XMVector3Normalize(toTarget);
+    const float dot = std::clamp(XMVectorGetX(
+        XMVector3Dot(currentForward, desiredForward)), -1.0f, 1.0f);
+    float angle = std::acos(dot);
+    angle = (std::min)(angle, XMConvertToRadians(
+        std::clamp(maxAngleDegrees, 0.0f, 180.0f)));
+    if (angle < 0.00001f)
+        return true;
+
+    XMVECTOR axis = XMVector3Cross(currentForward, desiredForward);
+    if (XMVectorGetX(XMVector3LengthSq(axis)) < 0.000001f)
+    {
+        axis = XMVector3Cross(currentForward,
+            XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+        if (XMVectorGetX(XMVector3LengthSq(axis)) < 0.000001f)
+            axis = XMVector3Cross(currentForward,
+                XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f));
+    }
+    const XMMATRIX delta = XMMatrixTranslationFromVector(XMVectorNegate(pivot)) *
+        XMMatrixRotationAxis(XMVector3Normalize(axis), angle) *
+        XMMatrixTranslationFromVector(pivot);
+
+    const std::string normalizedRoot = NormalizeBoneName(head);
+    auto visit = [&](auto&& self, const aiNode* node, bool inside) -> void
+    {
+        const std::string name = NormalizeBoneName(node->mName.C_Str());
+        inside = inside || name == normalizedRoot;
+        if (inside)
+        {
+            auto bone = m_boneInfoMap.find(name);
+            if (bone != m_boneInfoMap.end())
+            {
+                const int index = bone->second.boneIndex;
+                if (index >= 0 && index <
+                    static_cast<int>(animation.finalBoneMatrices.size()))
+                {
+                    auto& matrix = animation.finalBoneMatrices[index];
+                    XMStoreFloat4x4(&matrix,
+                        XMLoadFloat4x4(&matrix) * delta);
+                }
+            }
+        }
+        for (unsigned int child = 0; child < node->mNumChildren; ++child)
+            self(self, node->mChildren[child], inside);
+    };
+    visit(visit, m_scene->mRootNode, false);
+    return true;
+}
+
+bool AssimpModelClass::ApplyTwoBoneIK(AnimationComponent& animation,
+    const std::string& upperArm, const std::string& forearm, const std::string& hand,
+    const XMMATRIX& target, const XMVECTOR* poleTarget) const
+{
+    XMMATRIX upper, lower, palm;
+    if (!m_scene || !TryGetBoneModelTransform(animation, upperArm, upper) ||
+        !TryGetBoneModelTransform(animation, forearm, lower) ||
+        !TryGetBoneModelTransform(animation, hand, palm)) return false;
+    XMVECTOR elbow, wrist;
+    if (!TwoBoneIK::Solve(upper.r[3], lower.r[3], palm.r[3], target.r[3],
+            elbow, wrist, poleTarget)) return false;
+
+    // Each delta moves a whole subtree, so fingers stay attached to the hand.
+    auto moveSubtree = [&](const std::string& root, const XMMATRIX& delta) {
+        const std::string normalized = NormalizeBoneName(root);
+        auto visit = [&](auto&& self, const aiNode* node, bool inside) -> void {
+            const std::string name = NormalizeBoneName(node->mName.C_Str());
+            inside = inside || name == normalized;
+            if (inside) {
+                auto bone = m_boneInfoMap.find(name);
+                if (bone != m_boneInfoMap.end()) {
+                    const int index = bone->second.boneIndex;
+                    if (index >= 0 && index < static_cast<int>(animation.finalBoneMatrices.size())) {
+                        auto& matrix = animation.finalBoneMatrices[index];
+                        XMStoreFloat4x4(&matrix, XMLoadFloat4x4(&matrix) * delta);
+                    }
+                }
+            }
+            for (unsigned int i = 0; i < node->mNumChildren; ++i) self(self, node->mChildren[i], inside);
+        };
+        visit(visit, m_scene->mRootNode, false);
+    };
+    const XMVECTOR shoulder = upper.r[3];
+    moveSubtree(upperArm, XMMatrixTranslationFromVector(XMVectorNegate(shoulder)) *
+        TwoBoneIK::RotationBetween(XMVectorSubtract(lower.r[3], shoulder), XMVectorSubtract(elbow, shoulder)) *
+        XMMatrixTranslationFromVector(shoulder));
+    TryGetBoneModelTransform(animation, forearm, lower);
+    TryGetBoneModelTransform(animation, hand, palm);
+    moveSubtree(forearm, XMMatrixTranslationFromVector(XMVectorNegate(lower.r[3])) *
+        TwoBoneIK::RotationBetween(XMVectorSubtract(palm.r[3], lower.r[3]), XMVectorSubtract(wrist, lower.r[3])) *
+        XMMatrixTranslationFromVector(lower.r[3]));
+    TryGetBoneModelTransform(animation, hand, palm);
+    XMVECTOR scale, rotation, translation, targetScale, targetRotation, targetTranslation;
+    if (XMMatrixDecompose(&scale, &rotation, &translation, palm) &&
+        XMMatrixDecompose(&targetScale, &targetRotation, &targetTranslation, target)) {
+        const XMMATRIX desired = XMMatrixScalingFromVector(scale) *
+            XMMatrixRotationQuaternion(targetRotation) * XMMatrixTranslationFromVector(wrist);
+        moveSubtree(hand, XMMatrixInverse(nullptr, palm) * desired);
+    }
+    TryGetBoneModelTransform(animation, hand, palm);
+    animation.leftHandIKError = XMVectorGetX(XMVector3Length(XMVectorSubtract(palm.r[3], target.r[3])));
     return true;
 }

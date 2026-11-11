@@ -1,189 +1,22 @@
 {
     "objects": [
         {
+            "active": true,
             "entity_id": 0,
+            "has_navmesh_surface": true,
             "has_rigidbody": true,
             "id": 0,
-            "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\terrain1.glb",
-            "object_name": "Object",
+            "invulnerable": false,
+            "model_path": "assets/model/plane.obj",
+            "navmesh_surface_enabled": true,
+            "object_name": "Combat Arena Floor",
             "position": {
                 "x": 0.0,
-                "y": 0.0,
+                "y": 2.0,
                 "z": 0.0
             },
             "rb_angular_damping": 0.800000011920929,
-            "rb_compound_elements": [],
-            "rb_enable_ccd": false,
-            "rb_friction": 0.0,
-            "rb_is_compound": false,
-            "rb_is_dynamic": false,
-            "rb_is_kinematic": false,
-            "rb_linear_damping": 0.699999988079071,
-            "rb_mass": 0.0,
-            "rb_shape_radius": 0.5,
-            "rb_shape_size": [
-                0.5,
-                0.5,
-                0.5
-            ],
-            "rb_shape_type": 6,
-            "rb_use_manual_size": false,
-            "rotation": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "shader_type": 14,
-            "terrain_ambient_boost": 1.0,
-            "terrain_brightness": 1.0,
-            "terrain_dirt_normal": "assets/terrain/textures/dirt_normal.jpg",
-            "terrain_dirt_texture": "assets/terrain/textures/dirt_base.jpg",
-            "terrain_grass_normal": "assets/terrain/textures/grass_normal.jpg",
-            "terrain_grass_texture": "assets/terrain/textures/grass_base.jpg",
-            "terrain_grass_variation_normal": "",
-            "terrain_grass_variation_texture": "assets/terrain/textures/grass_variation_base.jpg",
-            "terrain_mask_texture": "assets/terrain/masks/dirt_mask.png",
-            "terrain_min_xz": [
-                -50.0,
-                -50.0
-            ],
-            "terrain_normal_strength": 2.9000000953674316,
-            "terrain_size_xz": [
-                100.0,
-                100.0
-            ],
-            "terrain_tile_scale": 0.6499999761581421,
-            "terrain_variation_scale": 1.2649999856948853,
-            "terrain_variation_strength": 0.4000000059604645,
-            "texture_path": "assets/texture/stone.tga"
-        },
-        {
-            "entity_id": 1,
-            "id": 1,
-            "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\House\\Untitled.glb",
-            "object_name": "Object",
-            "position": {
-                "x": 56.70000076293945,
-                "y": 2.700000047683716,
-                "z": 22.799999237060547
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "shader_type": 13,
-            "texture_path": "assets/texture/stone.tga"
-        },
-        {
-            "entity_id": 3,
-            "id": 2,
-            "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\House\\Untitled.glb",
-            "object_name": "Object",
-            "position": {
-                "x": 65.4000015258789,
-                "y": 2.700000047683716,
-                "z": -1.2000000476837158
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 2.369999885559082,
-                "z": 0.0
-            },
-            "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "shader_type": 13,
-            "texture_path": "assets/texture/stone.tga"
-        },
-        {
-            "entity_id": 4,
-            "has_rigidbody": true,
-            "id": 3,
-            "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\House\\Untitled.glb",
-            "object_name": "Object",
-            "position": {
-                "x": 35.70000076293945,
-                "y": 2.700000047683716,
-                "z": 2.0999999046325684
-            },
-            "rb_angular_damping": 0.800000011920929,
-            "rb_compound_elements": [],
-            "rb_enable_ccd": false,
-            "rb_friction": 0.0,
-            "rb_is_compound": false,
-            "rb_is_dynamic": false,
-            "rb_is_kinematic": false,
-            "rb_linear_damping": 0.699999988079071,
-            "rb_mass": 0.0,
-            "rb_shape_radius": 0.5,
-            "rb_shape_size": [
-                0.5,
-                0.5,
-                0.5
-            ],
-            "rb_shape_type": 6,
-            "rb_use_manual_size": false,
-            "rotation": {
-                "x": 0.0,
-                "y": 0.0,
-                "z": 0.0
-            },
-            "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "shader_type": 13,
-            "texture_path": "assets/texture/stone.tga"
-        },
-        {
-            "entity_id": 6,
-            "id": 4,
-            "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\Player.glb",
-            "object_name": "Object",
-            "position": {
-                "x": 49.87869644165039,
-                "y": 2.656704902648926,
-                "z": -4.425988674163818
-            },
-            "rotation": {
-                "x": 0.0,
-                "y": 1.6728988885879517,
-                "z": 0.0
-            },
-            "scale": {
-                "x": 1.0,
-                "y": 1.0,
-                "z": 1.0
-            },
-            "shader_type": 13,
-            "texture_path": "assets/texture/stone.tga"
-        },
-        {
-            "entity_id": 7,
-            "has_rigidbody": true,
-            "id": 5,
-            "model_path": "C:\\Users\\Lakis\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\House\\Untitled_collision.glb",
-            "object_name": "Object",
-            "position": {
-                "x": 50.20000076293945,
-                "y": 2.5999999046325684,
-                "z": 0.0
-            },
-            "rb_angular_damping": 0.800000011920929,
+            "rb_collision_model_path": "",
             "rb_compound_elements": [],
             "rb_enable_ccd": false,
             "rb_friction": 0.0,
@@ -194,15 +27,451 @@
             "rb_mass": 0.0,
             "rb_shape_radius": 0.5,
             "rb_shape_size": [
-                2.958699941635132,
-                3.220248222351074,
-                4.440493583679199
+                6.533854007720947,
+                1.0041639804840088,
+                4.738900184631348
             ],
             "rb_shape_type": 6,
             "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
+            "rotation": {
+                "x": -0.0018045160686597228,
+                "y": -0.04788139462471008,
+                "z": -0.0020864156540483236
+            },
+            "scale": {
+                "x": 4.0,
+                "y": 1.0,
+                "z": 4.0
+            },
+            "shader_type": 3,
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "actions": [
+                {
+                    "enabled": true,
+                    "first_person_clip": "Kevin_Melee_Guard",
+                    "id": "unarmed_guard",
+                    "input": "Aim",
+                    "move_first_person_clip": "Kevin_Melee_Guard_Walk",
+                    "move_world_clip": "Kevin_Melee_Guard_Walk",
+                    "type": "hold_guard",
+                    "world_clip": "Kevin_Melee_Guard"
+                },
+                {
+                    "base_world_clip": "",
+                    "id": "unarmed_punch",
+                    "input": "PrimaryMouse",
+                    "requires_guard": true,
+                    "type": "weighted_punch"
+                }
+            ],
+            "active": true,
+            "animation_bindings": [
+                {
+                    "name": "Idle",
+                    "state": 0
+                },
+                {
+                    "name": "Walk",
+                    "state": 1
+                },
+                {
+                    "name": "Run",
+                    "state": 2
+                },
+                {
+                    "name": "Kevin_Aim_Rifle",
+                    "state": 3
+                },
+                {
+                    "name": "Kevin_Aim_Shoot_R",
+                    "state": 4
+                },
+                {
+                    "name": "",
+                    "state": 5
+                },
+                {
+                    "name": "Kevin_Walk_R_I",
+                    "state": 6
+                },
+                {
+                    "name": "Kevin_Idle_Gun_R_SoftSway",
+                    "state": 7
+                },
+                {
+                    "name": "Kevin_Punch.1",
+                    "state": 8
+                },
+                {
+                    "name": "Kevin_Pistol_Idle",
+                    "state": 9
+                },
+                {
+                    "name": "Kevin_Pistol_Walk",
+                    "state": 10
+                },
+                {
+                    "name": "Kevin_Pistol_Shot",
+                    "state": 11
+                },
+                {
+                    "name": "Kevin_Crouch_Idle",
+                    "state": 12
+                },
+                {
+                    "name": "Kevin_Crouch_Walk",
+                    "state": 13
+                },
+                {
+                    "name": "Kevin_Crouch_Pistol_Idle",
+                    "state": 14
+                },
+                {
+                    "name": "Kevin_Crouch_Pistol_Walk",
+                    "state": 15
+                },
+                {
+                    "name": "Kevin_Crouch_Rifle_Idle",
+                    "state": 16
+                },
+                {
+                    "name": "Kevin_Crouch_Rifle_Walk",
+                    "state": 17
+                },
+                {
+                    "name": "",
+                    "state": 18
+                },
+                {
+                    "name": "",
+                    "state": 19
+                },
+                {
+                    "name": "",
+                    "state": 20
+                }
+            ],
+            "animation_fist_keys": [
+                {
+                    "amount": 0.46000000834465027,
+                    "clip": "Kevin_Aim_Shoot_R",
+                    "right_hand": false,
+                    "time": 0.0,
+                    "variant": -1
+                }
+            ],
+            "animation_index": 9,
+            "animation_is_playing": true,
+            "animation_pose_keys": [
+                {
+                    "bone": "@CTRL_Hand_IK.L",
+                    "clip": "Kevin_Idle_Gun_R_SoftSway",
+                    "position": [
+                        0.23800000548362732,
+                        -0.14800000190734863,
+                        0.004000000189989805
+                    ],
+                    "rotation": [
+                        -8.75,
+                        33.5,
+                        68.25
+                    ],
+                    "time": 0.0,
+                    "variant": -1
+                },
+                {
+                    "bone": "mixamorig:LeftForeArm",
+                    "clip": "Kevin_Idle_Gun_R_SoftSway",
+                    "position": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "rotation": [
+                        8.5,
+                        -3.25,
+                        47.5
+                    ],
+                    "time": 0.0,
+                    "variant": -1
+                },
+                {
+                    "bone": "@CTRL_Elbow_Pole.L",
+                    "clip": "Kevin_Idle_Gun_R_SoftSway",
+                    "position": [
+                        0.4519999921321869,
+                        -0.20999999344348907,
+                        0.05999999865889549
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "time": 0.0,
+                    "variant": -1
+                }
+            ],
+            "animation_profile": "Kevin",
+            "animation_punch_variants": [
+                {
+                    "aim_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "arm_extension": 0.9200000166893005,
+                    "contact_phase": 0.44999998807907104,
+                    "elbow_pole_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "first_person_clip": "Kevin_Melee_Jab_L",
+                    "fist_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "hand_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "ik_end_phase": 1.0,
+                    "ik_start_phase": 0.0,
+                    "ik_strength": -1.0,
+                    "name": "Left jab",
+                    "right_hand": false,
+                    "weight": 1.9500000476837158,
+                    "world_clip": "Kevin_Melee_Jab_L"
+                },
+                {
+                    "aim_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "arm_extension": 0.9200000166893005,
+                    "contact_phase": 0.46000000834465027,
+                    "elbow_pole_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "first_person_clip": "Kevin_Melee_Cross_R",
+                    "fist_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "hand_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "ik_end_phase": 1.0,
+                    "ik_start_phase": 0.0,
+                    "ik_strength": -1.0,
+                    "name": "Right cross",
+                    "right_hand": true,
+                    "weight": 1.0,
+                    "world_clip": "Kevin_Melee_Cross_R"
+                }
+            ],
+            "animation_state": 0,
+            "animation_time": 3.0502371788024902,
+            "character_auto_center_offset": true,
+            "character_auto_step_cooldown": 0.10000000149011612,
+            "character_auto_step_delay": 0.05999999865889549,
+            "character_auto_step_down_probe": 0.07999999821186066,
+            "character_auto_step_duration": 0.11999999731779099,
+            "character_auto_step_enabled": true,
+            "character_auto_step_forward_probe": 0.14000000059604645,
+            "character_auto_step_height": 0.30000001192092896,
+            "character_auto_step_predictive": true,
+            "character_auto_step_progress_distance": 0.019999999552965164,
+            "character_auto_step_skin": 0.014999999664723873,
+            "character_clamp_step": true,
+            "character_dynamic_max_push_speed": 1.25,
+            "character_dynamic_max_pushable_mass": 100.0,
+            "character_dynamic_push_force": 120.0,
+            "character_dynamic_push_probe": 0.03999999910593033,
+            "character_fall_speed": 30.0,
+            "character_foot_clearance": 0.019999999552965164,
+            "character_force_y_axis": true,
+            "character_legacy_step": 1.0,
+            "character_legacy_step_replacement": 0.3499999940395355,
+            "character_manual_center_offset_y": 1.100000023841858,
+            "character_max_penetration_depth": 0.03999999910593033,
+            "character_maximum_step": 0.44999998807907104,
+            "character_migrate_legacy_step": true,
+            "character_minimum_step": 0.05000000074505806,
+            "character_push_dynamic_bodies": true,
+            "character_use_ghost_sweep": false,
+            "clip_speeds": [
+                {
+                    "clip": "Kevin_Melee_Guard_Walk",
+                    "speed": 1.600000023841858
+                },
+                {
+                    "clip": "Kevin_Melee_Jab_L",
+                    "speed": 1.350000023841858
+                },
+                {
+                    "clip": "Kevin_Melee_Cross_R",
+                    "speed": 1.25
+                },
+                {
+                    "clip": "Kevin_Melee_Hook_L",
+                    "speed": 1.25
+                },
+                {
+                    "clip": "Kevin_Melee_Uppercut_R",
+                    "speed": 1.25
+                },
+                {
+                    "clip": "Kevin_Melee_Guard",
+                    "speed": 5.0
+                }
+            ],
+            "controller_capsule_center_offset_y": 1.1200000047683716,
+            "controller_capsule_height": 1.399999976158142,
+            "controller_capsule_radius": 0.4000000059604645,
+            "controller_gravity": 15.0,
+            "controller_jump_speed": 6.0,
+            "controller_max_slope": 45.0,
+            "controller_step_height": 0.3499999940395355,
+            "crouch_pose": false,
+            "entity_id": 1,
+            "equipped_weapon": 2,
+            "first_person_clip_offsets": [
+                {
+                    "clip": "Kevin_Melee_Guard",
+                    "position": [
+                        -0.11999999731779099,
+                        0.23999999463558197,
+                        0.14000000059604645
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "variant": -1
+                },
+                {
+                    "clip": "Kevin_Melee_Guard_Walk",
+                    "position": [
+                        -0.11999999731779099,
+                        0.23999999463558197,
+                        0.14000000059604645
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "variant": -1
+                },
+                {
+                    "clip": "Kevin_Melee_Jab_L",
+                    "position": [
+                        -0.11999999731779099,
+                        0.23999999463558197,
+                        0.14000000059604645
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "variant": 0
+                },
+                {
+                    "clip": "Kevin_Melee_Cross_R",
+                    "position": [
+                        -0.11999999731779099,
+                        0.23999999463558197,
+                        0.14000000059604645
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "variant": 1
+                }
+            ],
+            "has_animation": true,
+            "has_character_controller": true,
+            "has_character_movement": true,
+            "has_character_physics_tuning": true,
+            "has_equipped_weapon": true,
+            "has_inventory": true,
+            "has_play_camera": true,
+            "has_player_component": true,
+            "has_player_tag": true,
+            "id": 1,
+            "inventory_active_slot": 0,
+            "inventory_slots": [
+                2,
+                4294967295,
+                4294967295
+            ],
+            "invulnerable": false,
+            "model_path": "C:\\Users\\karin\\OneDrive\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\Kevin_Combat_Game.glb",
+            "movement_current_speed": 0.0,
+            "movement_move_speed": 3.5,
+            "movement_rotation_speed": 5.0,
+            "movement_run_speed": 6.0,
+            "movement_walk_direction": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "object_name": "Object",
+            "play_camera_first_person_eye_offset": [
+                0.0,
+                2.0299999713897705,
+                0.15000000596046448
+            ],
+            "play_camera_render_distance": 100.0,
+            "play_camera_third_person_distance": 4.0,
+            "play_camera_third_person_target_offset": [
+                0.0,
+                1.5,
+                0.0
+            ],
+            "player_god_mode": false,
+            "player_health": 0.0,
+            "player_max_health": 100.0,
+            "player_max_oxygen": 100.0,
+            "player_max_stamina": 100.0,
+            "player_oxygen": 100.0,
+            "player_punch_contact_phase": 0.5,
+            "player_punch_contact_radius": 0.25,
+            "player_punch_damage": 10.0,
+            "player_punch_fist_offset": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "player_punch_fp_ik_strength": 1.0,
+            "player_punch_ik_strength": 1.0,
+            "player_punch_reach": 1.340000033378601,
+            "player_stamina": 100.0,
+            "position": {
+                "x": 0.009088011458516121,
+                "y": 3.002291202545166,
+                "z": -1.0905871391296387
+            },
             "rotation": {
                 "x": 0.0,
-                "y": 0.0,
+                "y": 3.1442108154296875,
                 "z": 0.0
             },
             "scale": {
@@ -211,36 +480,1643 @@
                 "z": 1.0
             },
             "shader_type": 13,
-            "texture_path": "assets/texture/stone.tga"
+            "texture_path": "",
+            "upper_body_root": "mixamorig:Spine"
         },
         {
-            "entity_id": 5,
-            "has_rigidbody": true,
-            "id": 6,
-            "model_path": "",
-            "object_name": "Collision",
+            "active": false,
+            "entity_id": 2,
+            "has_weapon": true,
+            "has_weapon_owner": true,
+            "has_weapon_pickup": true,
+            "id": 2,
+            "invulnerable": false,
+            "model_path": "assets/model/Rifle_M4_CC0.glb",
+            "object_name": "Rifle Pickup",
+            "pickup_collision_size": [
+                0.3499999940395355,
+                0.18000000715255737,
+                0.8999999761581421
+            ],
+            "pickup_create_physics_on_drop": true,
+            "pickup_drop_mass": 1.5,
+            "pickup_enabled": false,
+            "pickup_equip_on_pickup": true,
+            "pickup_prompt": "Pick up rifle",
             "position": {
-                "x": 34.70000076293945,
-                "y": 9.899999618530273,
-                "z": 3.299999952316284
+                "x": 0.5911483764648438,
+                "y": 3.1691274642944336,
+                "z": 0.5379655361175537
             },
-            "rb_angular_damping": 0.800000011920929,
+            "rotation": {
+                "x": -0.04052847623825073,
+                "y": 0.27930018305778503,
+                "z": -0.3202483355998993
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shader_type": 3,
+            "texture_path": "",
+            "weapon_ballistics": {
+                "flash_enabled": true,
+                "flash_scale": 1.0,
+                "max_recoil": 3.0,
+                "moving_multiplier": 2.5,
+                "recoil_per_shot": 0.3499999940395355,
+                "recoil_recovery": 4.0,
+                "spread_degrees": 1.5
+            },
+            "weapon_breach_radius": 0.6499999761581421,
+            "weapon_damage": 10.0,
+            "weapon_enable_left_hand_ik": true,
+            "weapon_fire_rate": 5.0,
+            "weapon_fp_enable_left_hand_ik": true,
+            "weapon_fp_grip_pivot": [
+                0.05000000074505806,
+                0.4320000112056732,
+                0.0
+            ],
+            "weapon_fp_grip_position": [
+                0.3281214237213135,
+                -0.3015154004096985,
+                0.08232640475034714
+            ],
+            "weapon_fp_grip_rotation": [
+                -1.6137309074401855,
+                0.14756757020950317,
+                -2.032104253768921
+            ],
+            "weapon_fp_grip_scale": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "weapon_fp_left_hand_grip": [
+                -0.13600000739097595,
+                0.07400000095367432,
+                0.15922310948371887
+            ],
+            "weapon_fp_left_hand_rotation": [
+                1.7178995609283447,
+                1.2867612838745117,
+                0.3035855293273926
+            ],
+            "weapon_fp_pitch_offset": 0.0,
+            "weapon_fp_pitch_scale": 1.0,
+            "weapon_grip_profile": "Kevin_M4_3P",
+            "weapon_left_forearm_bone": "mixamorig:LeftForeArm",
+            "weapon_left_hand_bone": "mixamorig:LeftHand",
+            "weapon_left_hand_grip": [
+                -0.13039180636405945,
+                0.07605255395174026,
+                0.26683247089385986
+            ],
+            "weapon_left_hand_rotation": [
+                1.7256410121917725,
+                2.108236312866211,
+                0.8078575134277344
+            ],
+            "weapon_left_upper_arm_bone": "mixamorig:LeftArm",
+            "weapon_muzzle_position": [
+                0.0,
+                0.10999999940395355,
+                0.6069999933242798
+            ],
+            "weapon_owner": 1,
+            "weapon_pistol_pose": false,
+            "weapon_range": 100.0,
+            "weapon_rifle_gun_animation": "Kevin_Aim_Shoot_R",
+            "weapon_rifle_idle_animation": "Kevin_Aim_Rifle",
+            "weapon_right_hand_bone": "mixamorig:RightHand",
+            "weapon_show_fp_visual": true,
+            "weapon_show_world_visual": true,
+            "weapon_type": 0,
+            "weapon_visual_model": "assets/model/Rifle_M4_CC0.glb",
+            "weapon_world_grip_pivot": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "weapon_world_grip_position": [
+                0.041999999433755875,
+                0.09300000220537186,
+                -0.017999999225139618
+            ],
+            "weapon_world_grip_rotation": [
+                -1.4013092517852783,
+                2.861553430557251,
+                1.5676206350326538
+            ],
+            "weapon_world_grip_scale": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ]
+        },
+        {
+            "actions": [
+                {
+                    "enabled": true,
+                    "first_person_clip": "Kevin_Melee_Guard",
+                    "id": "unarmed_guard",
+                    "input": "Aim",
+                    "move_first_person_clip": "Kevin_Melee_Guard_Walk",
+                    "move_world_clip": "Kevin_Melee_Guard_Walk",
+                    "type": "hold_guard",
+                    "world_clip": "Kevin_Melee_Guard"
+                },
+                {
+                    "base_world_clip": "",
+                    "id": "unarmed_punch",
+                    "input": "PrimaryMouse",
+                    "requires_guard": true,
+                    "type": "weighted_punch"
+                }
+            ],
+            "active": true,
+            "animation_bindings": [
+                {
+                    "name": "Idle",
+                    "state": 0
+                },
+                {
+                    "name": "Walk",
+                    "state": 1
+                },
+                {
+                    "name": "Run",
+                    "state": 2
+                },
+                {
+                    "name": "Kevin_Aim_Rifle",
+                    "state": 3
+                },
+                {
+                    "name": "Kevin_Aim_Shoot_R",
+                    "state": 4
+                },
+                {
+                    "name": "",
+                    "state": 5
+                },
+                {
+                    "name": "Kevin_Walk_R_I",
+                    "state": 6
+                },
+                {
+                    "name": "Kevin_Idle_Gun_R_SoftSway",
+                    "state": 7
+                },
+                {
+                    "name": "Kevin_Punch.1",
+                    "state": 8
+                },
+                {
+                    "name": "Kevin_Pistol_Idle",
+                    "state": 9
+                },
+                {
+                    "name": "Kevin_Pistol_Walk",
+                    "state": 10
+                },
+                {
+                    "name": "Kevin_Pistol_Shot",
+                    "state": 11
+                },
+                {
+                    "name": "Kevin_Crouch_Idle",
+                    "state": 12
+                },
+                {
+                    "name": "Kevin_Crouch_Walk",
+                    "state": 13
+                },
+                {
+                    "name": "Kevin_Crouch_Pistol_Idle",
+                    "state": 14
+                },
+                {
+                    "name": "Kevin_Crouch_Pistol_Walk",
+                    "state": 15
+                },
+                {
+                    "name": "Kevin_Crouch_Rifle_Idle",
+                    "state": 16
+                },
+                {
+                    "name": "Kevin_Crouch_Rifle_Walk",
+                    "state": 17
+                },
+                {
+                    "name": "",
+                    "state": 18
+                },
+                {
+                    "name": "",
+                    "state": 19
+                },
+                {
+                    "name": "",
+                    "state": 20
+                }
+            ],
+            "animation_fist_keys": [],
+            "animation_index": 9,
+            "animation_is_playing": true,
+            "animation_pose_keys": [],
+            "animation_profile": "Kevin",
+            "animation_punch_variants": [
+                {
+                    "aim_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "arm_extension": 0.9200000166893005,
+                    "contact_phase": 0.44999998807907104,
+                    "elbow_pole_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "first_person_clip": "Kevin_Melee_Jab_L",
+                    "fist_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "hand_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "ik_end_phase": 1.0,
+                    "ik_start_phase": 0.0,
+                    "ik_strength": -1.0,
+                    "name": "Left jab",
+                    "right_hand": false,
+                    "weight": 1.9500000476837158,
+                    "world_clip": "Kevin_Melee_Jab_L"
+                },
+                {
+                    "aim_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "arm_extension": 0.9200000166893005,
+                    "contact_phase": 0.46000000834465027,
+                    "elbow_pole_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "first_person_clip": "Kevin_Melee_Cross_R",
+                    "fist_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "hand_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "ik_end_phase": 1.0,
+                    "ik_start_phase": 0.0,
+                    "ik_strength": -1.0,
+                    "name": "Right cross",
+                    "right_hand": true,
+                    "weight": 1.0,
+                    "world_clip": "Kevin_Melee_Cross_R"
+                }
+            ],
+            "animation_state": 0,
+            "animation_time": 3.0502371788024902,
+            "clip_speeds": [
+                {
+                    "clip": "Kevin_Melee_Guard_Walk",
+                    "speed": 1.600000023841858
+                },
+                {
+                    "clip": "Kevin_Melee_Jab_L",
+                    "speed": 1.350000023841858
+                },
+                {
+                    "clip": "Kevin_Melee_Cross_R",
+                    "speed": 1.25
+                },
+                {
+                    "clip": "Kevin_Melee_Hook_L",
+                    "speed": 1.25
+                },
+                {
+                    "clip": "Kevin_Melee_Uppercut_R",
+                    "speed": 1.25
+                },
+                {
+                    "clip": "Kevin_Melee_Guard",
+                    "speed": 5.0
+                }
+            ],
+            "crouch_pose": false,
+            "entity_id": 3,
+            "first_person_camera_offset": [
+                0.019999999552965164,
+                -2.059999942779541,
+                -0.07000000029802322
+            ],
+            "first_person_clip_offsets": [
+                {
+                    "clip": "Kevin_Melee_Guard",
+                    "position": [
+                        -0.11999999731779099,
+                        0.23999999463558197,
+                        0.14000000059604645
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "variant": -1
+                },
+                {
+                    "clip": "Kevin_Melee_Guard_Walk",
+                    "position": [
+                        -0.11999999731779099,
+                        0.23999999463558197,
+                        0.14000000059604645
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "variant": -1
+                },
+                {
+                    "clip": "Kevin_Melee_Jab_L",
+                    "position": [
+                        -0.11999999731779099,
+                        0.23999999463558197,
+                        0.14000000059604645
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "variant": 0
+                },
+                {
+                    "clip": "Kevin_Melee_Cross_R",
+                    "position": [
+                        -0.11999999731779099,
+                        0.23999999463558197,
+                        0.14000000059604645
+                    ],
+                    "rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "variant": 1
+                }
+            ],
+            "first_person_follow_camera": true,
+            "first_person_hide_owner": true,
+            "first_person_look_down_limit": 70.0,
+            "first_person_look_up_limit": 65.0,
+            "first_person_owner": 1,
+            "first_person_pitch_offset": 0.0,
+            "first_person_pitch_scale": 1.0,
+            "first_person_rotation_offset": [
+                0.0,
+                3.1415927410125732,
+                0.0
+            ],
+            "first_person_scale": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "first_person_sync_animation": true,
+            "has_animation": true,
+            "has_first_person_view": true,
+            "id": 3,
+            "invulnerable": false,
+            "model_path": "assets/model/Kevin_Combat_FP.glb",
+            "object_name": "Kevin FP Arms",
+            "position": {
+                "x": 7.570526123046875,
+                "y": 3.99288272857666,
+                "z": 8.165236473083496
+            },
+            "rotation": {
+                "x": -0.39706262946128845,
+                "y": 8.23620891571045,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shader_type": 13,
+            "texture_path": "",
+            "upper_body_root": "mixamorig:Spine"
+        },
+        {
+            "actions": [
+                {
+                    "enabled": true,
+                    "first_person_clip": "Kevin_Melee_Guard",
+                    "id": "unarmed_guard",
+                    "input": "Aim",
+                    "move_first_person_clip": "",
+                    "move_world_clip": "",
+                    "type": "hold_guard",
+                    "world_clip": "Kevin_Melee_Guard"
+                },
+                {
+                    "base_world_clip": "Kevin_Melee_Guard",
+                    "id": "unarmed_punch",
+                    "input": "PrimaryMouse",
+                    "requires_guard": true,
+                    "type": "weighted_punch"
+                }
+            ],
+            "active": true,
+            "animation_bindings": [
+                {
+                    "name": "Idle",
+                    "state": 0
+                },
+                {
+                    "name": "Walk",
+                    "state": 1
+                },
+                {
+                    "name": "Run",
+                    "state": 2
+                },
+                {
+                    "name": "",
+                    "state": 3
+                },
+                {
+                    "name": "",
+                    "state": 4
+                },
+                {
+                    "name": "",
+                    "state": 5
+                },
+                {
+                    "name": "Kevin_Walk_R_I",
+                    "state": 6
+                },
+                {
+                    "name": "Kevin_Idle_Gun_R_SoftSway",
+                    "state": 7
+                },
+                {
+                    "name": "Kevin_Punch.1",
+                    "state": 8
+                },
+                {
+                    "name": "Kevin_Pistol_Idle",
+                    "state": 9
+                },
+                {
+                    "name": "Kevin_Pistol_Walk",
+                    "state": 10
+                },
+                {
+                    "name": "Kevin_Pistol_Shot",
+                    "state": 11
+                },
+                {
+                    "name": "Kevin_Crouch_Idle",
+                    "state": 12
+                },
+                {
+                    "name": "Kevin_Crouch_Walk",
+                    "state": 13
+                },
+                {
+                    "name": "Kevin_Crouch_Pistol_Idle",
+                    "state": 14
+                },
+                {
+                    "name": "Kevin_Crouch_Pistol_Walk",
+                    "state": 15
+                },
+                {
+                    "name": "Kevin_Crouch_Rifle_Idle",
+                    "state": 16
+                },
+                {
+                    "name": "Kevin_Crouch_Rifle_Walk",
+                    "state": 17
+                },
+                {
+                    "name": "",
+                    "state": 18
+                },
+                {
+                    "name": "",
+                    "state": 19
+                },
+                {
+                    "name": "",
+                    "state": 20
+                }
+            ],
+            "animation_fist_keys": [],
+            "animation_index": 8,
+            "animation_is_playing": true,
+            "animation_pose_keys": [],
+            "animation_profile": "NPC",
+            "animation_punch_variants": [
+                {
+                    "aim_offset": [
+                        -0.0560000017285347,
+                        1.0,
+                        0.0
+                    ],
+                    "arm_extension": 0.9399999976158142,
+                    "contact_phase": -1.0,
+                    "elbow_pole_offset": [
+                        0.25999999046325684,
+                        -0.3100000023841858,
+                        -1.0
+                    ],
+                    "first_person_clip": "",
+                    "fist_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "hand_rotation": [
+                        87.75,
+                        14.5,
+                        -64.0
+                    ],
+                    "ik_end_phase": 1.0,
+                    "ik_start_phase": 0.0,
+                    "ik_strength": -1.0,
+                    "name": "Left jab",
+                    "right_hand": false,
+                    "weight": 1.0,
+                    "world_clip": "Kevin_Melee_Jab_L"
+                },
+                {
+                    "aim_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "arm_extension": 0.9200000166893005,
+                    "contact_phase": -1.0,
+                    "elbow_pole_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "first_person_clip": "",
+                    "fist_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "hand_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "ik_end_phase": 1.0,
+                    "ik_start_phase": 0.0,
+                    "ik_strength": -1.0,
+                    "name": "Right cross",
+                    "right_hand": true,
+                    "weight": 1.0,
+                    "world_clip": "Kevin_Melee_Cross_R"
+                }
+            ],
+            "animation_state": 0,
+            "animation_time": 1.781462550163269,
+            "character_auto_center_offset": true,
+            "character_auto_step_cooldown": 0.10000000149011612,
+            "character_auto_step_delay": 0.05999999865889549,
+            "character_auto_step_down_probe": 0.07999999821186066,
+            "character_auto_step_duration": 0.11999999731779099,
+            "character_auto_step_enabled": true,
+            "character_auto_step_forward_probe": 0.14000000059604645,
+            "character_auto_step_height": 0.30000001192092896,
+            "character_auto_step_predictive": true,
+            "character_auto_step_progress_distance": 0.019999999552965164,
+            "character_auto_step_skin": 0.014999999664723873,
+            "character_clamp_step": true,
+            "character_dynamic_max_push_speed": 1.25,
+            "character_dynamic_max_pushable_mass": 100.0,
+            "character_dynamic_push_force": 120.0,
+            "character_dynamic_push_probe": 0.03999999910593033,
+            "character_fall_speed": 30.0,
+            "character_foot_clearance": 0.019999999552965164,
+            "character_force_y_axis": true,
+            "character_legacy_step": 1.0,
+            "character_legacy_step_replacement": 0.3499999940395355,
+            "character_manual_center_offset_y": 1.100000023841858,
+            "character_max_penetration_depth": 0.03999999910593033,
+            "character_maximum_step": 0.44999998807907104,
+            "character_migrate_legacy_step": true,
+            "character_minimum_step": 0.05000000074505806,
+            "character_push_dynamic_bodies": true,
+            "character_use_ghost_sweep": false,
+            "clip_speeds": [],
+            "controller_capsule_center_offset_y": 1.1200000047683716,
+            "controller_capsule_height": 1.399999976158142,
+            "controller_capsule_radius": 0.4000000059604645,
+            "controller_gravity": 15.0,
+            "controller_jump_speed": 6.0,
+            "controller_max_slope": 45.0,
+            "controller_step_height": 0.3499999940395355,
+            "crew_on_duty": true,
+            "crew_repair_skill": 1.0,
+            "crew_role": 0,
+            "crouch_pose": false,
+            "entity_id": 4,
+            "equipped_weapon": 5,
+            "first_person_clip_offsets": [],
+            "has_animation": true,
+            "has_character_controller": true,
+            "has_character_movement": true,
+            "has_character_physics_tuning": true,
+            "has_crew_member": true,
+            "has_equipped_weapon": true,
+            "has_inventory": true,
+            "has_npc": true,
+            "has_npc_combat": true,
+            "has_npc_tactical": true,
+            "id": 4,
+            "inventory_active_slot": 0,
+            "inventory_slots": [
+                5,
+                4294967295,
+                4294967295
+            ],
+            "invulnerable": true,
+            "model_path": "C:\\Users\\karin\\OneDrive\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\Kevin_Combat_Game.glb",
+            "movement_current_speed": 0.0,
+            "movement_move_speed": 2.0,
+            "movement_rotation_speed": 5.0,
+            "movement_run_speed": 4.5,
+            "movement_walk_direction": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "npc_allow_running": true,
+            "npc_arrival_distance": 0.44999998807907104,
+            "npc_can_fly": false,
+            "npc_combat_attack_cooldown": 1.0,
+            "npc_combat_attack_range": 1.5,
+            "npc_combat_chase_resume_margin": 0.3499999940395355,
+            "npc_combat_field_of_view": 150.0,
+            "npc_combat_lose_target_delay": 7.0,
+            "npc_combat_max_prediction_distance": 3.0,
+            "npc_combat_prediction_seconds": 0.800000011920929,
+            "npc_combat_prediction_travel_timeout": 6.0,
+            "npc_combat_ranged_aim_delay": 0.30000001192092896,
+            "npc_combat_ranged_attack_range": 24.0,
+            "npc_combat_see_range": 35.0,
+            "npc_combat_stance_enter_delay": 0.30000001192092896,
+            "npc_description": "",
+            "npc_detection_range": 30.0,
+            "npc_door_open_distance": 2.25,
+            "npc_door_wait_distance": 1.25,
+            "npc_health": 100.0,
+            "npc_hostile": true,
+            "npc_max_health": 100.0,
+            "npc_name": "Tactical NPC 1",
+            "npc_patrol_allow_running": false,
+            "npc_patrol_arrival_distance": 0.44999998807907104,
+            "npc_patrol_default_wait": 1.0,
+            "npc_patrol_enabled": false,
+            "npc_patrol_loop": true,
+            "npc_patrol_ping_pong": false,
+            "npc_patrol_route_id": 1,
+            "npc_repair_distance": 1.0,
+            "npc_repair_duration": 3.0,
+            "npc_repath_interval": 0.75,
+            "npc_run_distance": 8.0,
+            "npc_run_speed": 4.5,
+            "npc_speed": 2.0,
+            "npc_squad_id": 1,
+            "npc_stuck_timeout": 2.0,
+            "npc_tactical_decision_interval": 0.4000000059604645,
+            "npc_tactical_expose_duration": 0.8999999761581421,
+            "npc_tactical_flank_weight": 1.5,
+            "npc_tactical_hide_duration": 1.0,
+            "npc_tactical_preferred_range": 10.0,
+            "npc_wander_radius": 4.0,
+            "object_name": "Arena Squad NPC 1",
+            "position": {
+                "x": -5.0,
+                "y": 3.032045364379883,
+                "z": 10.0
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": -1.570794939994812,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shader_type": 13,
+            "texture_path": "",
+            "upper_body_root": "mixamorig:Spine"
+        },
+        {
+            "active": false,
+            "entity_id": 5,
+            "has_weapon": true,
+            "has_weapon_owner": true,
+            "has_weapon_pickup": true,
+            "id": 5,
+            "invulnerable": false,
+            "model_path": "assets/model/Rifle_M4_CC0.glb",
+            "object_name": "NPC Rifle 1",
+            "pickup_collision_size": [
+                0.3499999940395355,
+                0.18000000715255737,
+                0.8999999761581421
+            ],
+            "pickup_create_physics_on_drop": true,
+            "pickup_drop_mass": 1.5,
+            "pickup_enabled": false,
+            "pickup_equip_on_pickup": true,
+            "pickup_prompt": "Pick up rifle",
+            "position": {
+                "x": 0.5911483764648438,
+                "y": 3.1691274642944336,
+                "z": 0.5379655361175537
+            },
+            "rotation": {
+                "x": -0.04052847623825073,
+                "y": 0.27930018305778503,
+                "z": -0.3202483355998993
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shader_type": 3,
+            "texture_path": "",
+            "weapon_ballistics": {
+                "flash_enabled": true,
+                "flash_scale": 1.0,
+                "max_recoil": 3.0,
+                "moving_multiplier": 2.5,
+                "recoil_per_shot": 0.3499999940395355,
+                "recoil_recovery": 4.0,
+                "spread_degrees": 1.5
+            },
+            "weapon_breach_radius": 0.6499999761581421,
+            "weapon_damage": 8.0,
+            "weapon_enable_left_hand_ik": true,
+            "weapon_fire_rate": 3.5,
+            "weapon_fp_enable_left_hand_ik": true,
+            "weapon_fp_grip_pivot": [
+                0.05000000074505806,
+                0.4320000112056732,
+                0.0
+            ],
+            "weapon_fp_grip_position": [
+                0.3281214237213135,
+                -0.3015154004096985,
+                0.08232640475034714
+            ],
+            "weapon_fp_grip_rotation": [
+                -1.6137309074401855,
+                0.14756757020950317,
+                -2.032104253768921
+            ],
+            "weapon_fp_grip_scale": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "weapon_fp_left_hand_grip": [
+                -0.13600000739097595,
+                0.07400000095367432,
+                0.15922310948371887
+            ],
+            "weapon_fp_left_hand_rotation": [
+                1.7178995609283447,
+                1.2867612838745117,
+                0.3035855293273926
+            ],
+            "weapon_fp_pitch_offset": 0.0,
+            "weapon_fp_pitch_scale": 1.0,
+            "weapon_grip_profile": "Kevin_M4_3P",
+            "weapon_left_forearm_bone": "mixamorig:LeftForeArm",
+            "weapon_left_hand_bone": "mixamorig:LeftHand",
+            "weapon_left_hand_grip": [
+                -0.13039180636405945,
+                0.07605255395174026,
+                0.26683247089385986
+            ],
+            "weapon_left_hand_rotation": [
+                1.7256410121917725,
+                2.108236312866211,
+                0.8078575134277344
+            ],
+            "weapon_left_upper_arm_bone": "mixamorig:LeftArm",
+            "weapon_muzzle_position": [
+                0.0,
+                0.10999999940395355,
+                0.6069999933242798
+            ],
+            "weapon_owner": 4,
+            "weapon_pistol_pose": false,
+            "weapon_range": 35.0,
+            "weapon_rifle_gun_animation": "Kevin_Aim_Shoot_R",
+            "weapon_rifle_idle_animation": "Kevin_Aim_Rifle",
+            "weapon_right_hand_bone": "mixamorig:RightHand",
+            "weapon_show_fp_visual": true,
+            "weapon_show_world_visual": true,
+            "weapon_type": 0,
+            "weapon_visual_model": "assets/model/Rifle_M4_CC0.glb",
+            "weapon_world_grip_pivot": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "weapon_world_grip_position": [
+                0.041999999433755875,
+                0.09300000220537186,
+                -0.017999999225139618
+            ],
+            "weapon_world_grip_rotation": [
+                -1.4013092517852783,
+                2.861553430557251,
+                1.5676206350326538
+            ],
+            "weapon_world_grip_scale": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ]
+        },
+        {
+            "actions": [
+                {
+                    "enabled": true,
+                    "first_person_clip": "Kevin_Melee_Guard",
+                    "id": "unarmed_guard",
+                    "input": "Aim",
+                    "move_first_person_clip": "",
+                    "move_world_clip": "",
+                    "type": "hold_guard",
+                    "world_clip": "Kevin_Melee_Guard"
+                },
+                {
+                    "base_world_clip": "Kevin_Melee_Guard",
+                    "id": "unarmed_punch",
+                    "input": "PrimaryMouse",
+                    "requires_guard": true,
+                    "type": "weighted_punch"
+                }
+            ],
+            "active": true,
+            "animation_bindings": [
+                {
+                    "name": "Idle",
+                    "state": 0
+                },
+                {
+                    "name": "Walk",
+                    "state": 1
+                },
+                {
+                    "name": "Run",
+                    "state": 2
+                },
+                {
+                    "name": "",
+                    "state": 3
+                },
+                {
+                    "name": "",
+                    "state": 4
+                },
+                {
+                    "name": "",
+                    "state": 5
+                },
+                {
+                    "name": "Kevin_Walk_R_I",
+                    "state": 6
+                },
+                {
+                    "name": "Kevin_Idle_Gun_R_SoftSway",
+                    "state": 7
+                },
+                {
+                    "name": "Kevin_Punch.1",
+                    "state": 8
+                },
+                {
+                    "name": "Kevin_Pistol_Idle",
+                    "state": 9
+                },
+                {
+                    "name": "Kevin_Pistol_Walk",
+                    "state": 10
+                },
+                {
+                    "name": "Kevin_Pistol_Shot",
+                    "state": 11
+                },
+                {
+                    "name": "Kevin_Crouch_Idle",
+                    "state": 12
+                },
+                {
+                    "name": "Kevin_Crouch_Walk",
+                    "state": 13
+                },
+                {
+                    "name": "Kevin_Crouch_Pistol_Idle",
+                    "state": 14
+                },
+                {
+                    "name": "Kevin_Crouch_Pistol_Walk",
+                    "state": 15
+                },
+                {
+                    "name": "Kevin_Crouch_Rifle_Idle",
+                    "state": 16
+                },
+                {
+                    "name": "Kevin_Crouch_Rifle_Walk",
+                    "state": 17
+                },
+                {
+                    "name": "",
+                    "state": 18
+                },
+                {
+                    "name": "",
+                    "state": 19
+                },
+                {
+                    "name": "",
+                    "state": 20
+                }
+            ],
+            "animation_fist_keys": [],
+            "animation_index": 8,
+            "animation_is_playing": true,
+            "animation_pose_keys": [],
+            "animation_profile": "NPC",
+            "animation_punch_variants": [
+                {
+                    "aim_offset": [
+                        -0.0560000017285347,
+                        1.0,
+                        0.0
+                    ],
+                    "arm_extension": 0.9399999976158142,
+                    "contact_phase": -1.0,
+                    "elbow_pole_offset": [
+                        0.25999999046325684,
+                        -0.3100000023841858,
+                        -1.0
+                    ],
+                    "first_person_clip": "",
+                    "fist_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "hand_rotation": [
+                        87.75,
+                        14.5,
+                        -64.0
+                    ],
+                    "ik_end_phase": 1.0,
+                    "ik_start_phase": 0.0,
+                    "ik_strength": -1.0,
+                    "name": "Left jab",
+                    "right_hand": false,
+                    "weight": 1.0,
+                    "world_clip": "Kevin_Melee_Jab_L"
+                },
+                {
+                    "aim_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "arm_extension": 0.9200000166893005,
+                    "contact_phase": -1.0,
+                    "elbow_pole_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "first_person_clip": "",
+                    "fist_offset": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "hand_rotation": [
+                        0.0,
+                        0.0,
+                        0.0
+                    ],
+                    "ik_end_phase": 1.0,
+                    "ik_start_phase": 0.0,
+                    "ik_strength": -1.0,
+                    "name": "Right cross",
+                    "right_hand": true,
+                    "weight": 1.0,
+                    "world_clip": "Kevin_Melee_Cross_R"
+                }
+            ],
+            "animation_state": 0,
+            "animation_time": 1.781462550163269,
+            "character_auto_center_offset": true,
+            "character_auto_step_cooldown": 0.10000000149011612,
+            "character_auto_step_delay": 0.05999999865889549,
+            "character_auto_step_down_probe": 0.07999999821186066,
+            "character_auto_step_duration": 0.11999999731779099,
+            "character_auto_step_enabled": true,
+            "character_auto_step_forward_probe": 0.14000000059604645,
+            "character_auto_step_height": 0.30000001192092896,
+            "character_auto_step_predictive": true,
+            "character_auto_step_progress_distance": 0.019999999552965164,
+            "character_auto_step_skin": 0.014999999664723873,
+            "character_clamp_step": true,
+            "character_dynamic_max_push_speed": 1.25,
+            "character_dynamic_max_pushable_mass": 100.0,
+            "character_dynamic_push_force": 120.0,
+            "character_dynamic_push_probe": 0.03999999910593033,
+            "character_fall_speed": 30.0,
+            "character_foot_clearance": 0.019999999552965164,
+            "character_force_y_axis": true,
+            "character_legacy_step": 1.0,
+            "character_legacy_step_replacement": 0.3499999940395355,
+            "character_manual_center_offset_y": 1.100000023841858,
+            "character_max_penetration_depth": 0.03999999910593033,
+            "character_maximum_step": 0.44999998807907104,
+            "character_migrate_legacy_step": true,
+            "character_minimum_step": 0.05000000074505806,
+            "character_push_dynamic_bodies": true,
+            "character_use_ghost_sweep": false,
+            "clip_speeds": [],
+            "controller_capsule_center_offset_y": 1.1200000047683716,
+            "controller_capsule_height": 1.399999976158142,
+            "controller_capsule_radius": 0.4000000059604645,
+            "controller_gravity": 15.0,
+            "controller_jump_speed": 6.0,
+            "controller_max_slope": 45.0,
+            "controller_step_height": 0.3499999940395355,
+            "crew_on_duty": true,
+            "crew_repair_skill": 1.0,
+            "crew_role": 0,
+            "crouch_pose": false,
+            "entity_id": 6,
+            "equipped_weapon": 7,
+            "first_person_clip_offsets": [],
+            "has_animation": true,
+            "has_character_controller": true,
+            "has_character_movement": true,
+            "has_character_physics_tuning": true,
+            "has_crew_member": true,
+            "has_equipped_weapon": true,
+            "has_inventory": true,
+            "has_npc": true,
+            "has_npc_combat": true,
+            "has_npc_tactical": true,
+            "id": 6,
+            "inventory_active_slot": 0,
+            "inventory_slots": [
+                7,
+                4294967295,
+                4294967295
+            ],
+            "invulnerable": true,
+            "model_path": "C:\\Users\\karin\\OneDrive\\Desktop\\DX_FrameWork\\DX_FrameWork\\assets\\model\\Kevin_Combat_Game.glb",
+            "movement_current_speed": 0.0,
+            "movement_move_speed": 2.0,
+            "movement_rotation_speed": 5.0,
+            "movement_run_speed": 4.5,
+            "movement_walk_direction": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "npc_allow_running": true,
+            "npc_arrival_distance": 0.44999998807907104,
+            "npc_can_fly": false,
+            "npc_combat_attack_cooldown": 1.0,
+            "npc_combat_attack_range": 1.5,
+            "npc_combat_chase_resume_margin": 0.3499999940395355,
+            "npc_combat_field_of_view": 150.0,
+            "npc_combat_lose_target_delay": 7.0,
+            "npc_combat_max_prediction_distance": 3.0,
+            "npc_combat_prediction_seconds": 0.800000011920929,
+            "npc_combat_prediction_travel_timeout": 6.0,
+            "npc_combat_ranged_aim_delay": 0.30000001192092896,
+            "npc_combat_ranged_attack_range": 24.0,
+            "npc_combat_see_range": 35.0,
+            "npc_combat_stance_enter_delay": 0.30000001192092896,
+            "npc_description": "",
+            "npc_detection_range": 30.0,
+            "npc_door_open_distance": 2.25,
+            "npc_door_wait_distance": 1.25,
+            "npc_health": 100.0,
+            "npc_hostile": true,
+            "npc_max_health": 100.0,
+            "npc_name": "Tactical NPC 2",
+            "npc_patrol_allow_running": false,
+            "npc_patrol_arrival_distance": 0.44999998807907104,
+            "npc_patrol_default_wait": 1.0,
+            "npc_patrol_enabled": false,
+            "npc_patrol_loop": true,
+            "npc_patrol_ping_pong": false,
+            "npc_patrol_route_id": 2,
+            "npc_repair_distance": 1.0,
+            "npc_repair_duration": 3.0,
+            "npc_repath_interval": 0.75,
+            "npc_run_distance": 8.0,
+            "npc_run_speed": 4.5,
+            "npc_speed": 2.0,
+            "npc_squad_id": 1,
+            "npc_stuck_timeout": 2.0,
+            "npc_tactical_decision_interval": 0.4000000059604645,
+            "npc_tactical_expose_duration": 0.6499999761581421,
+            "npc_tactical_flank_weight": 4.0,
+            "npc_tactical_hide_duration": 1.399999976158142,
+            "npc_tactical_preferred_range": 10.0,
+            "npc_wander_radius": 4.0,
+            "object_name": "Arena Squad NPC 2",
+            "position": {
+                "x": 5.000017166137695,
+                "y": 3.0103416442871094,
+                "z": 9.99998664855957
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 1.5707978010177612,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shader_type": 13,
+            "texture_path": "",
+            "upper_body_root": "mixamorig:Spine"
+        },
+        {
+            "active": false,
+            "entity_id": 7,
+            "has_weapon": true,
+            "has_weapon_owner": true,
+            "has_weapon_pickup": true,
+            "id": 7,
+            "invulnerable": false,
+            "model_path": "assets/model/Rifle_M4_CC0.glb",
+            "object_name": "NPC Rifle 2",
+            "pickup_collision_size": [
+                0.3499999940395355,
+                0.18000000715255737,
+                0.8999999761581421
+            ],
+            "pickup_create_physics_on_drop": true,
+            "pickup_drop_mass": 1.5,
+            "pickup_enabled": false,
+            "pickup_equip_on_pickup": true,
+            "pickup_prompt": "Pick up rifle",
+            "position": {
+                "x": 0.5911483764648438,
+                "y": 3.1691274642944336,
+                "z": 0.5379655361175537
+            },
+            "rotation": {
+                "x": -0.04052847623825073,
+                "y": 0.27930018305778503,
+                "z": -0.3202483355998993
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "shader_type": 3,
+            "texture_path": "",
+            "weapon_ballistics": {
+                "flash_enabled": true,
+                "flash_scale": 1.0,
+                "max_recoil": 3.0,
+                "moving_multiplier": 2.5,
+                "recoil_per_shot": 0.3499999940395355,
+                "recoil_recovery": 4.0,
+                "spread_degrees": 1.5
+            },
+            "weapon_breach_radius": 0.6499999761581421,
+            "weapon_damage": 8.0,
+            "weapon_enable_left_hand_ik": true,
+            "weapon_fire_rate": 3.5,
+            "weapon_fp_enable_left_hand_ik": true,
+            "weapon_fp_grip_pivot": [
+                0.05000000074505806,
+                0.4320000112056732,
+                0.0
+            ],
+            "weapon_fp_grip_position": [
+                0.3281214237213135,
+                -0.3015154004096985,
+                0.08232640475034714
+            ],
+            "weapon_fp_grip_rotation": [
+                -1.6137309074401855,
+                0.14756757020950317,
+                -2.032104253768921
+            ],
+            "weapon_fp_grip_scale": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ],
+            "weapon_fp_left_hand_grip": [
+                -0.13600000739097595,
+                0.07400000095367432,
+                0.15922310948371887
+            ],
+            "weapon_fp_left_hand_rotation": [
+                1.7178995609283447,
+                1.2867612838745117,
+                0.3035855293273926
+            ],
+            "weapon_fp_pitch_offset": 0.0,
+            "weapon_fp_pitch_scale": 1.0,
+            "weapon_grip_profile": "Kevin_M4_3P",
+            "weapon_left_forearm_bone": "mixamorig:LeftForeArm",
+            "weapon_left_hand_bone": "mixamorig:LeftHand",
+            "weapon_left_hand_grip": [
+                -0.13039180636405945,
+                0.07605255395174026,
+                0.26683247089385986
+            ],
+            "weapon_left_hand_rotation": [
+                1.7256410121917725,
+                2.108236312866211,
+                0.8078575134277344
+            ],
+            "weapon_left_upper_arm_bone": "mixamorig:LeftArm",
+            "weapon_muzzle_position": [
+                0.0,
+                0.10999999940395355,
+                0.6069999933242798
+            ],
+            "weapon_owner": 6,
+            "weapon_pistol_pose": false,
+            "weapon_range": 35.0,
+            "weapon_rifle_gun_animation": "Kevin_Aim_Shoot_R",
+            "weapon_rifle_idle_animation": "Kevin_Aim_Rifle",
+            "weapon_right_hand_bone": "mixamorig:RightHand",
+            "weapon_show_fp_visual": true,
+            "weapon_show_world_visual": true,
+            "weapon_type": 0,
+            "weapon_visual_model": "assets/model/Rifle_M4_CC0.glb",
+            "weapon_world_grip_pivot": [
+                0.0,
+                0.0,
+                0.0
+            ],
+            "weapon_world_grip_position": [
+                0.041999999433755875,
+                0.09300000220537186,
+                -0.017999999225139618
+            ],
+            "weapon_world_grip_rotation": [
+                -1.4013092517852783,
+                2.861553430557251,
+                1.5676206350326538
+            ],
+            "weapon_world_grip_scale": [
+                0.800000011920929,
+                0.800000011920929,
+                0.800000011920929
+            ]
+        },
+        {
+            "active": true,
+            "entity_id": 8,
+            "has_rigidbody": true,
+            "id": 8,
+            "invulnerable": false,
+            "model_path": "assets/model/cube.obj",
+            "object_name": "Arena Barrier 30",
+            "position": {
+                "x": 0.0,
+                "y": 3.3499999046325684,
+                "z": 1.0
+            },
+            "rb_angular_damping": 0.0,
+            "rb_collision_model_path": "",
             "rb_compound_elements": [],
             "rb_enable_ccd": false,
-            "rb_friction": 0.0,
+            "rb_friction": 0.800000011920929,
             "rb_is_compound": false,
             "rb_is_dynamic": false,
             "rb_is_kinematic": false,
-            "rb_linear_damping": 0.699999988079071,
+            "rb_linear_damping": 0.0,
             "rb_mass": 0.0,
             "rb_shape_radius": 0.5,
             "rb_shape_size": [
-                2.0,
-                2.0,
-                2.0
+                1.0,
+                1.0,
+                1.0
             ],
             "rb_shape_type": 0,
-            "rb_use_manual_size": true,
+            "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 3.0,
+                "y": 2.0299999713897705,
+                "z": 0.550000011920929
+            },
+            "shader_type": 3,
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "active": true,
+            "entity_id": 9,
+            "has_rigidbody": true,
+            "id": 9,
+            "invulnerable": false,
+            "model_path": "assets/model/cube.obj",
+            "object_name": "Arena Barrier 31",
+            "position": {
+                "x": -7.0,
+                "y": 3.3499999046325684,
+                "z": 0.0
+            },
+            "rb_angular_damping": 0.0,
+            "rb_collision_model_path": "",
+            "rb_compound_elements": [],
+            "rb_enable_ccd": false,
+            "rb_friction": 0.800000011920929,
+            "rb_is_compound": false,
+            "rb_is_dynamic": false,
+            "rb_is_kinematic": false,
+            "rb_linear_damping": 0.0,
+            "rb_mass": 0.0,
+            "rb_shape_radius": 0.5,
+            "rb_shape_size": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "rb_shape_type": 0,
+            "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.7000000476837158,
+                "y": 3.309999942779541,
+                "z": 0.550000011920929
+            },
+            "shader_type": 3,
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "active": true,
+            "entity_id": 10,
+            "has_rigidbody": true,
+            "id": 10,
+            "invulnerable": false,
+            "model_path": "assets/model/cube.obj",
+            "object_name": "Arena Barrier 32",
+            "position": {
+                "x": 7.0,
+                "y": 3.3499999046325684,
+                "z": 0.0
+            },
+            "rb_angular_damping": 0.0,
+            "rb_collision_model_path": "",
+            "rb_compound_elements": [],
+            "rb_enable_ccd": false,
+            "rb_friction": 0.800000011920929,
+            "rb_is_compound": false,
+            "rb_is_dynamic": false,
+            "rb_is_kinematic": false,
+            "rb_linear_damping": 0.0,
+            "rb_mass": 0.0,
+            "rb_shape_radius": 0.5,
+            "rb_shape_size": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "rb_shape_type": 0,
+            "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.7000000476837158,
+                "y": 1.350000023841858,
+                "z": 0.550000011920929
+            },
+            "shader_type": 3,
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "active": true,
+            "entity_id": 11,
+            "has_rigidbody": true,
+            "id": 11,
+            "invulnerable": false,
+            "model_path": "assets/model/cube.obj",
+            "object_name": "Arena Barrier 33",
+            "position": {
+                "x": -4.0,
+                "y": 3.3499999046325684,
+                "z": 6.0
+            },
+            "rb_angular_damping": 0.0,
+            "rb_collision_model_path": "",
+            "rb_compound_elements": [],
+            "rb_enable_ccd": false,
+            "rb_friction": 0.800000011920929,
+            "rb_is_compound": false,
+            "rb_is_dynamic": false,
+            "rb_is_kinematic": false,
+            "rb_linear_damping": 0.0,
+            "rb_mass": 0.0,
+            "rb_shape_radius": 0.5,
+            "rb_shape_size": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "rb_shape_type": 0,
+            "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 0.6499999761581421,
+                "y": 1.350000023841858,
+                "z": 2.200000047683716
+            },
+            "shader_type": 3,
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "active": true,
+            "entity_id": 12,
+            "has_rigidbody": true,
+            "id": 12,
+            "invulnerable": false,
+            "model_path": "assets/model/cube.obj",
+            "object_name": "Arena Barrier 34",
+            "position": {
+                "x": 4.0,
+                "y": 3.3499999046325684,
+                "z": 6.0
+            },
+            "rb_angular_damping": 0.0,
+            "rb_collision_model_path": "",
+            "rb_compound_elements": [],
+            "rb_enable_ccd": false,
+            "rb_friction": 0.800000011920929,
+            "rb_is_compound": false,
+            "rb_is_dynamic": false,
+            "rb_is_kinematic": false,
+            "rb_linear_damping": 0.0,
+            "rb_mass": 0.0,
+            "rb_shape_radius": 0.5,
+            "rb_shape_size": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "rb_shape_type": 0,
+            "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 0.6499999761581421,
+                "y": 1.350000023841858,
+                "z": 2.200000047683716
+            },
+            "shader_type": 3,
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "active": true,
+            "entity_id": 13,
+            "has_rigidbody": true,
+            "id": 13,
+            "invulnerable": false,
+            "model_path": "assets/model/cube.obj",
+            "object_name": "Arena Barrier 35",
+            "position": {
+                "x": 0.0006864666938781738,
+                "y": 3.3340983390808105,
+                "z": -5.006003379821777
+            },
+            "rb_angular_damping": 0.0,
+            "rb_collision_model_path": "",
+            "rb_compound_elements": [],
+            "rb_enable_ccd": false,
+            "rb_friction": 0.800000011920929,
+            "rb_is_compound": false,
+            "rb_is_dynamic": false,
+            "rb_is_kinematic": false,
+            "rb_linear_damping": 0.0,
+            "rb_mass": 0.0,
+            "rb_shape_radius": 0.5,
+            "rb_shape_size": [
+                1.0,
+                1.0,
+                1.0
+            ],
+            "rb_shape_type": 0,
+            "rb_use_manual_size": false,
+            "rb_use_separate_collision_mesh": false,
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 2.0,
+                "y": 2.2699999809265137,
+                "z": 0.5
+            },
+            "shader_type": 3,
+            "texture_path": "assets/texture/stone.tga"
+        },
+        {
+            "active": true,
+            "entity_id": 14,
+            "has_npc_cover_point": true,
+            "id": 14,
+            "invulnerable": false,
+            "model_path": "",
+            "npc_cover_crouched": true,
+            "npc_cover_enabled": true,
+            "npc_cover_peek_offset": [
+                -2.200000047683716,
+                0.0,
+                0.0
+            ],
+            "npc_cover_protection_height": 1.25,
+            "object_name": "NPC Cover Point 40",
+            "position": {
+                "x": -2.0999999046325684,
+                "y": 3.0,
+                "z": 2.0
+            },
             "rotation": {
                 "x": 0.0,
                 "y": 0.0,
@@ -251,9 +2127,174 @@
                 "y": 1.0,
                 "z": 1.0
             },
-            "texture_path": "assets/texture/stone.tga"
+            "texture_path": ""
+        },
+        {
+            "active": true,
+            "entity_id": 15,
+            "has_npc_cover_point": true,
+            "id": 15,
+            "invulnerable": false,
+            "model_path": "",
+            "npc_cover_crouched": true,
+            "npc_cover_enabled": true,
+            "npc_cover_peek_offset": [
+                2.200000047683716,
+                0.0,
+                0.0
+            ],
+            "npc_cover_protection_height": 1.25,
+            "object_name": "NPC Cover Point 41",
+            "position": {
+                "x": 2.0999999046325684,
+                "y": 3.0,
+                "z": 2.0
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": ""
+        },
+        {
+            "active": true,
+            "entity_id": 16,
+            "has_npc_cover_point": true,
+            "id": 16,
+            "invulnerable": false,
+            "model_path": "",
+            "npc_cover_crouched": true,
+            "npc_cover_enabled": true,
+            "npc_cover_peek_offset": [
+                -2.0,
+                0.0,
+                0.0
+            ],
+            "npc_cover_protection_height": 1.25,
+            "object_name": "NPC Cover Point 42",
+            "position": {
+                "x": -7.0,
+                "y": 3.0,
+                "z": 1.100000023841858
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": ""
+        },
+        {
+            "active": true,
+            "entity_id": 17,
+            "has_npc_cover_point": true,
+            "id": 17,
+            "invulnerable": false,
+            "model_path": "",
+            "npc_cover_crouched": true,
+            "npc_cover_enabled": true,
+            "npc_cover_peek_offset": [
+                2.0,
+                0.0,
+                0.0
+            ],
+            "npc_cover_protection_height": 1.25,
+            "object_name": "NPC Cover Point 43",
+            "position": {
+                "x": 7.0,
+                "y": 3.0,
+                "z": 1.100000023841858
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": ""
+        },
+        {
+            "active": true,
+            "entity_id": 18,
+            "has_npc_cover_point": true,
+            "id": 18,
+            "invulnerable": false,
+            "model_path": "",
+            "npc_cover_crouched": true,
+            "npc_cover_enabled": true,
+            "npc_cover_peek_offset": [
+                -1.2999999523162842,
+                0.0,
+                0.0
+            ],
+            "npc_cover_protection_height": 1.25,
+            "object_name": "NPC Cover Point 44",
+            "position": {
+                "x": -5.0,
+                "y": 3.0,
+                "z": 7.0
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": ""
+        },
+        {
+            "active": true,
+            "entity_id": 19,
+            "has_npc_cover_point": true,
+            "id": 19,
+            "invulnerable": false,
+            "model_path": "",
+            "npc_cover_crouched": true,
+            "npc_cover_enabled": true,
+            "npc_cover_peek_offset": [
+                1.2999999523162842,
+                0.0,
+                0.0
+            ],
+            "npc_cover_protection_height": 1.25,
+            "object_name": "NPC Cover Point 45",
+            "position": {
+                "x": 5.0,
+                "y": 3.0,
+                "z": 7.0
+            },
+            "rotation": {
+                "x": 0.0,
+                "y": 0.0,
+                "z": 0.0
+            },
+            "scale": {
+                "x": 1.0,
+                "y": 1.0,
+                "z": 1.0
+            },
+            "texture_path": ""
         }
     ],
     "scene_name": "MyLevel",
-    "version": 1
+    "version": 2
 }

@@ -27,9 +27,17 @@
 #include "DWriteTextSystem.h"
 #include "../ECS/System/MeshCuttingTest.h"
 #include "Gameplay/Combat/WeaponSystem.h"
+#include "Gameplay/Combat/NpcRangedCombatSystem.h"
+#include "Gameplay/Combat/PlayerPunchSystem.h"
+#include "Animation/WeaponIKSystem.h"
 #include "Gameplay/Player/FirstPersonViewSystem.h"
 #include "../../StateSystem.h"
 #include "Gameplay/AI/NpcNavMeshSystem.h"
+#include "Gameplay/AI/NpcSimulationStudio.h"
+#include "Gameplay/AI/NpcCombatModuleSystem.h"
+#include "Gameplay/AI/NpcCombatDebugCommandSystem.h"
+#include "Gameplay/AI/NpcSquadCombatSystem.h"
+#include "../../NpcCoverSystem.h"
 
 // ============================================================================
 // Конструктор — все поля инициализируются в заголовке (= nullptr / = 0)
@@ -557,6 +565,21 @@ m_renderer = new Renderer(
 
 
     initializationGuard.committed = true;
+    m_weaponQA = std::wcsstr(GetCommandLineW(), L"--weapon-qa") != nullptr;
+    m_weaponDemo = m_weaponQA || std::wcsstr(GetCommandLineW(), L"--weapon-demo") != nullptr;
+    const bool combatArena =
+        std::wcsstr(GetCommandLineW(), L"--combat-arena") != nullptr;
+    if (m_weaponDemo || combatArena)
+    {
+        // Удобный воспроизводимый вход для проверки тактики и CI-прогона.
+        const char* demoScene = combatArena ? "CombatTrainingGround.json"
+            : fs::exists("Weapon_IK_Demo.json") ? "Weapon_IK_Demo.json" : "scene.json";
+        if (!m_sceneManager.LoadScene(demoScene, m_direct3D->GetDevice(), m_direct3D->GetDeviceContext()))
+            return false;
+        m_cameraController.SetPlayViewMode(CameraController::PlayViewMode::ThirdPerson);
+        m_cameraController.SetThirdPersonDistance(4.0f);
+        m_cameraController.SetFollowPitch(5.0f);
+    }
     return true;
 }
 
@@ -767,9 +790,85 @@ void ApplicationClass::SetupTestRifleVisuals()
 
     auto& registry = m_sceneManager.GetECSRegistry();
     const Entity weaponEntity = WeaponSystem::GetEquippedWeaponEntity(registry, player);
+    FirstPersonViewComponent* armsView = nullptr;
+    auto& viewModels = registry.GetComponents<FirstPersonViewComponent>();
+    for (auto& [entity, viewModel] : viewModels)
+    {
+        if (viewModel.owner == player && viewModel.followCamera &&
+            registry.HasComponent<MeshRendererComponent>(entity))
+        {
+            m_firstPersonArms = entity;
+            armsView = &viewModel;
+            break;
+        }
+    }
+    auto* playCamera = registry.GetComponent<PlayCameraComponent>(player);
+    if (m_activeWeaponView != INVALID_ENTITY &&
+        m_activeWeaponView != weaponEntity)
+    {
+        auto& saved = m_weaponViewSnapshots[m_activeWeaponView];
+        if (playCamera)
+        {
+            saved.camera = *playCamera;
+            saved.hasCamera = true;
+        }
+        if (armsView)
+        {
+            saved.armsCameraOffset = armsView->cameraOffset;
+            saved.armsRotationOffset = armsView->rotationOffset;
+            saved.armsScale = armsView->scale;
+            saved.lookUpLimit = armsView->lookUpLimit;
+            saved.lookDownLimit = armsView->lookDownLimit;
+            saved.hasArms = true;
+        }
+    }
     auto* weapon = registry.GetComponent<WeaponComponent>(weaponEntity);
     if (!weapon)
+    {
+        m_activeWeaponView = INVALID_ENTITY;
         return;
+    }
+
+    // A preset belongs to the weapon entity. Load it on first equip, then
+    // keep live Play-mode edits when visuals are rebuilt or slots change.
+    const bool firstLoad = m_loadedWeaponProfiles.insert(weaponEntity).second;
+    if (firstLoad && !weapon->gripProfileName.empty())
+        m_sceneManager.LoadWeaponProfile(*weapon);
+    else if (m_activeWeaponView != weaponEntity)
+    {
+        const auto saved = m_weaponViewSnapshots.find(weaponEntity);
+        if (saved != m_weaponViewSnapshots.end())
+        {
+            if (playCamera && saved->second.hasCamera)
+                *playCamera = saved->second.camera;
+            if (armsView && saved->second.hasArms)
+            {
+                armsView->cameraOffset = saved->second.armsCameraOffset;
+                armsView->rotationOffset = saved->second.armsRotationOffset;
+                armsView->scale = saved->second.armsScale;
+                armsView->lookUpLimit = saved->second.lookUpLimit;
+                armsView->lookDownLimit = saved->second.lookDownLimit;
+            }
+        }
+    }
+    m_activeWeaponView = weaponEntity;
+
+    if (auto* animation = registry.GetComponent<AnimationComponent>(player))
+    {
+        for (auto& binding : animation->animations)
+        {
+            const std::string* clip = nullptr;
+            if (binding.state == AnimationState::RifleIdle)
+                clip = &weapon->rifleIdleAnimation;
+            if (binding.state == AnimationState::RifleGun)
+                clip = &weapon->rifleGunAnimation;
+            if (clip && binding.name != *clip)
+            {
+                binding.name = *clip;
+                binding.index = -1;
+            }
+        }
+    }
 
     AssimpModelClass* rifleModel = m_sceneManager.GetOrCreateModel(
         weapon->visualModelPath,
@@ -791,23 +890,12 @@ void ApplicationClass::SetupTestRifleVisuals()
         BoneAttachmentComponent worldAttachment;
         worldAttachment.parent = player;
         worldAttachment.boneName = weapon->rightHandBone;
-        worldAttachment.localPosition = weapon->worldGrip.position;
+        worldAttachment.localPosition = WeaponIKSystem::AttachmentPosition(weapon->worldGrip);
         worldAttachment.localRotation = weapon->worldGrip.rotation;
         worldAttachment.localScale = weapon->worldGrip.scale;
         registry.AddComponent<BoneAttachmentComponent>(m_worldRifleVisual, worldAttachment);
         registry.AddComponent<WeaponOwnerComponent>(
             m_worldRifleVisual, WeaponOwnerComponent{ player });
-    }
-
-    auto& viewModels = registry.GetComponents<FirstPersonViewComponent>();
-    for (const auto& [entity, viewModel] : viewModels)
-    {
-        if (viewModel.owner == player && viewModel.followCamera &&
-            registry.HasComponent<MeshRendererComponent>(entity))
-        {
-            m_firstPersonArms = entity;
-            break;
-        }
     }
 
     if (m_firstPersonArms == INVALID_ENTITY || !weapon->showFirstPersonVisual)
@@ -829,7 +917,7 @@ void ApplicationClass::SetupTestRifleVisuals()
     BoneAttachmentComponent fpAttachment;
     fpAttachment.parent = m_firstPersonArms;
     fpAttachment.boneName = weapon->rightHandBone;
-    fpAttachment.localPosition = weapon->firstPersonGrip.position;
+    fpAttachment.localPosition = WeaponIKSystem::AttachmentPosition(weapon->firstPersonGrip);
     fpAttachment.localRotation = weapon->firstPersonGrip.rotation;
     fpAttachment.localScale = weapon->firstPersonGrip.scale;
     registry.AddComponent<BoneAttachmentComponent>(m_firstPersonRifleVisual, fpAttachment);
@@ -856,7 +944,7 @@ void ApplicationClass::UpdateTestRifleVisuals()
         if (auto* attachment = registry.GetComponent<BoneAttachmentComponent>(visual))
         {
             attachment->boneName = weapon->rightHandBone;
-            attachment->localPosition = grip.position;
+            attachment->localPosition = WeaponIKSystem::AttachmentPosition(grip);
             attachment->localRotation = grip.rotation;
             attachment->localScale = grip.scale;
         }
@@ -873,8 +961,74 @@ void ApplicationClass::UpdateTestRifleVisuals()
     }
 }
 
+void ApplicationClass::UpdateNpcWeaponVisuals()
+{
+    if (!m_direct3D) return;
+    auto& registry = m_sceneManager.GetECSRegistry();
+    // Сначала чистим снятое/заменённое оружие. Не меняем ECS во время обхода его пула.
+    std::vector<Entity> remove;
+    std::unordered_map<Entity, Entity> visuals;
+    registry.ForEach<NpcWeaponVisualComponent>([&](Entity visual, NpcWeaponVisualComponent& link) {
+        const Entity equipped = WeaponSystem::GetEquippedWeaponEntity(registry, link.owner);
+        const auto* weapon = registry.GetComponent<WeaponComponent>(equipped);
+        if (!registry.HasComponent<NPCComponent>(link.owner) || !weapon ||
+            !registry.HasComponent<ActiveComponent>(link.owner) || !weapon->showWorldVisual ||
+            equipped != link.weapon || weapon->visualModelPath != link.modelPath)
+            remove.push_back(visual);
+        else visuals[link.owner] = visual;
+    });
+    for (Entity visual : remove) m_sceneManager.RemoveObject(visual);
+
+    std::vector<Entity> owners;
+    registry.ForEach<NPCComponent>([&](Entity npc, NPCComponent&) { owners.push_back(npc); });
+    for (Entity npc : owners)
+    {
+        if (registry.HasComponent<PlayerGameTag>(npc) ||
+            !registry.HasComponent<ActiveComponent>(npc)) continue;
+        if (registry.HasComponent<InventoryComponent>(npc))
+            InventorySystem::EnsureInventory(registry, npc);
+        const Entity equipped = WeaponSystem::GetEquippedWeaponEntity(registry, npc);
+        auto* weapon = registry.GetComponent<WeaponComponent>(equipped);
+        if (!weapon) continue;
+        // Как у игрока: профиль читается только при первой экипировке,
+        // последующие кадры не затирают ручные изменения Animation Studio.
+        if (m_loadedWeaponProfiles.insert(equipped).second && !weapon->gripProfileName.empty())
+            m_sceneManager.LoadWeaponProfile(*weapon);
+        if (!weapon->showWorldVisual || weapon->visualModelPath.empty()) continue;
+        Entity visual = visuals.count(npc) ? visuals.at(npc) : INVALID_ENTITY;
+        if (visual == INVALID_ENTITY)
+        {
+            auto* model = m_sceneManager.GetOrCreateModel(weapon->visualModelPath,
+                m_direct3D->GetDevice(), m_direct3D->GetDeviceContext(), "", false);
+            if (!model) continue;
+            SpawnObjectDesc desc;
+            desc.model = model;
+            desc.name = "Weapon Visual (NPC)";
+            desc.meshCastsShadow = true;
+            visual = m_sceneManager.SpawnObject(std::move(desc));
+            registry.AddComponent<NpcWeaponVisualComponent>(visual,
+                NpcWeaponVisualComponent{ npc, equipped, weapon->visualModelPath });
+            registry.AddComponent<WeaponOwnerComponent>(visual, WeaponOwnerComponent{ npc });
+            registry.AddComponent<EditorSelectionComponent>(visual, EditorSelectionComponent{ true, npc });
+            registry.AddComponent<BoneAttachmentComponent>(visual, BoneAttachmentComponent{});
+        }
+        // Те же worldGrip, pivot и сокет, которые редактирует Animation Studio.
+        auto* attachment = registry.GetComponent<BoneAttachmentComponent>(visual);
+        attachment->parent = npc;
+        attachment->boneName = weapon->rightHandBone;
+        attachment->localPosition = WeaponIKSystem::AttachmentPosition(weapon->worldGrip);
+        attachment->localRotation = weapon->worldGrip.rotation;
+        attachment->localScale = weapon->worldGrip.scale;
+    }
+}
+
 bool ApplicationClass::Frame(float dt)
 {
+    if (m_weaponDemo) UpdateWeaponQAInput();
+    if (m_weaponQA) dt = 1.0f / 60.0f;
+    // DebugHud uses unscaled frame time, so a temporary message also disappears
+    // while gameplay simulation is paused.
+    DebugHud::Get().Update(dt);
     // =====================================================
     // 0. Input
     // =====================================================
@@ -930,14 +1084,23 @@ bool ApplicationClass::Frame(float dt)
         if (m_gameplayController.EnterPlayMode(m_sceneManager.GetECSRegistry()))
         {
             m_engineMode = EngineMode::Play;
+            timer.Reset();
+            m_worldEventLog.Clear();
+            m_triggerZoneSystem.Reset();
+            m_interactionSystem.CloseOpenedEntity();
             m_cameraController.EnterPlayMode();
             auto& registry = m_sceneManager.GetECSRegistry();
             const Entity player = m_gameplayController.GetPlayerEntity();
-            const Entity weaponEntity =
-                WeaponSystem::GetEquippedWeaponEntity(registry, player);
-            if (auto* weapon = registry.GetComponent<WeaponComponent>(weaponEntity))
-                m_sceneManager.LoadWeaponProfile(*weapon);
-            SetupTestRifleVisuals();
+            m_loadedWeaponProfiles.clear();
+            m_weaponViewSnapshots.clear();
+            m_activeWeaponView = INVALID_ENTITY;
+            // An AI-only training scene has no local player.  Do not create a
+            // phantom inventory/weapon for INVALID_ENTITY in observer mode.
+            if (player != INVALID_ENTITY)
+            {
+                InventorySystem::EnsureInventory(registry, player);
+                SetupTestRifleVisuals();
+            }
         }
     }
     else
@@ -970,7 +1133,13 @@ bool ApplicationClass::Frame(float dt)
                         btVector3(0.0f, 0.0f, 0.0f), btScalar(0.0f));
                 }
             });
+        m_editorUI.CloseSocketStudio(m_sceneManager);
+        NpcCombatDebugCommandSystem::ClearAll(
+            m_sceneManager.GetECSRegistry());
+        NpcSimulationStudio::ClearHistory();
         RemoveTestRifleVisuals();
+        m_triggerZoneSystem.Reset();
+        m_interactionSystem.CloseOpenedEntity();
         m_engineMode = EngineMode::Editor;
         m_cameraController.ExitPlayMode();
     }
@@ -980,11 +1149,66 @@ bool ApplicationClass::Frame(float dt)
 
     const bool isEditorMode = m_engineMode == EngineMode::Editor;
     const bool isPlayMode = m_engineMode == EngineMode::Play;
+    // Камера наблюдателя независима от настоящей игровой мишени.
+    static bool wasLogicStudio = false;
+    static bool wasObserverFreeFly = false;
+    static auto previousLogicView = CameraController::PlayViewMode::ThirdPerson;
+    if (!isPlayMode) NpcSimulationStudio::enabled = false;
+    const bool logicStudio = isPlayMode && NpcSimulationStudio::enabled;
+    if (logicStudio != wasLogicStudio)
+    {
+        if (logicStudio)
+        {
+            previousLogicView = m_cameraController.GetPlayViewMode();
+            m_cameraController.SetPlayViewMode(CameraController::PlayViewMode::ThirdPerson);
+        }
+        else m_cameraController.SetPlayViewMode(previousLogicView);
+        m_playUiCursorActive = true;
+        m_cameraController.ReleaseMouseCapture();
+        wasLogicStudio = logicStudio;
+    }
+    const bool observerFreeFly = isPlayMode &&
+        (logicStudio || m_gameplayController.GetPlayerEntity() == INVALID_ENTITY);
+    if (observerFreeFly)
+    {
+        // Studio windows may close another preview mode during their render.
+        // Reassert observer free-fly every frame so an AI-only scene cannot
+        // silently fall back to a missing player camera.
+        m_cameraController.SetSocketStudioFreeFly(true);
+    }
+    if (observerFreeFly != wasObserverFreeFly)
+    {
+        if (!observerFreeFly)
+            m_cameraController.SetSocketStudioFreeFly(false);
+        m_playUiCursorActive = observerFreeFly;
+        m_cameraController.ReleaseMouseCapture();
+        wasObserverFreeFly = observerFreeFly;
+    }
+    bool weaponCrosshairValid = false;
+    float weaponCrosshairX = 0.0f;
+    float weaponCrosshairY = 0.0f;
+    float simulationDeltaTime = dt;
+    bool simulationRunning = isPlayMode;
 
-    // В обычном Play Mode мышь постоянно захвачена камерой и спрятана. F2
-    // временно отдаёт её ImGui, чтобы можно было нажимать кнопки NPC debug,
-    // инспектора и других runtime-окон. Повторное F2 возвращает управление.
-    if (isPlayMode && f2Down && !m_wasF2Down)
+    // In observer/NPC Studio mode ImGui owns the mouse only while it actually
+    // needs it.  Outside UI the same visible cursor can start RMB free-look,
+    // so no F2 round-trip is needed. WantCaptureMouse is from the previous
+    // completed ImGui frame, which is the intended way to route this frame.
+    if (observerFreeFly)
+    {
+        // While RMB free-look is captured, Windows keeps the physical cursor
+        // in the screen centre. That artificial centre must not be mistaken
+        // for hovering a Studio window and cancel the camera drag.
+        const bool cameraOwnsMouse =
+            m_inputManager.IsMouseCaptured(m_input);
+        m_playUiCursorActive =
+            !cameraOwnsMouse && m_editorUI.WantCaptureMouse();
+        if (m_playUiCursorActive)
+            m_cameraController.ReleaseMouseCapture();
+    }
+    // Normal player mode keeps the old explicit F2 switch because its camera
+    // is continuously captured for gameplay aiming.
+    else if (isPlayMode && f2Down && !m_wasF2Down)
     {
         m_playUiCursorActive = !m_playUiCursorActive;
         if (m_playUiCursorActive)
@@ -995,6 +1219,21 @@ bool ApplicationClass::Frame(float dt)
         m_playUiCursorActive = false;
     }
     m_wasF2Down = f2Down;
+
+    const bool playerControlAvailable = isPlayMode && !logicStudio &&
+        !m_cameraController.IsSocketStudioFreeFly();
+    const bool locomotionEnabled = playerControlAvailable &&
+        (!m_playUiCursorActive || !m_editorUI.WantTextInput());
+    m_gameplayInputSystem.Sample(
+        m_input,
+        isPlayMode,
+        playerControlAvailable && !m_playUiCursorActive,
+        locomotionEnabled);
+    const GameInputFrame& gameInput = m_gameplayInputSystem.GetFrame();
+
+    if (isPlayMode)
+        m_gameplayInputSystem.UpdateSession(
+            m_cameraController, timer);
 
   
     m_jobSystem.ExecuteMainThreadJobs();
@@ -1015,10 +1254,12 @@ bool ApplicationClass::Frame(float dt)
     // =====================================================
     bool imguiWantsMouse = false;
 
+    // Обновляем отладочные переключатели и в редакторе, и в режиме игры.
+    // Ниже режим игры сам отключит лишние категории, но оставит лучи оружия.
+    m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
+
     if (isEditorMode)
     {
-        m_physicsDebugSettings = m_editorUI.GetPhysicsDebugSettings();
-
         imguiWantsMouse =
             m_editorUI.WantCaptureMouse()
             || ImGuizmo::IsOver()
@@ -1039,40 +1280,131 @@ bool ApplicationClass::Frame(float dt)
 
     if (m_engineMode == EngineMode::Play)
     {
-        timer.Update(dt);
+        if (logicStudio)
+        {
+            // Пауза останавливает и мировые часы, не только движение/AI.
+            const bool oldPause = timer.IsPaused();
+            const float oldScale = timer.GetTimeScale();
+            timer.SetPaused(NpcSimulationStudio::paused && !NpcSimulationStudio::step);
+            timer.SetTimeScale(NpcSimulationStudio::step ? 1.0f : NpcSimulationStudio::speed);
+            simulationDeltaTime = timer.Update(NpcSimulationStudio::step ? 1.0f/60.0f : dt);
+            timer.SetTimeScale(oldScale);
+            timer.SetPaused(oldPause);
+        }
+        else simulationDeltaTime = timer.Update(dt);
+        if (logicStudio)
+        {
+            // Один шаг запускает ту же цепочку AI/физики, что и обычная игра.
+            NpcSimulationStudio::step = false;
+            if (NpcSimulationStudio::moveTarget)
+            {
+                auto& simRegistry = m_sceneManager.GetECSRegistry();
+                const Entity simPlayer = m_gameplayController.GetPlayerEntity();
+                if (auto* transform = simRegistry.GetComponent<TransformComponent>(simPlayer))
+                {
+                    transform->position = NpcSimulationStudio::targetPosition;
+                    if (auto* controller = simRegistry.GetComponent<CharacterController>(simPlayer);
+                        controller && controller->controller)
+                    {
+                        controller->controller->warp(btVector3(transform->position.x,
+                            transform->position.y+controller->capsuleCenterOffsetY, transform->position.z));
+                        controller->lastSyncedPosition = transform->position;
+                    }
+                }
+                NpcSimulationStudio::moveTarget = false;
+            }
+
+            NpcDebugDamageRequest debugDamage;
+            if (NpcSimulationStudio::ConsumeDamageRequest(debugDamage))
+            {
+                auto& simRegistry = m_sceneManager.GetECSRegistry();
+                if (debugDamage.nearMiss)
+                {
+                    // Near miss не изображает физическое попадание: это отдельный
+                    // отладочный сигнал угрозы без изменения здоровья NPC.
+                    if (auto* tactical = simRegistry.GetComponent<NpcTacticalComponent>(debugDamage.target))
+                    {
+                        tactical->underFireTime = 3.0f;
+                        // Near miss передаёт угрозу, но не должен считаться
+                        // реальным попаданием при выборе штурмовой тактики.
+                        if (tactical->damageReactionCooldown <= 0.0f)
+                        {
+                            tactical->damageReactionWasHit = false;
+                            tactical->damageReactionPending = true;
+                        }
+                        NpcSimulationStudio::PushEvent(timer.GetTotalSeconds(), debugDamage.target,
+                            NpcDebugEventCategory::Damage, "Симуляция близкого выстрела",
+                            "Здоровье не изменено; передан только сигнал угрозы",
+                            "Near miss simulated",
+                            "Health was not changed; only the threat signal was sent");
+                    }
+                }
+                else
+                {
+                    // Настоящий debug-hit идёт через ту же очередь DamageSystem,
+                    // что и оружие: реакции, здоровье и смерть не дублируются UI.
+                    DamageEvent event;
+                    event.target = debugDamage.target;
+                    event.source = debugDamage.source;
+                    event.damageAmount = debugDamage.amount;
+                    event.damageType = debugDamage.type;
+                    if (const auto* transform = simRegistry.GetComponent<TransformComponent>(debugDamage.target))
+                        event.hit_position = transform->position;
+                    event.hit_normal = { 0.0f, 1.0f, 0.0f };
+                    m_damageSystem.AddDamageEvent(event);
+                    NpcSimulationStudio::PushEvent(timer.GetTotalSeconds(), debugDamage.target,
+                        NpcDebugEventCategory::Debug, "Отладочное попадание поставлено в очередь",
+                        "Событие передано штатному DamageSystem",
+                        "Debug hit queued",
+                        "The event was sent to the regular DamageSystem");
+                }
+            }
+        }
+        simulationRunning = simulationDeltaTime > 0.0f;
+        if (logicStudio)
+        {
+            // Предварительный снимок сохраняет baseline даже на паузе. Благодаря
+            // ему первое же тестовое попадание не теряется из истории здоровья.
+            NpcSimulationStudio::Capture(
+                m_sceneManager.GetECSRegistry(), timer.GetTotalSeconds());
+        }
 
         m_interactionSystem.Update(
             m_camera.get(),
-            &m_inputManager,
+            gameInput,
             &m_sceneManager.GetECSRegistry(),
             PhysicsWorld::Get().GetWorld(),
-            m_input,
             m_physicsDebugRenderer,
             m_physicsDebugSettings,
             m_events
         );
 
         auto& registry = m_sceneManager.GetECSRegistry();
-        m_doorSystem.ProcessEvents(registry, m_events);
-        m_doorSystem.Update(registry, dt);
-        // ЛКМ в режиме UI должен нажимать ImGui, а не одновременно стрелять или
-        // ремонтировать объект за окном. Остальные world-системы продолжают жить.
-        if (!m_playUiCursorActive)
-        {
-            WeaponSystem::Update(
-                m_sceneManager.GetECSRegistry(),
-                m_damageSystem,
-                m_input,
-                m_camera.get(),
-                PhysicsWorld::Get().GetWorld(),
-                m_direct3D->GetDevice(),
-                m_jobSystem,
-                dt);
+        const Entity player = m_gameplayController.GetPlayerEntity();
 
+        m_weaponPickupSystem.Update(
+            registry, player, m_events, dt, simulationRunning);
+
+        if (simulationRunning && !m_playUiCursorActive &&
+            player != INVALID_ENTITY &&
+            m_gameplayInputSystem.UpdateInventory(
+                m_weaponPickupSystem, registry, player,
+                m_camera.get()))
+            SetupTestRifleVisuals();
+
+        if (simulationRunning)
+        {
+            m_doorSystem.ProcessEvents(registry, m_events);
+            m_doorSystem.Update(registry, simulationDeltaTime);
+        }
+        // Input snapshot suppresses gameplay actions while runtime UI owns them.
+        // Keep pumping completed asynchronous repairs even during UI interaction.
+        if (simulationRunning)
+        {
             m_repairSystem.Update(
                 m_sceneManager.GetECSRegistry(),
-                dt,
-                m_input,
+                simulationDeltaTime,
+                gameInput,
                 m_camera.get(),
                 PhysicsWorld::Get().GetWorld(),
                 m_jobSystem, m_worldEventLog, timer.GetTotalSeconds());
@@ -1081,18 +1413,60 @@ bool ApplicationClass::Frame(float dt)
     }
     
 
+    // Read the new mouse yaw before movement and armed-player facing use it.
+    // Camera placement still happens after physics, at the final foot point.
+    if (isPlayMode)
+    {
+        auto& registry = m_sceneManager.GetECSRegistry();
+        const Entity player = m_gameplayController.GetPlayerEntity();
+        if (const auto* playCamera =
+            registry.GetComponent<PlayCameraComponent>(player))
+        {
+            m_cameraController.SetFirstPersonEyeRightOffset(
+                playCamera->firstPersonEyeOffset.x);
+            m_cameraController.SetFirstPersonEyeHeight(
+                playCamera->firstPersonEyeOffset.y);
+            m_cameraController.SetFirstPersonForwardOffset(
+                playCamera->firstPersonEyeOffset.z);
+            m_cameraController.SetThirdPersonTargetOffset(
+                playCamera->thirdPersonTargetOffset);
+            m_cameraController.SetThirdPersonDistance(
+                playCamera->thirdPersonDistance);
+        }
+        if (m_cameraController.IsFirstPerson())
+        {
+            registry.ForEach<FirstPersonViewComponent>(
+                [&](Entity, FirstPersonViewComponent& view)
+                {
+                    if (view.owner == player && view.followCamera)
+                    {
+                        m_cameraController.SetFirstPersonLookUpLimit(view.lookUpLimit);
+                        m_cameraController.SetFirstPersonLookDownLimit(view.lookDownLimit);
+                    }
+                });
+        }
+        const Entity openedEntity = m_interactionSystem.GetOpenedEntity();
+        const bool deviceUiOpen =
+            registry.HasComponent<GeneratorComponent>(openedEntity) ||
+            registry.HasComponent<OxygenGeneratorComponent>(openedEntity);
+        m_cameraController.UpdateFollowLook(dt,
+            deviceUiOpen || m_playUiCursorActive || m_weaponQA);
+    }
+
     // =====================================================
     // 3. Gameplay input -> controller intent
     // =====================================================
-    if (isPlayMode)
+    if (isPlayMode && simulationRunning)
     {
         m_gameplayController.Update(
             m_sceneManager.GetECSRegistry(),
-            dt,
-            m_input,
-            m_playUiCursorActive,
+            simulationDeltaTime,
+            gameInput,
+            !locomotionEnabled,
             m_cameraController.GetFollowYaw()
         );
+
+
 
         // =====================================================================
         // NPC AI PIPELINE — порядок вызовов является частью архитектуры.
@@ -1100,23 +1474,118 @@ bool ApplicationClass::Frame(float dt)
         // 1. Utility: решает, ЧТО делать автоматически (например, чинить дыру).
         //    При активной debug-команде считает score только для отображения и
         //    не имеет права перехватывать управление.
-        m_npcUtilitySystem.Update(m_sceneManager.GetECSRegistry(), dt);
+        // Один общий шаг таймеров до любых попыток стрельбы игрока и NPC.
+        WeaponSystem::UpdateTimers(m_sceneManager.GetECSRegistry(), simulationDeltaTime);
+        m_npcUtilitySystem.Update(
+            m_sceneManager.GetECSRegistry(), simulationDeltaTime);
 
-        // 2. StateSystem: исполняет ручную команду или решение Utility AI. Здесь
+        // 2. Координатор экипажа резервирует разные аварии за разными NPC.
+        //    Он работает после расчёта score, но до движения, поэтому весь
+        //    экипаж не сбегается к одной и той же пробоине.
+        CrewTaskCoordinator::Update(
+            m_sceneManager.GetECSRegistry(),
+            timer.GetTotalSeconds());
+
+        // Сначала применяем переходы модульной конфигурации. Например,
+        // выключение Peek очищает старые exposed/isPeeking до нового решения.
+        NpcCombatModuleSystem::Update(
+            m_sceneManager.GetECSRegistry(), simulationDeltaTime);
+
+        // 3. Восприятие боя: выбирает врага, проверяет FOV/raycast и обновляет
+        //    личную память последней увиденной позиции. Здесь пули ещё нет.
+        NpcCombatSystem::Update(
+            m_sceneManager.GetECSRegistry(),
+            simulationDeltaTime,
+            PhysicsWorld::Get().GetWorld(),
+            m_physicsDebugRenderer,
+            m_physicsDebugSettings);
+
+        // 4. Индивидуальный слой укрытий работает независимо от наличия отряда.
+        // Он только выбирает точку; движение выполняется следующим StateSystem.
+        NpcCoverSystem::Update(
+            m_sceneManager.GetECSRegistry(),
+            simulationDeltaTime,
+            PhysicsWorld::Get().GetWorld());
+
+        // Combat Lab получает последний голос среди РЕШЕНИЙ, но не двигает
+        // capsule напрямую: принудительная команда всё равно проходит через
+        // StateSystem, NavMesh, CharacterController и WeaponSystem.
+        NpcCombatDebugCommandSystem::ProcessPending(
+            m_sceneManager.GetECSRegistry(),
+            PhysicsWorld::Get().GetWorld(),
+            timer.GetTotalSeconds());
+
+        // -----------------------------------------------------------------
+        // ГРУППОВАЯ ТАКТИКА НАМЕРЕННО ОТКЛЮЧЕНА.
+        // -----------------------------------------------------------------
+        // Текущие короткие очереди, бег, перезарядка за стеной и
+        // смена плохого укрытия — это решения ОДНОГО NPC. Они не
+        // назначают suppressor/flanker и не обмениваются скрытыми данными.
+        // Когда индивидуальный цикл станет стабильным, этот вызов можно
+        // вернуть как отдельный слой «прикрывающий + перебегающий».
+        // NpcSquadCombatSystem::Update(
+        //     m_sceneManager.GetECSRegistry(), simulationDeltaTime,
+        //     PhysicsWorld::Get().GetWorld());
+
+        // 5. StateSystem: исполняет ручную команду или решение Utility AI. Здесь
         //    строится маршрут через комнаты/двери и заполняется CharacterMovement.
-		StateSystem::Update(m_sceneManager.GetECSRegistry(), dt, m_jobSystem);
+		StateSystem::Update(
+            m_sceneManager.GetECSRegistry(), simulationDeltaTime, m_jobSystem);
 
-        // 3. Facing: разворачивает модель в сторону walkDirection, записанного AI.
-        CharacterFacingSystem::Update(m_sceneManager.GetECSRegistry(), dt);
+        // 6. Facing: разворачивает модель в сторону walkDirection, записанного AI.
+        CharacterFacingSystem::Update(
+            m_sceneManager.GetECSRegistry(), simulationDeltaTime);
 
-        // 4. Controller: применяет желаемое движение к Bullet capsule с коллизиями.
-        CharacterControllerSystem::Update(m_sceneManager.GetECSRegistry(), dt);
+        // Короткий debug-уклон перекрывает только итоговый вектор движения
+        // этого кадра и затем обрабатывается обычным Bullet controller.
+        NpcCombatDebugCommandSystem::ApplyMovementOverrides(
+            m_sceneManager.GetECSRegistry(), simulationDeltaTime);
 
-        // 5. Animation: читает итоговые isMoving/isRunning/locomotionState и
+        // При прицеливании кулаком персонаж должен смотреть туда же, куда камера.
+        // Иначе клип и IK работают на модели, повёрнутой боком после ходьбы.
+        auto& aimRegistry = m_sceneManager.GetECSRegistry();
+        const Entity aimingPlayer = m_gameplayController.GetPlayerEntity();
+        const auto* aimingAnimation =
+            aimRegistry.GetComponent<AnimationComponent>(aimingPlayer);
+        const auto* aimingPlayerData =
+            aimRegistry.GetComponent<PlayerComponent>(aimingPlayer);
+        const bool previewingPunch = aimingAnimation &&
+            aimingAnimation->socketPreviewEnabled &&
+            aimingAnimation->socketPreviewPunch &&
+            !m_cameraController.IsSocketStudioEnabled() &&
+            !m_cameraController.IsSocketStudioFreeFly();
+        const bool facingCamera =
+            WeaponSystem::GetEquippedWeaponEntity(aimRegistry, aimingPlayer) != INVALID_ENTITY ||
+            gameInput.Down(GameAction::Aim) ||
+            (aimingPlayerData && aimingPlayerData->punchActive) ||
+            previewingPunch;
+        if (facingCamera)
+            if (auto* transform = aimRegistry.GetComponent<TransformComponent>(aimingPlayer))
+                transform->rotation.y = DirectX::XMConvertToRadians(m_cameraController.GetFollowYaw()) + DirectX::XM_PI;
+
+        // 7. Controller: применяет желаемое движение к Bullet capsule с коллизиями.
+        CharacterControllerSystem::Update(
+            m_sceneManager.GetECSRegistry(), simulationDeltaTime);
+
+        // 8. Animation: читает итоговые isMoving/isRunning/locomotionState и
         //    выбирает Idle, Walk или Run. Поэтому AI не запускает клипы напрямую.
-        AnimationController::Update(m_sceneManager.GetECSRegistry(), dt);
-        m_damageSystem.Update(m_sceneManager.GetECSRegistry(), m_particleSystem, m_worldEventLog, timer.GetTotalSeconds(), dt);
-        m_particleSystem.Update(dt, m_physicsDebugRenderer);	
+        PlayerPunchSystem::Update(
+            m_sceneManager.GetECSRegistry(), aimingPlayer, gameInput,
+            m_camera.get(), PhysicsWorld::Get().GetWorld(),
+            m_damageSystem, simulationDeltaTime);
+        AnimationController::Update(
+            m_sceneManager.GetECSRegistry(), simulationDeltaTime);
+        m_damageSystem.Update(
+            m_sceneManager.GetECSRegistry(), m_particleSystem,
+            m_worldEventLog, timer.GetTotalSeconds(), simulationDeltaTime);
+        if (logicStudio)
+        {
+            // Снимок делается после AI и урона, чтобы журнал показывал итог
+            // реального тика, не влияя на порядок работы игровых систем.
+            NpcSimulationStudio::Capture(
+                m_sceneManager.GetECSRegistry(), timer.GetTotalSeconds());
+        }
+        m_particleSystem.Update(simulationDeltaTime, m_physicsDebugRenderer);
        
     }
 
@@ -1124,8 +1593,20 @@ bool ApplicationClass::Frame(float dt)
     // 4. World systems / physics
     // =====================================================
     SyncCompartmentPositions();
-    UpdatePhysics(dt);
-    UpdateWaterAnimation(dt);
+    // Authoring mode must be stable: rigid bodies, flooding and pressure are
+    // previewed only during Play. Water UV animation is visual-only and may
+    // continue so the editor viewport does not look frozen.
+    UpdatePhysics(isPlayMode ? simulationDeltaTime : 0.0f);
+    UpdateWaterAnimation(isPlayMode ? simulationDeltaTime : dt);
+
+    if (isPlayMode)
+    {
+        auto& registry = m_sceneManager.GetECSRegistry();
+        if (simulationRunning)
+            m_triggerZoneSystem.Update(registry, simulationDeltaTime, m_events);
+        m_triggerActionSystem.Update(
+            registry, m_events, dt, simulationRunning);
+    }
 
     // =====================================================
     // 5. Play camera follows post-physics transform
@@ -1142,21 +1623,20 @@ bool ApplicationClass::Frame(float dt)
                 player = entity;
             });
 
-        if (player != INVALID_ENTITY)
+        Entity cameraTarget = player;
+        const Entity studioTarget = m_editorUI.GetAnimationStudioTarget();
+        if (studioTarget != INVALID_ENTITY && registry.IsAlive(studioTarget) &&
+            registry.HasComponent<TransformComponent>(studioTarget))
+            cameraTarget = studioTarget;
+
+        if (cameraTarget != INVALID_ENTITY)
         {
             auto* transform =
-                registry.GetComponent<TransformComponent>(player);
+                registry.GetComponent<TransformComponent>(cameraTarget);
 
             if (transform)
             {
-                const Entity openedEntity = m_interactionSystem.GetOpenedEntity();
-                const bool deviceUiOpen =
-                    registry.HasComponent<GeneratorComponent>(openedEntity) ||
-                    registry.HasComponent<OxygenGeneratorComponent>(openedEntity);
-                m_cameraController.UpdateFollow(
-                    dt,
-                    transform,
-                    deviceUiOpen || m_playUiCursorActive);
+                m_cameraController.UpdateFollow(transform);
             }
         }
     }
@@ -1171,12 +1651,152 @@ bool ApplicationClass::Frame(float dt)
             m_camera.get(),
             m_gameplayController.GetPlayerEntity());
     }
-    m_sceneManager.UpdateAll(dt, m_gameplayController.GetPlayerEntity());
+    // Scene systems can still refresh derived zero-delta state in the editor,
+    // but must not consume fuel, move actors or change vitals there.
+    UpdateNpcWeaponVisuals();
+    m_sceneManager.UpdateAll(
+        isPlayMode ? simulationDeltaTime : 0.0f,
+        m_gameplayController.GetPlayerEntity(),
+        m_camera.get(), PhysicsWorld::Get().GetWorld());
     m_sceneManager.UpdateLights();
 
     m_camera->Render();
     m_camera->GetViewMatrix(m_viewMatrix);
+
+    // Применяем настройку и в Play Mode, и в редакторе. Projection и frustum
+    // culling используют одну матрицу, поэтому дальность у них не расходится.
+    auto& renderRegistry = m_sceneManager.GetECSRegistry();
+    bool renderDistanceApplied = false;
+    renderRegistry.ForEach<PlayerGameTag>([&](Entity entity, PlayerGameTag&)
+    {
+        if (renderDistanceApplied)
+            return;
+        if (auto* playCamera =
+            renderRegistry.GetComponent<PlayCameraComponent>(entity))
+        {
+            playCamera->renderDistance =
+                m_direct3D->SetRenderDistance(playCamera->renderDistance);
+            renderDistanceApplied = true;
+        }
+    });
     m_direct3D->GetProjectionMatrix(m_projMatrix);
+
+    // Камера выбирает точку прицеливания, но настоящий луч начинается у Muzzle.
+    // Так прицел остаётся удобным, а близкая стена может перекрыть ствол.
+    CameraClass::Ray weaponShotRay{};
+    bool weaponShotRayValid = false;
+    if (isPlayMode)
+    {
+        auto& registry = m_sceneManager.GetECSRegistry();
+        const Entity player = m_gameplayController.GetPlayerEntity();
+        const Entity weaponEntity = WeaponSystem::GetEquippedWeaponEntity(
+            registry, player);
+        const auto* weapon = registry.GetComponent<WeaponComponent>(weaponEntity);
+        const bool firstPerson = m_cameraController.IsFirstPerson();
+        const Entity rifleVisual = firstPerson
+            ? m_firstPersonRifleVisual
+            : m_worldRifleVisual;
+        const auto* rifleTransform = rifleVisual != INVALID_ENTITY
+            ? registry.GetComponent<TransformComponent>(rifleVisual)
+            : nullptr;
+        if (weapon && rifleVisual != INVALID_ENTITY && rifleTransform)
+        {
+            using namespace DirectX;
+            const XMMATRIX rifleWorld = rifleTransform->GetWorldMatrix();
+            const XMVECTOR muzzle = XMVector3TransformCoord(
+                XMLoadFloat3(&weapon->muzzlePosition), rifleWorld);
+
+            const XMFLOAT3 cameraOrigin = m_camera->GetPosition();
+            const XMFLOAT3 cameraForward = m_camera->GetForward();
+            PhysicsRaycastHit cameraAimHit;
+            const auto* controller = registry.GetComponent<CharacterController>(player);
+            const btCollisionObject* playerBody = controller
+                ? controller->ghostObj : nullptr;
+            PhysicsRaycast::CastRay(
+                cameraOrigin,
+                cameraForward,
+                PhysicsWorld::Get().GetWorld(),
+                weapon->range,
+                player,
+                playerBody,
+                cameraAimHit);
+
+            // Если камера ни во что не смотрит, сводим лучи на максимальной
+            // дистанции. На обычной дистанции отклонение получается почти нулевым.
+            const XMVECTOR aimPoint = cameraAimHit.collisionObject
+                ? XMLoadFloat3(&cameraAimHit.position)
+                : XMVectorAdd(
+                    XMLoadFloat3(&cameraOrigin),
+                    XMVectorScale(XMLoadFloat3(&cameraForward), weapon->range));
+            const XMVECTOR toAim = XMVectorSubtract(aimPoint, muzzle);
+            const float distanceSquared = XMVectorGetX(XMVector3LengthSq(toAim));
+
+            XMFLOAT3 muzzlePoint{};
+            XMStoreFloat3(&muzzlePoint, muzzle);
+            if (std::isfinite(distanceSquared) && distanceSquared > 0.000001f)
+            {
+                const XMVECTOR direction = XMVector3Normalize(toAim);
+                XMFLOAT3 shotDirection{};
+                XMStoreFloat3(&shotDirection, direction);
+                weaponShotRay = { muzzlePoint, shotDirection };
+                weaponShotRayValid = true;
+
+                // В первом лице прицел показывает реальную точку, куда упрётся
+                // луч от дула, включая препятствие прямо перед оружием.
+                if (firstPerson)
+                {
+                    PhysicsRaycastHit shotPreviewHit;
+                    PhysicsRaycast::CastRay(
+                        muzzlePoint,
+                        shotDirection,
+                        PhysicsWorld::Get().GetWorld(),
+                        weapon->range,
+                        player,
+                        playerBody,
+                        shotPreviewHit);
+                    const XMVECTOR visibleAimPoint = shotPreviewHit.collisionObject
+                        ? XMLoadFloat3(&shotPreviewHit.position)
+                        : XMVectorAdd(
+                            muzzle,
+                            XMVectorScale(direction,
+                                (std::min)(weapon->range, 40.0f)));
+                    const XMVECTOR clip = XMVector3Transform(
+                        visibleAimPoint,
+                        m_viewMatrix * m_projMatrix);
+                    const float w = XMVectorGetW(clip);
+                    if (w > 0.0001f)
+                    {
+                        const float x = XMVectorGetX(clip) / w;
+                        const float y = XMVectorGetY(clip) / w;
+                        const float z = XMVectorGetZ(clip) / w;
+                        if (std::isfinite(x) && std::isfinite(y) &&
+                            z >= 0.0f && z <= 1.0f &&
+                            std::abs(x) <= 0.96f && std::abs(y) <= 0.96f)
+                        {
+                            weaponCrosshairValid = true;
+                            weaponCrosshairX = (x * 0.5f + 0.5f) * m_screenWidth;
+                            weaponCrosshairY =
+                                (1.0f - (y * 0.5f + 0.5f)) * m_screenHeight;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (isPlayMode && simulationRunning)
+    {
+        // Выстрелы выполняются после позы/физики: так дуло NPC уже находится в
+        // актуальной руке. Оба WeaponSystem пишут урон в общую DamageSystem.
+        WeaponSystem::Update(m_sceneManager.GetECSRegistry(),
+            m_damageSystem, gameInput, m_camera.get(),
+            PhysicsWorld::Get().GetWorld(), m_direct3D->GetDevice(),
+            m_jobSystem,
+            m_physicsDebugRenderer, m_physicsDebugSettings,
+            weaponShotRayValid ? &weaponShotRay : nullptr);
+        NpcRangedCombatSystem::Update(m_sceneManager.GetECSRegistry(),
+            PhysicsWorld::Get().GetWorld(), m_damageSystem, m_direct3D->GetDevice(),
+            m_jobSystem, m_physicsDebugRenderer, m_physicsDebugSettings);
+    }
 
     // =====================================================
     // 6. Debug visualizer
@@ -1245,7 +1865,9 @@ bool ApplicationClass::Frame(float dt)
         NpcNavMeshSystem::GetDebugDrawSettings();
     if (navDraw.enabled && m_physicsDebugRenderer)
     {
-        const Entity debugNpc = m_editorUI.GetSelectedEntity();
+        std::vector<Entity> drawnNavigationRooms;
+        auto drawNpcNavigation = [&](Entity debugNpc)
+        {
         const NpcNavMeshDebugInfo navInfo =
             NpcNavMeshSystem::GetDebugInfo(debugNpc);
         const float yOffset = navDraw.heightOffset;
@@ -1262,8 +1884,10 @@ bool ApplicationClass::Frame(float dt)
                 lifted, color, oneFrameLifetime);
         };
 
-        if (navDraw.drawMesh)
+        if (navDraw.drawMesh && !navInfo.meshEdges.empty() &&
+            std::find(drawnNavigationRooms.begin(), drawnNavigationRooms.end(), navInfo.room) == drawnNavigationRooms.end())
         {
+            drawnNavigationRooms.push_back(navInfo.room);
             // Оранжевый сразу выдаёт аварийную сетку "только пол". Голубой
             // означает, что препятствия действительно вошли в NavMesh.
             const XMFLOAT4 meshColor = navInfo.floorOnlyFallback
@@ -1329,10 +1953,88 @@ bool ApplicationClass::Frame(float dt)
                 },
                 XMFLOAT4{ 1.0f, 0.45f, 0.05f, 1.0f });
         }
-    }
+        };
+        // Все маршруты видны без выбора конкретного NPC в редакторе.
+        if (navDraw.allNpcs)
+            m_sceneManager.GetECSRegistry().ForEach<NpcBrainComponent>(
+                [&](Entity npc, NpcBrainComponent&) { drawNpcNavigation(npc); });
+        else drawNpcNavigation(m_editorUI.GetSelectedEntity());
+        if (navDraw.drawCoverPoints)
+        {
+            m_sceneManager.GetECSRegistry().ForEach<NpcCoverPointComponent, TransformComponent>(
+                [&](Entity, NpcCoverPointComponent& cover, TransformComponent& transform) {
+                    XMFLOAT3 point = transform.position, peek{};
+                    XMStoreFloat3(&peek, XMVector3TransformCoord(XMLoadFloat3(&cover.peekOffset), transform.GetWorldMatrix()));
+                    point.y += navDraw.heightOffset;
+                    peek.y += navDraw.heightOffset;
+                    std::vector<XMFLOAT3> lines{ {point.x-0.3f,point.y,point.z}, {point.x+0.3f,point.y,point.z},
+                        {point.x,point.y,point.z-0.3f}, {point.x,point.y,point.z+0.3f}, point, peek,
+                        point, {point.x,point.y+cover.protectionHeight,point.z} };
+                    m_physicsDebugRenderer->AddNavigationLines(lines,
+                        cover.enabled ? XMFLOAT4{0.2f,1.0f,0.2f,1.0f} : XMFLOAT4{0.5f,0.5f,0.5f,1.0f}, 0.001f);
+                });
+        }
+        if (navDraw.drawCoverQueries)
+        {
+            // Эти линии — снимок последнего полного поиска, а не лучи зрения.
+            // Красный: кандидат не защищён. Голубой: проверялся выход из-за
+            // края. Жёлтый: допустимый кандидат. Зелёный крест: победитель.
+            auto drawCoverQueryForNpc = [&](Entity npc)
+            {
+                const auto* tactical = m_sceneManager.GetECSRegistry()
+                    .GetComponent<NpcTacticalComponent>(npc);
+                if (!tactical)
+                    return;
 
+                auto drawQueryPairs = [&](const std::vector<XMFLOAT3>& source,
+                    const XMFLOAT4& color)
+                {
+                    if (source.size() < 2)
+                        return;
+                    std::vector<XMFLOAT3> lifted = source;
+                    for (XMFLOAT3& point : lifted)
+                        point.y += navDraw.heightOffset;
+                    m_physicsDebugRenderer->AddNavigationLines(
+                        lifted, color, 0.001f);
+                };
+
+                drawQueryPairs(tactical->dynamicCoverRejectedRays,
+                    XMFLOAT4{ 1.0f, 0.12f, 0.08f, 0.75f });
+                drawQueryPairs(tactical->dynamicCoverPeekRays,
+                    XMFLOAT4{ 0.10f, 0.75f, 1.0f, 0.80f });
+                drawQueryPairs(tactical->dynamicCoverAcceptedRays,
+                    XMFLOAT4{ 1.0f, 0.80f, 0.08f, 0.75f });
+
+                if (tactical->dynamicCoverActive)
+                {
+                    XMFLOAT3 point = tactical->coverPosition;
+                    point.y += navDraw.heightOffset + 0.06f;
+                    const std::vector<XMFLOAT3> selected{
+                        { point.x - 0.38f, point.y, point.z },
+                        { point.x + 0.38f, point.y, point.z },
+                        { point.x, point.y, point.z - 0.38f },
+                        { point.x, point.y, point.z + 0.38f }
+                    };
+                    m_physicsDebugRenderer->AddNavigationLines(selected,
+                        XMFLOAT4{ 0.10f, 1.0f, 0.20f, 1.0f }, 0.001f);
+                }
+            };
+
+            if (navDraw.allNpcs)
+                m_sceneManager.GetECSRegistry().ForEach<NpcTacticalComponent>(
+                    [&](Entity npc, NpcTacticalComponent&)
+                    {
+                        drawCoverQueryForNpc(npc);
+                    });
+            else
+                drawCoverQueryForNpc(
+                    NpcSimulationStudio::inspectedNpc != INVALID_ENTITY
+                        ? NpcSimulationStudio::inspectedNpc
+                        : m_editorUI.GetSelectedEntity());
+        }
+    }
     m_renderer->SetFirstPersonView(
-        isPlayMode && m_cameraController.IsFirstPerson(),
+        isPlayMode && !logicStudio && m_cameraController.IsFirstPerson(),
         m_gameplayController.GetPlayerEntity());
     m_renderer->RenderFrame(
         m_direct3D->GetDeviceContext(),
@@ -1357,6 +2059,66 @@ bool ApplicationClass::Frame(float dt)
             m_viewMatrix,
             m_projMatrix,
             m_colorShader);
+    }
+
+    if (isEditorMode)
+    {
+        auto& registry = m_sceneManager.GetECSRegistry();
+        for (auto& [entity, trigger] :
+            registry.GetComponents<TriggerZoneComponent>())
+        {
+            if (!trigger.enabled || !trigger.showDebugShape ||
+                !m_sceneManager.IsObjectActive(entity))
+            {
+                continue;
+            }
+
+            const auto* transform =
+                registry.GetComponent<TransformComponent>(entity);
+            if (!transform)
+                continue;
+
+            XMFLOAT3 center{};
+            XMStoreFloat3(
+                &center,
+                XMVector3TransformCoord(
+                    XMLoadFloat3(&trigger.localCenter),
+                    transform->GetWorldMatrix()));
+
+            if (trigger.shape == TriggerZoneShape::Sphere)
+            {
+                const float scale = (std::max)({
+                    std::abs(transform->scale.x),
+                    std::abs(transform->scale.y),
+                    std::abs(transform->scale.z) });
+                const float diameter =
+                    std::abs(trigger.sphereRadius) * scale * 2.0f;
+                m_areaDebugRenderer.RenderSphere(
+                    m_direct3D->GetDeviceContext(),
+                    center,
+                    diameter,
+                    trigger.debugColor,
+                    m_viewMatrix,
+                    m_projMatrix,
+                    m_colorShader);
+            }
+            else
+            {
+                const XMFLOAT3 size = {
+                    std::abs(trigger.boxHalfExtents.x * transform->scale.x) * 2.0f,
+                    std::abs(trigger.boxHalfExtents.y * transform->scale.y) * 2.0f,
+                    std::abs(trigger.boxHalfExtents.z * transform->scale.z) * 2.0f };
+                m_areaDebugRenderer.RenderVolume(
+                    m_direct3D->GetDeviceContext(),
+                    center,
+                    size,
+                    transform->rotation,
+                    trigger.debugColor,
+                    m_viewMatrix,
+                    m_projMatrix,
+                    m_colorShader);
+            }
+        }
     }
 
 
@@ -1389,23 +2151,13 @@ bool ApplicationClass::Frame(float dt)
     }
     else
     {
-        m_editorUI.UpdatePlayOverlay(m_sceneManager);
+        m_editorUI.UpdatePlayOverlay(m_sceneManager, m_playUiCursorActive);
+        m_editorUI.RenderSocketStudioGizmo(
+            m_sceneManager, m_viewMatrix, m_projMatrix);
         if (m_editorUI.ConsumeWeaponVisualReloadRequest())
             SetupTestRifleVisuals();
         m_editorUI.Render();
     }
-    if (isPlayMode && !m_interactionSystem.GetPrompt().empty())
-    {
-        const std::wstring prompt = Utf8ToWide("E: " + m_interactionSystem.GetPrompt());
-        if (!prompt.empty())
-            dwrite_text.DrawSmallTextLineColor(
-                prompt.c_str(),
-                (std::max)(20.0f, static_cast<float>(m_screenWidth) * 0.5f - 120.0f),
-                (std::max)(20.0f, static_cast<float>(m_screenHeight) - 126.0f),
-                240.0f,
-                D2D1::ColorF(0.82f, 0.92f, 0.94f, 1.0f));
-    }
-
     // Панель устройства появляется только при взгляде на кислородный генератор.
     if (isPlayMode)
     {
@@ -1424,36 +2176,82 @@ bool ApplicationClass::Frame(float dt)
     }
 
 
-	/////======GAMEHUD======/////
-    GameHudStats hudStats;
-   
-    hudStats.frameMs = dt > 0.0f ? dt * 1000.0f : 0.0f;
-    if (m_renderer)
+    if (isPlayMode)
     {
-        const auto& renderStats = m_renderer->GetLastFrameStats();
-        hudStats.renderCpuMs = renderStats.renderCpuMs;
-        hudStats.activeMeshObjects = renderStats.activeMeshObjects;
-        hudStats.mainRenderedObjects = renderStats.mainRenderedObjects;
-        hudStats.shadowRenderedObjects = renderStats.shadowRenderedObjects;
-    }
-   
+        GameHudStats hudStats;
+        hudStats.frameMs = dt > 0.0f ? dt * 1000.0f : 0.0f;
+        if (m_renderer)
+        {
+            const auto& renderStats = m_renderer->GetLastFrameStats();
+            hudStats.renderCpuMs = renderStats.renderCpuMs;
+            hudStats.activeMeshObjects = renderStats.activeMeshObjects;
+            hudStats.mainRenderedObjects = renderStats.mainRenderedObjects;
+            hudStats.shadowRenderedObjects = renderStats.shadowRenderedObjects;
+        }
 
-    m_gameHud.Render(
+        const auto& crew = CrewTaskCoordinator::GetSnapshot();
+        hudStats.availableCrew = crew.availableCrew;
+        hudStats.busyCrew = crew.busyCrew;
+        hudStats.openCrewTasks = crew.openTasks;
+        hudStats.simulationPaused = timer.IsPaused();
+        hudStats.timeScale = timer.GetTimeScale();
+
+        GameHudContext hudContext;
+        hudContext.interactionBinding =
+            m_gameplayInputSystem.GetBindingLabel(GameAction::Interact);
+        hudContext.useWeaponCrosshair = weaponCrosshairValid;
+        hudContext.weaponCrosshairX = weaponCrosshairX;
+        hudContext.weaponCrosshairY = weaponCrosshairY;
+        hudContext.interactionPrompt = m_interactionSystem.GetPrompt();
+        hudContext.interactionTarget = m_interactionSystem.GetHoveredEntity();
+
+        auto& registry = m_sceneManager.GetECSRegistry();
+        const Entity openedEntity = m_interactionSystem.GetOpenedEntity();
+        if (registry.HasComponent<NPCComponent>(openedEntity))
+            hudContext.openedNpc = openedEntity;
+
+        const auto& inventoryFeedback = m_weaponPickupSystem.GetFeedback();
+        const auto& triggerFeedback = m_triggerActionSystem.GetFeedback();
+        if (inventoryFeedback.visible)
+        {
+            hudContext.notification = inventoryFeedback.message;
+            hudContext.notificationSuccess = inventoryFeedback.success;
+        }
+        else if (triggerFeedback.visible)
+        {
+            hudContext.notification = triggerFeedback.message;
+            hudContext.notificationSuccess = true;
+        }
+
+        m_gameHud.Render(
+            dwrite_text,
+            registry,
+            m_gameplayController.GetPlayerEntity(),
+            dt,
+            static_cast<float>(m_screenWidth),
+            static_cast<float>(m_screenHeight),
+            gameInput,
+            m_worldEventLog,
+            hudStats,
+            hudContext);
+    }
+
+    // Render last so urgent development messages stay visible above normal HUD.
+    // SetEnabled(false) turns the overlay into a no-op without removing calls.
+    DebugHud::Get().Render(
         dwrite_text,
-        m_sceneManager.GetECSRegistry(),
-        m_gameplayController.GetPlayerEntity(),
-        dt,
         static_cast<float>(m_screenWidth),
-        static_cast<float>(m_screenHeight),
-        m_inputManager, m_worldEventLog,
-        hudStats);
+        static_cast<float>(m_screenHeight));
     
 
 
     // =====================================================
     // 10. Present
     // =====================================================
+    if (m_weaponQA) CaptureWeaponQAFrame();
     m_direct3D->EndScene();
+    if (m_weaponDemo) ++m_weaponQAFrame;
+    if (m_weaponQA && m_weaponQAFrame > 820) return false;
 
     return true;
 }
@@ -2743,3 +3541,4 @@ void ApplicationClass::UpdateCameraControlMode()
         m_cameraController.ReleaseMouseCapture();
     }
 }
+#include "WeaponGameQA.inl"

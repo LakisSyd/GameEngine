@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include <Components.h>
 #include <ECSRegistry.h>
 #include "GeneratorComponent.h"
 
@@ -11,12 +12,22 @@ class GeneratorSystem
 public:
     static void Update(ECSRegistry& registry, float deltaTime)
     {
-        if (deltaTime <= 0.0f)
-            return;
-
         registry.ForEach<GeneratorComponent>(
-            [&](Entity, GeneratorComponent& generator)
+            [&](Entity entity, GeneratorComponent& generator)
             {
+                if (!registry.HasComponent<ActiveComponent>(entity))
+                {
+                    // These are runtime readings, not authoring controls. Keep
+                    // isOnline/targetOutput/fuel/heat intact so reactivation can
+                    // resume the configured reactor instead of rewriting it.
+                    generator.currentOutputMw = 0.0f;
+                    generator.currentFuelBurnKgPerSecond = 0.0f;
+                    return;
+                }
+
+                if (deltaTime <= 0.0f)
+                    return;
+
                 UpdateGenerator(generator, deltaTime);
             });
     }

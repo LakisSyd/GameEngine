@@ -25,6 +25,20 @@ struct CharacterPhysicsTuningComponent
     float maxPenetrationDepth = 0.04f;
     float fallSpeed = 30.0f;
 
+    // Кинематический контроллер Bullet сам не передаёт динамическому телу
+    // физически корректный импульс. Этот общий параметр используется и игроком,
+    // и NPC. Одинаковый импульс сильнее разгоняет лёгкий объект и слабее тяжёлый.
+    bool pushDynamicBodies = true;
+    float dynamicBodyPushForce = 120.0f;
+    float dynamicBodyPushProbe = 0.04f;
+    // A kinematic character has no physical mass of its own, so gameplay must
+    // explicitly define what it is strong enough to move. Player and NPC use
+    // these same defaults; individual characters can still override them.
+    float dynamicBodyMaxPushableMass = 100.0f;
+    // Repeated force may accelerate a body, but never beyond this speed in the
+    // character's push direction. This prevents per-frame impulse buildup.
+    float dynamicBodyMaxPushSpeed = 1.25f;
+
     // Normal step-height safety limits. Disable the clamp when deliberately
     // experimenting, but remember that a very large step can hit a low ceiling
     // every frame and can help a character climb walls or reach the ship roof.

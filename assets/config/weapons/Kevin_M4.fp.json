@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "profile_name": "Kevin_M4",
+  "view": "first_person",
+  "first_person_position": [0.0298783, 0.0213676, 0.1143637],
+  "first_person_rotation": [-0.0080474, 0.0122972, -1.870682],
+  "first_person_scale": [0.8, 0.8, 0.8],
+  "first_person_pitch_scale": 1.0,
+  "first_person_pitch_offset": 0.0
+}

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <limits>
 #include <queue>
 #include <string>
 #include <unordered_map>
@@ -12,11 +13,19 @@
 #include "NpcCommandSystem.h"
 #include "CharacterSpawnSystem.h"
 #include "Gameplay/Power/PowerConsumerComponent.h"
+#include "Gameplay/AI/CrewTaskCoordinator.h"
 #include "Gameplay/AI/NpcNavMeshSystem.h"
+#include "Gameplay/AI/NpcCrowdSpacing.h"
+#include "Gameplay/AI/NpcCombatDecisionRules.h"
+#include "Gameplay/AI/NpcCombatModules.h"
+#include "Gameplay/AI/NpcCoverLifecycle.h"
 #include "Gameplay/Repair/RepairComponent.h"
 #include "Gameplay/Repair/RepairSystem.h"
 #include "AnimationComponent.h"
 #include "JobSystem.h"
+#include "Gameplay/Combat/WeaponComponent.h"
+#include "Gameplay/Combat/WeaponSystem.h"
+#include "../DebugHud.h"
 
 // =============================================================================
 // StateSystem — исполнитель NPC AI ("как выполнить выбранную задачу?").
@@ -52,6 +61,8 @@
 // команды, граф дверей и ремонт при этом останутся без изменений.
 
 
+// Переводит позицию NPC в локальные координаты кубической WorkZone, зажимает
+// её внутри [-1..1] и возвращает ближайшую доступную мировую точку зоны.
 static DirectX::XMFLOAT3 GetClosestPointInWorkZone(
     const DirectX::XMFLOAT3& worldPosition,
     const TransformComponent& zoneTransform)
@@ -106,6 +117,7 @@ static DirectX::XMFLOAT3 GetClosestPointInWorkZone(
     return result;
 }
 
+// Переводит заранее выбранную локальную точку WorkZone обратно в мир.
 static DirectX::XMFLOAT3 TransformWorkZoneLocalPoint(
     const TransformComponent& zoneTransform,
     const DirectX::XMFLOAT3& localPoint)
@@ -120,6 +132,8 @@ static DirectX::XMFLOAT3 TransformWorkZoneLocalPoint(
     return result;
 }
 
+// Перебирает несколько мест внутри рабочей зоны и выбирает то, которое NavMesh
+// может связать с NPC. outPoint заполняется только при true.
 static bool TryPickReachableWorkZonePoint(
     ECSRegistry& registry,
     Entity repairRoom,
@@ -210,6 +224,25 @@ public:
         registry.ForEach<NpcBrainComponent, TransformComponent>(
             [&](Entity npc, NpcBrainComponent& brain, TransformComponent& transform)
             {
+                if (!registry.HasComponent<ActiveComponent>(npc))
+                {
+                    if (auto* movement =
+                        registry.GetComponent<CharacterMovement>(npc))
+                    {
+                        StopMovement(*movement);
+                    }
+                    if (auto* controller =
+                        registry.GetComponent<CharacterController>(npc);
+                        controller && controller->controller)
+                    {
+                        controller->controller->setWalkDirection(
+                            btVector3(0.0f, 0.0f, 0.0f));
+                        controller->controller->setVelocityForTimeInterval(
+                            btVector3(0.0f, 0.0f, 0.0f), btScalar(0.0f));
+                    }
+                    return;
+                }
+
                 // One Entity cannot be controlled by both a Bullet rigid body
                 // and btKinematicCharacterController. Editor mesh objects often
                 // already have RigidBodyComponent when NPC AI is added; leaving
@@ -275,6 +308,44 @@ public:
                 // проверяем, действительно ли физический controller продвинулся.
                 brain.portalCollisionBypassRequestedThisFrame = false;
                 UpdateNpc(registry, npc, brain, transform, *movement, *npcMovement, deltaTime, jobs);
+                // Разводим не только конечные позиции, но и движущиеся капсулы.
+                // Transform не телепортируем: корректировку выполняет физика.
+                if (!brain.command.IsActive())
+                {
+                    DirectX::XMFLOAT3 separation{};
+                    registry.ForEach<NPCComponent, TransformComponent>([&](Entity other,
+                        NPCComponent&, TransformComponent& otherTransform) {
+                        const auto* otherVitals =
+                            registry.GetComponent<CharacterVitalsComponent>(other);
+                        if (other == npc || !otherVitals || otherVitals->health <= 0.0f ||
+                            !registry.HasComponent<ActiveComponent>(other) ||
+                            std::abs(otherTransform.position.y-transform.position.y) > 1.5f) return;
+                        float x = transform.position.x-otherTransform.position.x;
+                        float z = transform.position.z-otherTransform.position.z;
+                        const auto* otherController = registry.GetComponent<CharacterController>(other);
+                        const float spacing = controller->capsuleRadius +
+                            (otherController ? otherController->capsuleRadius : 0.4f) + 0.6f;
+                        // При полном совпадении выбираем противоположные стороны
+                        // по ID, иначе нулевой вектор никогда не раздвинет пару.
+                        const auto correction = NpcPairSeparation(npc, other, x, z, spacing);
+                        separation.x += correction.x;
+                        separation.z += correction.z;
+                    });
+                    if (std::hypot(separation.x,separation.z) > 0.01f)
+                    {
+                        const float x = movement->walkDirection.x + separation.x;
+                        const float z = movement->walkDirection.z + separation.z;
+                        const float length = std::hypot(x,z);
+                        if (length > 0.001f)
+                        {
+                            movement->walkDirection = {x/length,0.0f,z/length};
+                            movement->currentSpeed = movement->moveSpeed;
+                            movement->isMoving = true;
+                            movement->isRunning = movement->wantsRun = false;
+                            movement->locomotionState = PlayerLocomotionState::Walk;
+                        }
+                    }
+                }
                 if (brain.portalCollisionIgnoredDoor != INVALID_ENTITY &&
                     !brain.portalCollisionBypassRequestedThisFrame)
                 {
@@ -323,11 +394,13 @@ private:
         return component;
     }
 
+    // Исполняет состояние одного NPC. Здесь ручная команда получает приоритет,
+    // а затем switch делегирует ремонт, бой, поиск, укрытие или патруль.
     static void UpdateNpc(
         ECSRegistry& registry,
         Entity npc,
         NpcBrainComponent& brain,
-        const TransformComponent& transform,
+         TransformComponent& transform,
         CharacterMovement& movement,
         const NPCMovementComponent& npcMovement,
         float deltaTime,
@@ -343,11 +416,123 @@ private:
             return;
         }
 
+        // После завершённого поиска старое состояние Attacking/Searching могло
+        // остаться ещё на один кадр, хотя targetEntity и память позиции уже
+        // очищены. Раньше такой NPC не попадал в ветку Wandering и визуально
+        // застывал. Если контакта действительно больше нет и авторский patrol
+        // не включён, сразу возвращаем боевого NPC в исходный патруль поиска.
+        const auto* preContactCombat =
+            registry.GetComponent<NPCCombatComponent>(npc);
+        const auto* preContactFaction =
+            registry.GetComponent<FactionComponent>(npc);
+        const auto* authoredPatrol =
+            registry.GetComponent<NpcPatrolComponent>(npc);
+        const auto* preContactTactical =
+            registry.GetComponent<NpcTacticalComponent>(npc);
+        const bool defensiveHoldingCover =
+            preContactTactical &&
+            preContactTactical->activeStyle == NpcTacticalStyle::Defensive &&
+            (preContactTactical->reservedCover != INVALID_ENTITY ||
+                preContactTactical->dynamicCoverActive) &&
+            brain.state == NpcState::InCover;
+        const bool shouldResumeContactWander =
+            preContactCombat &&
+            preContactFaction &&
+            preContactFaction->faction != FactionId::Neutral &&
+            preContactCombat->wanderUntilContact &&
+            preContactCombat->targetEntity == INVALID_ENTITY &&
+            !preContactCombat->hasLastKnownPosition &&
+            !defensiveHoldingCover &&
+            (!authoredPatrol || !authoredPatrol->enabled);
+        if (shouldResumeContactWander &&
+            brain.state != NpcState::Idle &&
+            brain.state != NpcState::Wandering)
+        {
+            brain.state = NpcState::Idle;
+            brain.wanderTargetValid = false;
+            brain.wanderPauseTimer = 0.0f;
+            NpcNavMeshSystem::InvalidatePath(npc);
+        }
+
         // Ручной команды нет: исполняем состояние, выбранное Utility AI.
         // WaitingForDoor обрабатывается тем же UpdateRepairTask, потому что после
         // открытия двери нужно продолжить ту же задачу, а не создавать отдельную.
         switch (brain.state)
         {
+        case NpcState::Idle:
+        case NpcState::Patrolling:
+        case NpcState::Wandering:
+            if (auto* patrol = registry.GetComponent<NpcPatrolComponent>(npc);
+                patrol && patrol->enabled)
+            {
+                UpdatePatrol(registry, npc, brain, transform, movement,
+                    npcMovement, *patrol, deltaTime);
+            }
+            else
+            {
+                const auto* combat =
+                    registry.GetComponent<NPCCombatComponent>(npc);
+                const auto* faction =
+                    registry.GetComponent<FactionComponent>(npc);
+                const bool canSearchForFirstContact =
+                    combat &&
+                    faction &&
+                    faction->faction != FactionId::Neutral &&
+                    combat->wanderUntilContact &&
+                    combat->targetEntity == INVALID_ENTITY &&
+                    !combat->hasLastKnownPosition;
+
+                if (canSearchForFirstContact)
+                {
+                    // Это не поиск уже известного врага: NPC не знает,
+                    // где он находится. Он просто ходит по случайным достижимым
+                    // точкам. Поворот по ходу перемещает сектор зрения, и рано
+                    // или поздно NpcCombatSystem сам подтвердит контакт.
+                    if (brain.state != NpcState::Wandering)
+                    {
+                        // Новый боевой патруль всегда начинает новый цикл.
+                        // Иначе оставшаяся от ручной команды Wander цель могла
+                        // находиться в другой комнате или уже быть недоступной.
+                        brain.wanderAnchor = transform.position;
+                        brain.wanderTargetValid = false;
+                        brain.wanderPauseTimer = 0.0f;
+                    }
+                    else if (!brain.wanderTargetValid)
+                    {
+                        // Боевой поиск не должен вечно кружить вокруг точки
+                        // спавна. После каждого достигнутого waypoint текущая
+                        // позиция становится новым центром следующего шага.
+                        // Так два бойца способны в итоге встретиться даже если
+                        // начали дальше одного contactWanderRadius.
+                        brain.wanderAnchor = transform.position;
+                    }
+
+                    const float ordinaryWanderRadius = brain.wanderRadius;
+                    brain.wanderRadius = (std::max)(
+                        1.0f,
+                        combat->contactWanderRadius);
+                    NPCMovementComponent searchMovement = npcMovement;
+                    searchMovement.allowRunning = false;
+                    UpdateWander(
+                        registry,
+                        npc,
+                        brain,
+                        transform,
+                        movement,
+                        searchMovement,
+                        deltaTime);
+                    brain.wanderRadius = ordinaryWanderRadius;
+                    brain.status = movement.isMoving
+                        ? "Боевой патруль: ищу первый визуальный контакт"
+                        : "Боевой патруль: осматриваю окружение";
+                }
+                else
+                {
+                    brain.state = NpcState::Idle;
+                    StopMovement(movement);
+                }
+            }
+            break;
         case NpcState::MoveToRepair:
         case NpcState::Repairing:
         case NpcState::WaitingForDoor:
@@ -355,6 +540,977 @@ private:
                 registry, npc, brain, transform, movement, npcMovement,
                 brain.repairTarget, false, deltaTime, jobs);
             break;
+        case NpcState::TakingCover:
+        {
+            auto* tactical = registry.GetComponent<NpcTacticalComponent>(npc);
+            auto* combat = registry.GetComponent<NPCCombatComponent>(npc);
+            if (!tactical || !combat || !combat->hasLastKnownPosition)
+            {
+                brain.state = NpcState::Chasing;
+                break;
+            }
+            // TakingCover всегда означает движение: к краю, обратно за стену
+            // или к новой позиции. Полнотелая peek-поза включится только после
+            // NavigationResult::Arrived ниже.
+            tactical->isPeeking = false;
+            tactical->peekState = NpcTacticalComponent::PeekSide::none;
+            NPCMovementComponent tacticalMovement = npcMovement;
+            if (tactical->movingToPeek)
+            {
+                // Peek — это короткое резкое выглядывание, а не пробежка.
+                // Поэтому повышаем линейную скорость, но оставляем
+                // locomotion=Walk. Так будущий peek-clip не заменится Run-клипом.
+                tacticalMovement.speed = (std::max)(
+                    tacticalMovement.speed,
+                    tactical->peekMoveSpeed);
+                tacticalMovement.allowRunning = false;
+            }
+            else
+            {
+                // Путь к защищённой точке — аварийный рывок. Нолевой
+                // порог включает runSpeed сразу, а не лишь за 8 метров.
+                tacticalMovement.allowRunning = npcMovement.allowRunning;
+                tacticalMovement.runWhenFartherThan = 0.0f;
+            }
+            const Entity room = FindContainingRoom(registry, tactical->moveTarget);
+            const NavigationResult result = NavigateTo(registry, npc, brain,
+                transform, movement, tacticalMovement, tactical->moveTarget,
+                room, npcMovement.arrivalDistance, NpcState::TakingCover, deltaTime);
+            if (result == NavigationResult::Arrived)
+            {
+                StopMovement(movement);
+                if (tactical->movingToPeek)
+                {
+                    tactical->wantsPeek = false;
+                    tactical->isPeeking = true;
+                    tactical->peekState = NpcTacticalComponent::PeekSide::left;
+                    tactical->exposed = true;
+                    tactical->crouched = false;
+                    // Окно огня включает время прицеливания и короткую очередь.
+                    // exposeDuration больше не перекрывается одинаковой для
+                    // всех константой: стили действительно получают разный ритм.
+                    tactical->phaseTimer = (std::max)(
+                        0.35f,
+                        combat->rangedAimDelay + tactical->exposeDuration);
+                    tactical->status = "Exposed: firing from cover edge";
+                    brain.state = NpcState::Attacking;
+                }
+                else
+                {
+                    tactical->wantsPeek = false;
+                    tactical->isPeeking = false;
+                    tactical->peekState = NpcTacticalComponent::PeekSide::none;
+                    tactical->exposed = false;
+                    tactical->crouched = tactical->coverUsesCrouch;
+                    // Небольшое детерминированное смещение не даёт двум NPC
+                    // синхронно повторять один и тот же peek-цикл.
+                    const float cadenceOffset = 0.15f * static_cast<float>(
+                        (static_cast<unsigned int>(npc) +
+                            static_cast<unsigned int>(tactical->completedPeekCount)) % 3u);
+                    tactical->phaseTimer = (std::max)(
+                        0.1f,
+                        tactical->hideDuration + cadenceOffset);
+                    tactical->status = "Protected: waiting for next peek";
+                    brain.state = NpcState::InCover;
+                }
+            }
+            else if (result == NavigationResult::Blocked)
+            {
+                NpcCoverLifecycle::Clear(*tactical);
+                tactical->status = "Маршрут к укрытию заблокирован: ищу новый";
+                brain.state = NpcState::Chasing;
+            }
+            break;
+        }
+        case NpcState::InCover:
+        {
+            StopMovement(movement);
+            auto* tactical = registry.GetComponent<NpcTacticalComponent>(npc);
+            auto* combat = registry.GetComponent<NPCCombatComponent>(npc);
+            if (!tactical || !combat)
+            {
+                brain.state = NpcState::Searching;
+                break;
+            }
+            if (!combat->hasLastKnownPosition)
+            {
+                // После полного забывания цели защитник не бросает хорошее
+                // укрытие ради обычного wandering. Он остаётся за стеной до
+                // нового визуального/звукового контакта.
+                if (tactical->activeStyle == NpcTacticalStyle::Defensive &&
+                    (tactical->reservedCover != INVALID_ENTITY ||
+                        tactical->dynamicCoverActive))
+                {
+                    brain.status = "Оборона: удерживаю укрытие после потери контакта";
+                    break;
+                }
+
+                brain.state = NpcState::Searching;
+                break;
+            }
+            // Корпус следит за последней известной точкой: будущая crouch/lean
+            // анимация получит уже правильное направление персонажа.
+            const float dx = combat->lastKnownPosition.x - transform.position.x;
+            const float dz = combat->lastKnownPosition.z - transform.position.z;
+            if (dx*dx + dz*dz > 0.001f)
+            {
+                const float targetYaw = std::atan2(dx, dz) + DirectX::XM_PI;
+                const float difference = std::atan2(std::sin(targetYaw-transform.rotation.y),
+                    std::cos(targetYaw-transform.rotation.y));
+                const float step = movement.rotationSpeed * deltaTime;
+                transform.rotation.y += std::clamp(difference, -step, step);
+            }
+            break;
+        }
+        case NpcState::Chasing:
+        {
+            auto* combat =
+                registry.GetComponent<NPCCombatComponent>(npc);
+            const auto* combatModules =
+                registry.GetComponent<NpcCombatModulesComponent>(npc);
+            const bool pursuitEnabled = NpcCombatModuleOperational(
+                combatModules,
+                NpcCombatModule::Pursuit);
+            const bool engagementEnabled = NpcCombatModuleOperational(
+                combatModules,
+                NpcCombatModule::Engagement);
+            const bool searchEnabled = NpcCombatModuleOperational(
+                combatModules,
+                NpcCombatModule::Search);
+
+            // Это постоянный входной gate, а не только очистка на момент
+            // checkbox. Старые переходы больше не могут заново включить
+            // Chasing после отключения модуля.
+            if (!pursuitEnabled)
+            {
+                StopMovement(movement);
+                if (combat && combat->targetVisible && engagementEnabled)
+                    brain.state = NpcState::Attacking;
+                else if (combat && combat->hasLastKnownPosition && searchEnabled)
+                    brain.state = NpcState::Searching;
+                else
+                {
+                    if (combat && !combat->targetVisible)
+                        ForgetLostCombatTarget(*combat,
+                            registry.GetComponent<NpcTacticalComponent>(npc));
+                    brain.state = NpcState::Idle;
+                }
+                brain.status = "Pursuit module disabled";
+                NpcNavMeshSystem::InvalidatePath(npc);
+                break;
+            }
+
+            const auto* rangedWeapon = registry.GetComponent<WeaponComponent>(
+                WeaponSystem::GetEquippedWeaponEntity(registry, npc));
+            const bool hasRangedWeapon = rangedWeapon != nullptr;
+
+            if (!combat ||
+                combat->targetEntity == INVALID_ENTITY ||
+                !registry.IsAlive(combat->targetEntity))
+            {
+                brain.state = NpcState::Idle;
+                StopMovement(movement);
+                break;
+            }
+
+            auto* targetTransform =
+                registry.GetComponent<TransformComponent>(combat->targetEntity);
+
+            if (!targetTransform)
+            {
+                brain.state = NpcState::Idle;
+                StopMovement(movement);
+                break;
+            }
+
+            if (!combat->hasLastKnownPosition)
+            {
+				StopMovement(movement);
+                brain.state = NpcState::Idle;
+                break;
+            }
+
+
+            const Entity targetRoom =
+                FindContainingRoom(registry, combat->lastKnownPosition);
+
+            // Возобновляем погоню обычным бегом: незавершённый Punch иначе останется
+            // на слое верхней части тела. Сюда попадает только безоружная погоня.
+            if (auto* anim = registry.GetComponent<AnimationComponent>(npc);
+                anim && anim->oneShotState == AnimationState::Punch)
+            {
+                anim->oneShotRequested = false;
+                anim->oneShotTimeRemaining = 0.0f;
+                anim->poseVariant = -1;
+            }
+            NPCMovementComponent chaseMovement = npcMovement;
+            if (!hasRangedWeapon)
+            {
+                chaseMovement.allowRunning = true;
+                chaseMovement.runWhenFartherThan = 0.0f;
+            }
+            const float engagementRange = hasRangedWeapon
+                ? (std::max)(0.0f, (std::min)(combat->rangedAttackRange, rangedWeapon->range))
+                : combat->attackRange;
+            auto* chaseTactical = registry.GetComponent<NpcTacticalComponent>(npc);
+
+            // Защитник не копирует штурмовую реакцию «цель исчезла — бежать к
+            // последней позиции». Пока CoverSystem ищет подходящую стену, он
+            // удерживает дистанцию. Если контакт потерян, переходит в Searching,
+            // где Defensive не получает наступательных поисковых секторов.
+            // Не привязываем запрет погони к текущему указателю оружия: во
+            // время перезарядки/смены слота он может кратко отсутствовать, но
+            // выбранная оборонительная тактика от этого не становится штурмовой.
+            if (chaseTactical &&
+                chaseTactical->activeStyle == NpcTacticalStyle::Defensive)
+            {
+                StopMovement(movement);
+                // Удаляем любой маршрут, который мог быть создан предыдущим
+                // Balanced/Assault-решением до переключения на Defensive.
+                chaseTactical->hasFlankTarget = false;
+                chaseTactical->searchingSector = false;
+                combat->investigatingPrediction = false;
+                combat->searchPlanReady = true;
+                combat->searchTravelTime = 0.0f;
+                combat->searchTurnRemaining = 0.0f;
+                NpcNavMeshSystem::InvalidatePath(npc);
+                brain.status = combat->targetVisible
+                    ? "Оборона: удерживаю дистанцию и жду укрытие"
+                    : "Оборона: не преследую скрытую цель";
+                if (!combat->targetVisible)
+                {
+                    if (searchEnabled)
+                        brain.state = NpcState::Searching;
+                    else
+                    {
+                        ForgetLostCombatTarget(*combat, chaseTactical);
+                        brain.state = NpcState::Idle;
+                    }
+                }
+                break;
+            }
+
+            const bool flanking = hasRangedWeapon &&
+                chaseTactical && chaseTactical->hasFlankTarget;
+            const auto chaseTarget = flanking ? chaseTactical->flankTarget : combat->lastKnownPosition;
+            const float chaseDx = chaseTarget.x - transform.position.x;
+            const float chaseDz = chaseTarget.z - transform.position.z;
+            const float chaseDistance = std::sqrt(
+                chaseDx * chaseDx + chaseDz * chaseDz);
+            const float combatRunDistance = (std::min)(
+                npcMovement.runWhenFartherThan,
+                4.0f);
+            const bool runDuringChase = npcMovement.allowRunning &&
+                (!hasRangedWeapon ||
+                    NpcCombatDecisionRules::ShouldRunDuringCombat(
+                        NpcState::Chasing,
+                        false,
+                        chaseTactical && chaseTactical->underFireTime > 0.0f,
+                        chaseDistance,
+                        combatRunDistance));
+            // В бою NPC бежит уже на средней дистанции, а под
+            // огнём — на любом ненулевом участке. Около самой цели
+            // он снова переходит на шаг, чтобы не проскочить точку.
+            chaseMovement.allowRunning = runDuringChase;
+            if (runDuringChase)
+                chaseMovement.runWhenFartherThan = 0.0f;
+            // Стрелок без подходящего обхода останавливается на дистанции и
+            // начинает поиск. Вплотную к памяти цели бегут только безоружные.
+            // Стрелок не обязан подходить на максимальную дальность оружия.
+            // preferredRange задаёт удобную дистанцию, а небольшой запас не
+            // позволяет состояниям Chasing/Attacking дрожать на одной границе.
+            const float preferredFireRange = hasRangedWeapon && chaseTactical
+                ? (std::max)(3.0f, (std::min)(
+                    chaseTactical->preferredRange, engagementRange))
+                : engagementRange;
+            const float holdDistance = (std::max)(
+                3.0f,
+                preferredFireRange - 0.75f);
+            const float arrivalRange = flanking ? npcMovement.arrivalDistance :
+                hasRangedWeapon ? holdDistance :
+                combat->targetVisible ? engagementRange : npcMovement.arrivalDistance;
+            const NavigationResult result = NavigateTo(
+				registry, npc, brain, transform, movement, chaseMovement,
+                chaseTarget, flanking ? FindContainingRoom(registry, chaseTarget) : targetRoom,
+                arrivalRange,
+				NpcState::Chasing, deltaTime);
+            if (flanking && result != NavigationResult::Moving)
+            {
+                // Засчитываем сектор только после прибытия, не при выдаче приказа.
+                if (chaseTactical->searchingSector)
+                {
+                    if (result == NavigationResult::Arrived)
+                    {
+                        ++chaseTactical->searchSectorsAssigned;
+                        chaseTactical->lastSearchDestination = chaseTactical->flankTarget;
+                        chaseTactical->hasLastSearchDestination = true;
+                    }
+                    else { ++chaseTactical->searchRouteFailures; chaseTactical->searchRetryTime = 1.0f; }
+                    chaseTactical->searchingSector = false;
+                }
+                chaseTactical->hasFlankTarget = false;
+            }
+
+            if (result == NavigationResult::Blocked && !combat->targetVisible)
+            {
+                // Если последнее место уже недоступно, не зависаем в погоне:
+                // проверим доступное продолжение и затем завершим поиск.
+                StopMovement(movement);
+                if (searchEnabled)
+                {
+                    brain.state = NpcState::Searching;
+                    combat->searchPlanReady = false;
+                    combat->timeSinceTargetSeen = 0.0f;
+                }
+                else
+                {
+                    ForgetLostCombatTarget(*combat, chaseTactical);
+                    brain.state = NpcState::Idle;
+                }
+            }
+            else if (result == NavigationResult::Arrived)
+            {
+                StopMovement(movement);
+                if (combat->targetVisible)
+                {
+                    if (engagementEnabled)
+                    {
+                        if (!hasRangedWeapon)
+                            combat->EnterMeleeStance();
+                        brain.state = NpcState::Attacking;
+                    }
+                    else
+                    {
+                        brain.status =
+                            "Engagement module disabled; holding at range";
+                    }
+                    break;
+                }
+                else {
+                    // Дошли до последнего наблюдения. Теперь можно проверить
+                    // продолжение пути и, если игрока нет, подождать на месте.
+                    if (searchEnabled)
+                    {
+                        brain.state = NpcState::Searching;
+					    combat->timeSinceTargetSeen = 0.0f;
+                        combat->searchPlanReady = false;
+                    }
+                    else
+                    {
+                        ForgetLostCombatTarget(*combat, chaseTactical);
+                        brain.state = NpcState::Idle;
+                    }
+                    break;
+                }
+            }
+            break;
+        }
+        case NpcState::Searching:
+        {
+            auto* combat = registry.GetComponent<NPCCombatComponent>(npc);
+            const auto* combatModules =
+                registry.GetComponent<NpcCombatModulesComponent>(npc);
+            auto* searchTactical =
+                registry.GetComponent<NpcTacticalComponent>(npc);
+            StopMovement(movement);
+            if (!NpcCombatModuleOperational(
+                combatModules,
+                NpcCombatModule::Search))
+            {
+                if (combat)
+                    ForgetLostCombatTarget(*combat, searchTactical);
+                brain.status = "Search module disabled";
+                brain.state = NpcState::Idle;
+                NpcNavMeshSystem::InvalidatePath(npc);
+                break;
+            }
+            if (!combat || !combat->hasLastKnownPosition ||
+                !registry.IsAlive(combat->targetEntity))
+            {
+                if (combat)
+                {
+                    combat->targetEntity = INVALID_ENTITY;
+                    combat->targetVisible = false;
+                    combat->hasLastKnownPosition = false;
+                    combat->investigatingPrediction = false;
+                    combat->searchPlanReady = false;
+                }
+                brain.state = NpcState::Idle;
+                break;
+            }
+            if (combat->targetVisible)
+            {
+                if (NpcCombatModuleOperational(
+                    combatModules,
+                    NpcCombatModule::Pursuit))
+                {
+                    brain.state = NpcState::Chasing;
+                }
+                else if (NpcCombatModuleOperational(
+                    combatModules,
+                    NpcCombatModule::Engagement))
+                {
+                    brain.state = NpcState::Attacking;
+                }
+                else
+                {
+                    brain.state = NpcState::Idle;
+                }
+                break;
+            }
+
+            // Defensive не исследует последнюю известную точку ногами. Даже
+            // если прогноз или сектор были назначены в предыдущем стиле, здесь
+            // они отменяются до вызова NavigateTo. NPC остаётся на позиции и
+            // поворачивается в сторону последнего подтверждённого контакта.
+            if (searchTactical &&
+                searchTactical->activeStyle == NpcTacticalStyle::Defensive)
+            {
+                const bool hadOffensiveSearchOrder =
+                    combat->investigatingPrediction ||
+                    searchTactical->hasFlankTarget ||
+                    searchTactical->searchingSector;
+
+                combat->investigatingPrediction = false;
+                combat->searchPlanReady = true;
+                combat->searchTravelTime = 0.0f;
+                combat->searchTurnRemaining = 0.0f;
+                searchTactical->hasFlankTarget = false;
+                searchTactical->searchingSector = false;
+
+                if (hadOffensiveSearchOrder)
+                {
+                    NpcNavMeshSystem::InvalidatePath(npc);
+                }
+
+                const float dangerDx =
+                    combat->lastKnownPosition.x - transform.position.x;
+                const float dangerDz =
+                    combat->lastKnownPosition.z - transform.position.z;
+                if (dangerDx * dangerDx + dangerDz * dangerDz > 0.001f)
+                {
+                    const float dangerYaw =
+                        std::atan2(dangerDx, dangerDz) + DirectX::XM_PI;
+                    const float yawDifference = std::atan2(
+                        std::sin(dangerYaw - transform.rotation.y),
+                        std::cos(dangerYaw - transform.rotation.y));
+                    const float yawStep = (std::max)(
+                        0.0f,
+                        movement.rotationSpeed * deltaTime);
+                    transform.rotation.y += std::clamp(
+                        yawDifference,
+                        -yawStep,
+                        yawStep);
+                }
+
+                brain.status =
+                    "Оборона: наблюдаю последнюю позицию, не преследую";
+                break;
+            }
+
+            // Раньше этот таймер уменьшал отключённый групповой координатор.
+            // Теперь индивидуальный поиск сам отвечает за повторные попытки.
+            if (searchTactical)
+            {
+                searchTactical->searchRetryTime = (std::max)(
+                    0.0f,
+                    searchTactical->searchRetryTime - deltaTime);
+            }
+            if (!combat->searchPlanReady)
+            {
+                // Строим план один раз на одну потерю цели. Повторять прогноз
+                // каждый кадр нельзя: иначе NPC бесконечно двигал бы свою цель.
+                combat->searchPlanReady = true;
+                combat->searchTravelTime = 0.0f;
+                combat->BeginSearchTurn();
+                combat->timeSinceTargetSeen = 0.0f;
+                if (auto* anim = registry.GetComponent<AnimationComponent>(npc))
+                {
+                    anim->oneShotRequested = false;
+                    anim->oneShotTimeRemaining = 0.0f;
+                }
+                // Защитник не выбегает из позиции вслед за первой догадкой.
+                // Штурмовик и сбалансированный NPC сначала проверяют короткое
+                // продолжение последнего наблюдавшегося движения цели.
+                const bool mayInvestigatePrediction =
+                    !searchTactical ||
+                    searchTactical->activeStyle != NpcTacticalStyle::Defensive;
+                if (mayInvestigatePrediction)
+                {
+                    const DirectX::XMFLOAT3 desired =
+                        combat->EstimateSearchPosition();
+                    const float aheadX =
+                        desired.x - combat->lastKnownPosition.x;
+                    const float aheadZ =
+                        desired.z - combat->lastKnownPosition.z;
+                    float bestScore = (std::numeric_limits<float>::max)();
+                    // Если прямое продолжение упирается в стену, проверяем ещё
+                    // два направления. Реальную скрытую позицию не читаем.
+                    const float angles[] =
+                    {
+                        0.0f,
+                        DirectX::XM_PI / 3.0f,
+                        -DirectX::XM_PI / 3.0f
+                    };
+                    for (float angle : angles)
+                    {
+                        const DirectX::XMFLOAT3 candidate = {
+                            combat->lastKnownPosition.x +
+                                aheadX * std::cos(angle) -
+                                aheadZ * std::sin(angle),
+                            desired.y,
+                            combat->lastKnownPosition.z +
+                                aheadX * std::sin(angle) +
+                                aheadZ * std::cos(angle) };
+                        DirectX::XMFLOAT3 reachable{};
+                        if (!NpcNavMeshSystem::FindReachablePoint(
+                                registry,
+                                brain.currentRoom,
+                                transform.position,
+                                candidate,
+                                reachable))
+                            continue;
+                        const float x = reachable.x - transform.position.x;
+                        const float z = reachable.z - transform.position.z;
+                        const float progress =
+                            (reachable.x - combat->lastKnownPosition.x) * aheadX +
+                            (reachable.z - combat->lastKnownPosition.z) * aheadZ;
+                        const float offsetX =
+                            reachable.x - combat->lastKnownPosition.x;
+                        const float offsetZ =
+                            reachable.z - combat->lastKnownPosition.z;
+                        const float maxDistance = (std::max)(
+                            0.0f,
+                            combat->maxPredictionDistance);
+                        const float errorX = reachable.x - candidate.x;
+                        const float errorZ = reachable.z - candidate.z;
+                        const float score = errorX*errorX + errorZ*errorZ +
+                            (angle == 0.0f ? 0.0f : 0.3f);
+                        if (score < bestScore &&
+                            offsetX*offsetX + offsetZ*offsetZ <=
+                                maxDistance*maxDistance &&
+                            progress > 0.05f &&
+                            x*x + z*z > npcMovement.arrivalDistance *
+                                npcMovement.arrivalDistance)
+                        {
+                            bestScore = score;
+                            combat->searchDestination = reachable;
+                            combat->investigatingPrediction = true;
+                        }
+                    }
+                }
+            }
+            // Групповой координатор временно отключён, поэтому каждый NPC сам
+            // исследует рассчитанную точку поиска. Раньше этот участок отменял
+            // индивидуальный маршрут стрелка в ожидании приказа отряда.
+            if (combat->investigatingPrediction)
+            {
+                // Предположение проверяем обычной ходьбой через общий маршрут.
+                // При неудаче или истечении лимита начинаем ожидание, а не
+                // застреваем навсегда в попытке дойти до неверного предположения.
+                combat->searchTravelTime += deltaTime;
+                NPCMovementComponent searchMovement = npcMovement;
+                searchMovement.allowRunning = false;
+                const Entity room = FindContainingRoom(registry, combat->searchDestination);
+                const NavigationResult result = NavigateTo(registry, npc, brain,
+                    transform, movement, searchMovement, combat->searchDestination,
+                    room, npcMovement.arrivalDistance, NpcState::Searching, deltaTime);
+                if (result == NavigationResult::Arrived || result == NavigationResult::Blocked ||
+                    combat->searchTravelTime >= (std::max)(0.0f, combat->predictionTravelTimeout))
+                {
+                    // Если это был дополнительный сектор, учитываем реальный
+                    // результат пути. Сектор считается проверенным только после
+                    // прибытия; заблокированный маршрут получает отдельный счётчик.
+                    if (searchTactical && searchTactical->searchingSector)
+                    {
+                        if (result == NavigationResult::Arrived)
+                        {
+                            ++searchTactical->searchSectorsAssigned;
+                            searchTactical->lastSearchDestination =
+                                combat->searchDestination;
+                            searchTactical->hasLastSearchDestination = true;
+                        }
+                        else
+                        {
+                            ++searchTactical->searchRouteFailures;
+                            searchTactical->searchRetryTime = 0.35f;
+                        }
+                        searchTactical->searchingSector = false;
+                    }
+                    combat->investigatingPrediction = false;
+                    combat->timeSinceTargetSeen = 0.0f;
+                    brain.state = NpcState::Searching;
+                    StopMovement(movement);
+                }
+            }
+            if (!combat->investigatingPrediction)
+            {
+                // После прогнозируемой точки индивидуальный AI сам назначает
+                // до трёх секторов вокруг последнего контакта. Раньше эти точки
+                // должен был выдавать отключённый NpcSquadCombatSystem, поэтому
+                // NPC бесконечно стоял со статусом Searching и счётчиком 0/3.
+                bool assignedSector = false;
+                const int searchSectorLimit = !searchTactical
+                    ? 0
+                    : searchTactical->activeStyle == NpcTacticalStyle::Assault
+                        ? 3
+                        : searchTactical->activeStyle == NpcTacticalStyle::Balanced
+                            ? 1
+                            : 0;
+                if (searchTactical &&
+                    searchTactical->searchSectorsAssigned < searchSectorLimit &&
+                    searchTactical->searchRouteFailures < 10 &&
+                    searchTactical->searchRetryTime <= 0.0f)
+                {
+                    const int sectorIndex =
+                        searchTactical->searchSectorsAssigned;
+                    const float baseAngle = std::atan2(
+                        combat->lastSeenVelocity.x,
+                        combat->lastSeenVelocity.z);
+                    const float sectorOffsets[3] =
+                    {
+                        0.0f,
+                        DirectX::XM_PIDIV2,
+                        -DirectX::XM_PIDIV2
+                    };
+                    const float sectorRadius = (std::min)(
+                        8.0f,
+                        (std::max)(4.0f,
+                            combat->contactWanderRadius * 0.40f));
+
+                    // Несколько радиусов дают шанс найти путь, если дальняя
+                    // точка оказалась за стеной или вне связного острова NavMesh.
+                    for (const float radiusScale : { 1.0f, 0.70f, 0.45f })
+                    {
+                        const float angle = baseAngle +
+                            sectorOffsets[sectorIndex] +
+                            static_cast<float>(npc % 5u) * 0.08f;
+                        const DirectX::XMFLOAT3 desiredSector{
+                            combat->lastKnownPosition.x +
+                                std::sin(angle) * sectorRadius * radiusScale,
+                            combat->lastKnownPosition.y,
+                            combat->lastKnownPosition.z +
+                                std::cos(angle) * sectorRadius * radiusScale
+                        };
+                        DirectX::XMFLOAT3 reachableSector{};
+                        if (!NpcNavMeshSystem::FindReachablePoint(
+                                registry,
+                                brain.currentRoom,
+                                transform.position,
+                                desiredSector,
+                                reachableSector))
+                        {
+                            continue;
+                        }
+
+                        const float moveDx =
+                            reachableSector.x - transform.position.x;
+                        const float moveDz =
+                            reachableSector.z - transform.position.z;
+                        if (moveDx * moveDx + moveDz * moveDz <=
+                            npcMovement.arrivalDistance *
+                            npcMovement.arrivalDistance)
+                        {
+                            continue;
+                        }
+
+                        if (searchTactical->hasLastSearchDestination)
+                        {
+                            const float oldDx = reachableSector.x -
+                                searchTactical->lastSearchDestination.x;
+                            const float oldDz = reachableSector.z -
+                                searchTactical->lastSearchDestination.z;
+                            if (oldDx * oldDx + oldDz * oldDz < 1.0f)
+                                continue;
+                        }
+
+                        combat->searchDestination = reachableSector;
+                        combat->searchTravelTime = 0.0f;
+                        combat->investigatingPrediction = true;
+                        searchTactical->searchingSector = true;
+                        NpcNavMeshSystem::InvalidatePath(npc);
+                        assignedSector = true;
+                        break;
+                    }
+
+                    if (!assignedSector)
+                    {
+                        ++searchTactical->searchRouteFailures;
+                        searchTactical->searchRetryTime = 0.35f;
+                    }
+                }
+
+                if (!assignedSector)
+                {
+                    // Между попытками NPC не смотрит в случайную сторону, а
+                    // держит последний опасный сектор перед собой.
+                    const float dx = combat->lastKnownPosition.x-transform.position.x;
+                    const float dz = combat->lastKnownPosition.z-transform.position.z;
+                    if (dx*dx+dz*dz > 0.001f)
+                    {
+                        const float yaw = std::atan2(dx,dz) + DirectX::XM_PI;
+                        const float difference = std::atan2(
+                            std::sin(yaw-transform.rotation.y),
+                            std::cos(yaw-transform.rotation.y));
+                        const float step = (std::max)(
+                            0.0f,
+                            movement.rotationSpeed*deltaTime);
+                        transform.rotation.y += std::clamp(
+                            difference,
+                            -step,
+                            step);
+                    }
+                    combat->searchTurnRemaining = 0.0f;
+                }
+            }
+            brain.status = combat->investigatingPrediction
+                ? (searchTactical && searchTactical->searchingSector
+                    ? "Поиск: проверяю следующий сектор"
+                    : "Поиск: проверяю предполагаемый путь противника")
+                : "Поиск: наблюдаю последнюю известную позицию";
+            break;
+        }
+        case NpcState::Attacking:
+        {
+            auto* combat =
+                registry.GetComponent<NPCCombatComponent>(npc);
+            const auto* combatModules =
+                registry.GetComponent<NpcCombatModulesComponent>(npc);
+            const bool engagementEnabled = NpcCombatModuleOperational(
+                combatModules,
+                NpcCombatModule::Engagement);
+            const bool pursuitEnabled = NpcCombatModuleOperational(
+                combatModules,
+                NpcCombatModule::Pursuit);
+            const bool searchEnabled = NpcCombatModuleOperational(
+                combatModules,
+                NpcCombatModule::Search);
+
+            // Постоянный gate не позволяет старой машине состояний вернуть
+            // запрещённую атаку через кадр после выключения checkbox.
+            if (!engagementEnabled)
+            {
+                StopMovement(movement);
+                if (combat && combat->targetVisible && pursuitEnabled)
+                    brain.state = NpcState::Chasing;
+                else if (combat && combat->hasLastKnownPosition && searchEnabled)
+                    brain.state = NpcState::Searching;
+                else
+                {
+                    if (combat && !combat->targetVisible)
+                        ForgetLostCombatTarget(*combat,
+                            registry.GetComponent<NpcTacticalComponent>(npc));
+                    brain.state = NpcState::Idle;
+                }
+                if (combat)
+                    combat->rangedAimTime = 0.0f;
+                brain.status = "Engagement module disabled";
+                break;
+            }
+
+            // Без живой цели атаковать некого.
+            if (!combat ||
+                combat->targetEntity == INVALID_ENTITY ||
+                !registry.IsAlive(combat->targetEntity))
+            {
+                brain.state = NpcState::Idle;
+                StopMovement(movement);
+                break;
+            }
+
+            if (!combat->targetVisible)
+            {
+				StopMovement(movement);
+				if (pursuitEnabled)
+				    brain.state = NpcState::Chasing;
+				else if (searchEnabled)
+				    brain.state = NpcState::Searching;
+				else
+				{
+				    ForgetLostCombatTarget(*combat,
+				        registry.GetComponent<NpcTacticalComponent>(npc));
+				    brain.state = NpcState::Idle;
+				}
+				break;
+            }
+
+            auto* targetTransform =
+                registry.GetComponent<TransformComponent>(combat->targetEntity);
+
+            if (!targetTransform)
+            {
+                combat->targetEntity = INVALID_ENTITY;
+                brain.state = NpcState::Idle;
+                StopMovement(movement);
+                break;
+            }
+
+            const float dx =
+                targetTransform->position.x - transform.position.x;
+            const float dy =
+                targetTransform->position.y - transform.position.y;
+            const float dz =
+                targetTransform->position.z - transform.position.z;
+
+            const float distanceSquared =
+                dx * dx + dy * dy + dz * dz;
+
+            const float attackRangeSquared =
+                combat->attackRange * combat->attackRange;
+
+            // Игрок отошёл — снова начинаем преследование.
+            const auto* rangedWeapon = registry.GetComponent<WeaponComponent>(
+                WeaponSystem::GetEquippedWeaponEntity(registry, npc));
+            const bool unarmed = rangedWeapon == nullptr;
+            const float shootingRange = rangedWeapon ? (std::max)(0.0f,
+                (std::min)(combat->rangedAttackRange, rangedWeapon->range)) : 0.0f;
+            if (unarmed ? !combat->ShouldHoldMeleeStance(distanceSquared, true)
+                        : distanceSquared > shootingRange * shootingRange)
+            {
+                StopMovement(movement);
+                if (pursuitEnabled)
+                {
+                    brain.state = NpcState::Chasing;
+                }
+                else
+                {
+                    combat->rangedAimTime = 0.0f;
+                    brain.status =
+                        "Target outside range; pursuit module disabled";
+                }
+                break;
+            }
+
+            // Stop before facing/attack checks so animation sees an idle lower
+            // body immediately on the frame the NPC enters striking distance.
+            StopMovement(movement);
+
+            const float targetYaw =
+                std::atan2(dx, dz) + DirectX::XM_PI;
+
+            // Находим кратчайший угол поворота.
+            float yawDifference =
+                targetYaw - transform.rotation.y;
+
+            yawDifference = std::atan2(
+                std::sin(yawDifference),
+                std::cos(yawDifference));
+
+            // Плавно поворачиваем NPC к цели.
+            const float maxRotation =
+                movement.rotationSpeed * deltaTime;
+
+            transform.rotation.y += std::clamp(
+                yawDifference,
+                -maxRotation,
+                maxRotation);
+
+            // yawDifference выше вычислен до поворота. Для допуска нужен уже
+            // оставшийся угол, иначе на медленном кадре удар может начаться боком.
+            const float remainingYaw = std::atan2(
+                std::sin(targetYaw - transform.rotation.y),
+                std::cos(targetYaw - transform.rotation.y));
+
+            // В отличие от игрока, у NPC нет прицела, который сам направляет
+            // удар. Поэтому не начинаем Punch, пока корпус не смотрит на цель.
+            // Иначе одноразовый клип фиксирует удар в бок в момент разворота.
+            constexpr float attackFacingTolerance = DirectX::XMConvertToRadians(8.0f);
+            if (std::fabs(remainingYaw) > attackFacingTolerance)
+            {
+                combat->rangedAimTime = 0.0f;
+                StopMovement(movement);
+                break;
+            }
+
+            if (!unarmed)
+            {
+                // С оружием не запрашиваем Punch. Здесь только стоим, смотрим
+                // на цель и набираем время прицеливания. Выстрел выполнится
+                // после обновления костей, когда известно положение дула.
+                if (auto* animation = registry.GetComponent<AnimationComponent>(npc);
+                    animation && animation->oneShotState == AnimationState::Punch)
+                {
+                    animation->oneShotRequested = false;
+                    animation->oneShotTimeRemaining = 0.0f;
+                }
+                if (NpcCombatModuleOperational(
+                    combatModules,
+                    NpcCombatModule::StationaryFire))
+                {
+                    combat->rangedAimTime += deltaTime;
+                }
+                else
+                {
+                    combat->rangedAimTime = 0.0f;
+                    combat->rangedStatus =
+                        "Stationary fire module disabled";
+                }
+                break;
+            }
+
+            // Атака пока состоит только из анимации. Таймер тикает даже у NPC
+            // без модели, но запрос клипа отправляется только при наличии
+            // AnimationComponent — так не будет обращения к нулевому указателю.
+            auto* anim = registry.GetComponent<AnimationComponent>(npc);
+            combat->attackTimer -= deltaTime;
+
+            if (anim && anim->oneShotState == AnimationState::Punch &&
+                (anim->oneShotRequested || anim->oneShotTimeRemaining > 0.0f))
+            {
+                // Finish the current animation, then leave a recovery gap even
+                // when the configured attack cooldown is shorter than the clip.
+                combat->attackTimer = (std::max)(combat->attackTimer, 0.15f);
+                break;
+            }
+            if (unarmed && (combat->stanceTimeRemaining > 0.0f ||
+                distanceSquared > attackRangeSquared))
+                break;
+
+            if (combat->attackTimer <= 0.0f)
+            {
+                if (anim)
+                {
+                    // NPC использует тот же набор взвешенных вариантов и pose
+                    // keys, что и игрок. Выбор идёт через собственный seed NPC,
+                    // поэтому несколько персонажей не обязаны бить синхронно.
+                    float totalWeight = 0.0f;
+                    for (const auto& variant : anim->punchVariants)
+                        if (variant.weight > 0.0f &&
+                            std::isfinite(variant.weight))
+                            totalWeight += variant.weight;
+                    anim->poseVariant = -1;
+                    if (totalWeight > 0.0f && std::isfinite(totalWeight))
+                    {
+                        float roll = Random01(brain) * totalWeight;
+                        for (int i = 0;
+                            i < static_cast<int>(anim->punchVariants.size()); ++i)
+                        {
+                            const float weight = anim->punchVariants[i].weight;
+                            if (!(weight > 0.0f) || !std::isfinite(weight))
+                                continue;
+                            anim->poseVariant = i;
+                            roll -= weight;
+                            if (roll <= 0.0f)
+                                break;
+                        }
+                    }
+                    anim->oneShotState = AnimationState::Punch;
+                    anim->oneShotRequested = true;
+                }
+                else
+                {
+                    DebugHud::Get().Show(
+                        "NPC " + std::to_string(npc) +
+                            " has no AnimationComponent",
+                        DebugHudMessageKind::Info);
+                }
+
+                combat->attackTimer = (std::max)(0.15f, combat->attackCooldown);
+            }
+
+            StopMovement(movement);
+            break;
+        }
 
         default:
             brain.state = NpcState::Idle;
@@ -363,6 +1519,8 @@ private:
         }
     }
 
+    // Исполняет активный NpcCommand. Одноразовые команды сами завершаются,
+    // Stop/Wander/Follow остаются до явной отмены.
     static void UpdateManualCommand(
         ECSRegistry& registry,
         Entity npc,
@@ -480,6 +1638,8 @@ private:
     }
 
 
+    // Находит WorkZoneComponent, принадлежащую ремонтируемому оборудованию.
+    // Возвращает INVALID_ENTITY, если автор не создал подходящую зону.
     static Entity FindRepairZoneForOwner(
         ECSRegistry& registry,
         Entity owner)
@@ -643,6 +1803,8 @@ private:
 
 
 
+    // Общий исполнитель ремонта пробоины и оборудования: проверяет цель,
+    // находит точку работы, доводит NPC и передаёт прогресс в RepairSystem.
     static void UpdateRepairTask(
         ECSRegistry& registry,
         Entity npc,
@@ -899,9 +2061,20 @@ private:
                 0.05f);
 
 
+        // Настройки члена экипажа влияют не только на выбор, но и на выполнение
+        // задачи: инженер с repairSkill=1.5 завершит тот же ремонт на 50% быстрее,
+        // а обычный NPC сохранит нейтральный множитель 1.0.
+        float repairSkill = 1.0f;
+        if (const auto* crew =
+            registry.GetComponent<CrewMemberComponent>(npc))
+        {
+            repairSkill = std::clamp(crew->repairSkill, 0.25f, 2.0f);
+        }
+
         const float progressDelta =
             repairable->requiredProgress *
-            deltaTime /
+            deltaTime *
+            repairSkill /
             duration;
 
 
@@ -1030,6 +2203,8 @@ private:
     }
     
 
+    // Поддерживает бесконечное брожение: выбирает достижимую случайную точку,
+    // идёт к ней, ждёт и повторяет цикл.
     static void UpdateWander(
         ECSRegistry& registry,
         Entity npc,
@@ -1045,7 +2220,7 @@ private:
         if (brain.wanderPauseTimer > 0.0f)
         {
             brain.wanderPauseTimer -= deltaTime;
-            brain.status = "Wander: observing surroundings";
+            brain.status = "Брожение: осматриваю окружение";
             StopMovement(movement);
             return;
         }
@@ -1075,11 +2250,116 @@ private:
             // Текущая точка забывается; после случайной паузы будет создана новая.
             brain.wanderTargetValid = false;
             brain.wanderPauseTimer = 0.5f + Random01(brain) * 2.0f;
-            brain.status = "Wander: waypoint reached";
+            brain.status = "Брожение: точка достигнута";
+            StopMovement(movement);
+        }
+        else if (result == NavigationResult::Blocked)
+        {
+            // Случайная точка может оказаться на другой стороне
+            // баррикады. Не пытаемся вечно идти в неё: забываем
+            // waypoint и на следующем шаге берём другой сектор.
+            brain.wanderTargetValid = false;
+            brain.wanderPauseTimer = 0.15f;
+            brain.status = "Брожение: заблокированная точка отброшена";
             StopMovement(movement);
         }
     }
 
+    // Идёт по NpcPatrolPoint с нужным routeId, соблюдая order, waitTime,
+    // loop/pingPong и индивидуальное разрешение бега.
+    static void UpdatePatrol(
+        ECSRegistry& registry,
+        Entity npc,
+        NpcBrainComponent& brain,
+        const TransformComponent& transform,
+        CharacterMovement& movement,
+        const NPCMovementComponent& npcMovement,
+        NpcPatrolComponent& patrol,
+        float deltaTime)
+    {
+        struct Point
+        {
+            Entity entity = INVALID_ENTITY;
+            int order = 0;
+            float waitTime = 0.0f;
+            DirectX::XMFLOAT3 position{};
+        };
+
+        std::vector<Point> points;
+        registry.ForEach<NpcPatrolPointComponent, TransformComponent>(
+            [&](Entity entity, NpcPatrolPointComponent& point,
+                TransformComponent& pointTransform)
+            {
+                if (point.enabled && point.routeId == patrol.routeId)
+                    points.push_back({ entity, point.order, point.waitTime,
+                        pointTransform.position });
+            });
+        std::sort(points.begin(), points.end(), [](const Point& a, const Point& b)
+        {
+            return a.order != b.order ? a.order < b.order : a.entity < b.entity;
+        });
+
+        if (points.empty())
+        {
+            patrol.status = "No enabled Patrol Points for route " +
+                std::to_string(patrol.routeId);
+            brain.status = patrol.status;
+            brain.state = NpcState::Idle;
+            StopMovement(movement);
+            return;
+        }
+
+        patrol.currentIndex = std::clamp(
+            patrol.currentIndex, 0, static_cast<int>(points.size()) - 1);
+        if (patrol.waitTimer > 0.0f)
+        {
+            patrol.waitTimer = (std::max)(0.0f, patrol.waitTimer - deltaTime);
+            patrol.status = "Waiting at patrol point";
+            brain.status = patrol.status;
+            brain.state = NpcState::Patrolling;
+            StopMovement(movement);
+            return;
+        }
+
+        const Point& target = points[static_cast<size_t>(patrol.currentIndex)];
+        NPCMovementComponent patrolMovement = npcMovement;
+        patrolMovement.allowRunning = patrol.allowRunning;
+        const Entity room = FindContainingRoom(registry, target.position);
+        brain.state = NpcState::Patrolling;
+        patrol.status = "Moving to patrol point " + std::to_string(target.order);
+        brain.status = patrol.status;
+        const NavigationResult result = NavigateTo(
+            registry, npc, brain, transform, movement, patrolMovement,
+            target.position, room, (std::max)(0.05f, patrol.arrivalDistance),
+            NpcState::Patrolling, deltaTime);
+        if (result != NavigationResult::Arrived)
+            return;
+
+        patrol.waitTimer = (std::max)(0.0f,
+            target.waitTime >= 0.0f ? target.waitTime : patrol.defaultWaitTime);
+        const int last = static_cast<int>(points.size()) - 1;
+        if (patrol.pingPong && points.size() > 1)
+        {
+            if (patrol.currentIndex >= last) patrol.direction = -1;
+            else if (patrol.currentIndex <= 0) patrol.direction = 1;
+            patrol.currentIndex += patrol.direction;
+        }
+        else if (patrol.currentIndex < last)
+            ++patrol.currentIndex;
+        else if (patrol.loop)
+            patrol.currentIndex = 0;
+        else
+        {
+            patrol.enabled = false;
+            patrol.status = "Patrol completed";
+            brain.status = patrol.status;
+            brain.state = NpcState::Idle;
+        }
+        StopMovement(movement);
+    }
+
+    // Главная двухуровневая навигация. Сначала проводит через граф комнат и
+    // дверей, затем внутри комнаты запрашивает NavMesh waypoint или идёт прямо.
     static NavigationResult NavigateTo(
         ECSRegistry& registry,
         Entity npc,
@@ -1115,11 +2395,10 @@ private:
         const bool needsRoomRoute =
             brain.currentRoom != INVALID_ENTITY && targetRoom != INVALID_ENTITY &&
             brain.currentRoom != targetRoom;
-        // The destination room volume may start inside the physical doorway.
-        // Keep the active portal step alive even after currentRoom has already
-        // switched; otherwise the route is cleared while the capsule is still
-        // standing on the sill. The door step itself decides when enough exit
-        // progress has been made.
+        // Объём комнаты назначения может начинаться прямо внутри дверного проёма.
+        // Поэтому активный переход сохраняем даже после смены currentRoom: иначе
+        // маршрут сбросится, пока капсула NPC ещё стоит на пороге. Сам дверной шаг
+        // ниже решит, когда NPC достаточно далеко вышел в соседнюю комнату.
         const bool continuingDoorTransition =
             brain.activeDoor != INVALID_ENTITY &&
             brain.doorRouteIndex < brain.doorRoute.size();
@@ -1298,9 +2577,9 @@ private:
                     continue;
                 }
 
-                // First centre the capsule on the source side of the opening.
-                // Otherwise an NPC coming from a diagonal waypoint aims through
-                // the jamb/raised edge while the player approaches it head-on.
+                // Сначала центрируем капсулу со стороны исходной комнаты. Иначе NPC,
+                // пришедший к двери по диагонали, пытается пройти сквозь косяк или
+                // выступ порога, хотя при прямом подходе проход свободен.
                 const float approachDistance = HorizontalDistance(
                     transform.position, doorApproachPosition);
                 const float approachOffsetX =
@@ -1312,12 +2591,11 @@ private:
                         exitLength
                     : 0.0f;
 
-                // Align only while the capsule is still on the source side of
-                // the approach plane. The old progressBeyondDoor < 0.05 test
-                // stayed true almost up to the centre of the doorway. Once the
-                // NPC had passed the approach point, it therefore ordered a
-                // reversal back to that point; the following frame ordered the
-                // direct crossing again, producing an endless tug-of-war.
+                // Выравниваемся, только пока капсула остаётся со стороны исходной
+                // комнаты относительно плоскости подхода. Старая проверка
+                // progressBeyondDoor < 0.05 оставалась истинной почти до центра
+                // двери: NPC уже проходил точку подхода, затем получал приказ
+                // вернуться к ней, а следующим кадром снова шёл вперёд.
                 if (progressBeyondDoor < approachPlaneProgress &&
                     approachDistance > (std::max)(arrivalDistance, 0.30f))
                 {
@@ -1335,17 +2613,16 @@ private:
                 brain.state = movingState;
                 brain.debugDoorPhase = "CROSSING_DIRECT";
                 brain.status = "Clearing doorway " + std::to_string(doorEntity);
-                // The destination is deliberately in the adjacent room, so a
-                // single-room NavMesh query cannot own this short portal span.
-                // Cross it directly along the door axis, then resume Detour in
-                // the destination room.
+                // Точка выхода специально лежит в соседней комнате, поэтому
+                // NavMesh одной комнаты не может провести этот короткий отрезок.
+                // Пересекаем проём напрямую вдоль оси двери, а затем снова отдаём
+                // движение Detour уже внутри комнаты назначения.
                 NpcNavMeshSystem::InvalidatePath(npc);
-                // The open door's frame/leaf collision proxy can share a seam
-                // with floors of different heights. Bullet may then wedge the
-                // rounded capsule at the threshold even though the portal is
-                // visibly clear. Ignore only this open door during the short,
-                // axis-aligned crossing; the next non-crossing frame restores
-                // both collision-object ignore lists.
+                // Коллайдер рамы/створки открытой двери может совпасть со швом полов
+                // разной высоты. Тогда Bullet зажимает округлую капсулу на пороге,
+                // хотя визуально проход свободен. Только на время прямого перехода
+                // игнорируем именно эту открытую дверь; следующий обычный кадр
+                // восстановит обе пары проверки столкновений.
                 SetPortalCollisionBypass(
                     registry, npc, brain, doorEntity, true);
                 MoveTowards(
@@ -1400,6 +2677,8 @@ private:
         return NavigationResult::Moving;
     }
 
+    // BFS по RoomComponent/DoorComponent. Заполняет параллельные массивы
+    // doorRoute и doorDestinationRooms от текущей комнаты до цели.
     static bool BuildDoorRoute(
         ECSRegistry& registry,
         Entity startRoom,
@@ -1481,6 +2760,7 @@ private:
         return false;
     }
 
+    // Находит RoomComponent, чьи мировые bounds содержат переданную позицию.
     static Entity FindContainingRoom(
         ECSRegistry& registry,
         const DirectX::XMFLOAT3& worldPosition,
@@ -1530,6 +2810,7 @@ private:
         return INVALID_ENTITY;
     }
 
+    // Вычисляет мировой центр локального объёма комнаты.
     static bool TryGetRoomCenter(
         ECSRegistry& registry,
         Entity roomEntity,
@@ -1555,6 +2836,7 @@ private:
         return true;
     }
 
+    // Возвращает мировую позицию корня двери для подхода к порталу.
     static bool TryGetDoorPosition(
         ECSRegistry& registry,
         Entity doorEntity,
@@ -1584,6 +2866,8 @@ private:
         return true;
     }
 
+    // Строит безопасную точку уже ЗА дверью в направлении комнаты назначения.
+    // Это не даёт capsule поворачивать в косяке до полного выхода.
     static bool TryGetDoorExitPosition(
         ECSRegistry& registry,
         const DirectX::XMFLOAT3& doorPosition,
@@ -1597,10 +2881,10 @@ private:
         if (!room || !roomTransform)
             return false;
 
-        // The room centre is not a valid portal normal: a door near a corner
-        // produces a diagonal vector and makes the capsule hit the jamb. Find
-        // the nearest horizontal face of the destination room instead. Its
-        // inward normal is the stable doorway axis even for rotated rooms.
+        // Направление к центру комнаты нельзя считать нормалью портала: дверь у
+        // угла даст диагональный вектор, и капсула упрётся в косяк. Вместо этого
+        // находим ближайшую боковую грань комнаты назначения. Её внутренняя нормаль
+        // задаёт устойчивую ось прохода даже у повёрнутых комнат.
         const DirectX::XMMATRIX roomWorld = roomTransform->GetWorldMatrix();
         const DirectX::XMMATRIX worldToRoom =
             DirectX::XMMatrixInverse(nullptr, roomWorld);
@@ -1655,6 +2939,8 @@ private:
         return true;
     }
 
+    // Выбирает псевдослучайную точку внутри комнаты/радиуса и по возможности
+    // проецирует её на достижимый остров NavMesh.
     static DirectX::XMFLOAT3 PickWanderTarget(
         ECSRegistry& registry,
         NpcBrainComponent& brain,
@@ -1720,17 +3006,30 @@ private:
             return fallbackTarget;
         }
 
-        // Fallback вне комнаты: случайная точка в кольце вокруг wanderAnchor.
-        // Минимальный радиус 1.0 не даёт NPC выбирать почти ту же самую позицию.
-        const float angle = Random01(brain) * DirectX::XM_2PI;
-        const float radius = 1.0f + Random01(brain) * (std::max)(1.0f, brain.wanderRadius);
-        return {
-            brain.wanderAnchor.x + std::sin(angle) * radius,
-            currentPosition.y,
-            brain.wanderAnchor.z + std::cos(angle) * radius
-        };
+        // На открытой локации выбираем цель на том же связном острове NavMesh.
+        // Если слой выключен или поверхность ещё не настроена, сохраняем
+        // прежнее поведение со случайной точкой вокруг anchor.
+        DirectX::XMFLOAT3 fallbackTarget = currentPosition;
+        for (int attempt = 0; attempt < 12; ++attempt)
+        {
+            const float angle = Random01(brain) * DirectX::XM_2PI;
+            const float radius = 1.0f + Random01(brain) * (std::max)(1.0f, brain.wanderRadius);
+            fallbackTarget = {
+                brain.wanderAnchor.x + std::sin(angle) * radius,
+                currentPosition.y,
+                brain.wanderAnchor.z + std::cos(angle) * radius
+            };
+            DirectX::XMFLOAT3 reachableTarget{};
+            if (NpcNavMeshSystem::FindReachablePoint(
+                    registry, INVALID_ENTITY, currentPosition,
+                    fallbackTarget, reachableTarget) &&
+                HorizontalDistance(currentPosition, reachableTarget) >= 1.0f)
+                return reachableTarget;
+        }
+        return fallbackTarget;
     }
 
+    // Дешёвый детерминированный генератор 0..1 с отдельным seed каждого NPC.
     static float Random01(NpcBrainComponent& brain)
     {
         // Простой LCG. Для gameplay-рандома его достаточно; для криптографии — нет.
@@ -1740,6 +3039,8 @@ private:
             static_cast<float>(0x01000000u);
     }
 
+    // Проверяет питание двери. Старые двери без PowerConsumer считаются
+    // запитанными для обратной совместимости сцен.
     static bool DoorHasPower(ECSRegistry& registry, Entity doorEntity, const DoorComponent& door)
     {
         if (!door.requiresPower)
@@ -1751,6 +3052,8 @@ private:
         return !power || power->hasPower;
     }
 
+    // Временно отключает столкновение capsule только с активной дверью и её
+    // створками при проходе, затем гарантированно восстанавливает фильтры.
     static void SetPortalCollisionBypass(
         ECSRegistry& registry,
         Entity npc,
@@ -1770,8 +3073,9 @@ private:
             if (!rigidBody || !rigidBody->body)
                 return;
 
-            // Bullet does not deduplicate its ignore list. This helper is called
-            // only when the tracked door changes, never once per crossing frame.
+            // Bullet не удаляет дубликаты из списка игнорирования. Поэтому helper
+            // вызывается только при смене отслеживаемой двери, а не каждый кадр
+            // нахождения NPC внутри проёма.
             controller->ghostObj->setIgnoreCollisionCheck(
                 rigidBody->body, pairIgnored);
             rigidBody->body->setIgnoreCollisionCheck(
@@ -1820,6 +3124,8 @@ private:
         brain.portalCollisionIgnoredDoor = INVALID_ENTITY;
     }
 
+    // Запрашивает локальный NavMesh waypoint и при успехе передаёт его в
+    // MoveTowards; при неудаче использует прямую конечную цель.
     static void MoveTowardsNavigated(
         ECSRegistry& registry,
         Entity npc,
@@ -1892,6 +3198,8 @@ private:
         MoveTowards(from, movementTarget, movement, settings);
     }
 
+    // Преобразует мировую цель в нормализованное направление CharacterMovement
+    // и выбирает Walk/Run. Сам Transform здесь не изменяется.
     static void MoveTowards(
         const DirectX::XMFLOAT3& from,
         const DirectX::XMFLOAT3& to,
@@ -1926,6 +3234,7 @@ private:
             : PlayerLocomotionState::Walk;
     }
 
+    // Полностью обнуляет намерение движения и ставит Idle-анимацию.
     static void StopMovement(CharacterMovement& movement)
     {
         // Сбрасываем ВСЕ locomotion-флаги вместе. Если забыть, например, wantsRun,
@@ -1938,6 +3247,23 @@ private:
         movement.locomotionState = PlayerLocomotionState::Idle;
     }
 
+    static void ForgetLostCombatTarget(
+        NPCCombatComponent& combat,
+        NpcTacticalComponent* tactical)
+    {
+        combat.ForgetTarget();
+        if (!tactical)
+            return;
+
+        tactical->searchingSector = false;
+        tactical->hasFlankTarget = false;
+        tactical->searchSectorsAssigned = 0;
+        tactical->searchRouteFailures = 0;
+        tactical->searchRetryTime = 0.0f;
+        tactical->hasLastSearchDestination = false;
+    }
+
+    // Успешно завершает одноразовую ручную команду и возвращает Utility AI.
     static void CompleteManualCommand(
         NpcBrainComponent& brain,
         CharacterMovement& movement,
@@ -1957,6 +3283,7 @@ private:
         StopMovement(movement);
     }
 
+    // Останавливает NPC, переводит в Blocked и сохраняет понятную причину.
     static void SetBlocked(
         NpcBrainComponent& brain,
         CharacterMovement& movement,
@@ -1971,6 +3298,8 @@ private:
         StopMovement(movement);
     }
 
+    // Сравнивает фактическую позицию с предыдущей. Если NPC долго хочет идти,
+    // но не сдвигается, инвалидирует маршрут и просит перепланирование.
     static void UpdateStuckStatus(
         Entity npc,
         NpcBrainComponent& brain,
@@ -2081,6 +3410,7 @@ private:
         }
     }
 
+    // Расстояние в плоскости XZ: перепад высоты не мешает достижению точки пола.
     static float HorizontalDistance(
         const DirectX::XMFLOAT3& a,
         const DirectX::XMFLOAT3& b)

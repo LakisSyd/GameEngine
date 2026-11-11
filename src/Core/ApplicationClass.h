@@ -3,6 +3,8 @@
 #include <windows.h>
 #include <vector>
 #include <memory>
+#include <unordered_set>
+#include <unordered_map>
 #include "D3DClass.h"
 #include "cameraclass.h"
 #include "InputClass.h"
@@ -46,14 +48,22 @@
 #include "AreaDebugRenderer.h"
 #include "DWriteTextSystem.h"
 #include "InteractionSystem.h"
+#include "Gameplay/Interaction/TriggerZoneSystem.h"
+#include "Gameplay/Interaction/TriggerActionSystem.h"
+#include "Gameplay/Inventory/InventorySystem.h"
+#include "Gameplay/Inventory/WeaponPickupSystem.h"
+#include "Gameplay/Player/GameplayInputSystem.h"
 #include "GameHud.h"
+#include "DebugHud.h"
 #include "OxygenGeneratorHud.h"
 #include "GeneratorHud.h"
 #include "DamageSystem.h"
 #include "Gameplay/Repair/RepairSystem.h"
 #include <Gameplay/Effects/ParticleSystem.h>
 #include "DoorSystem.h"
+#include "Gameplay/AI/CrewTaskCoordinator.h"
 #include "../../NpcUtilitySystem.h"
+#include "../../NpcCombatSystem.h"
 #include "../../GameTimer.h"
 #include "../../WorldEventLog.h"
 class Renderer;
@@ -62,7 +72,7 @@ class GrassRenderer;
 
 const bool  FULL_SCREEN = false;
 const bool  VSYNC_ENABLED = false;
-const float SCREEN_DEPTH = 1000.0f;
+const float SCREEN_DEPTH = 15.0f;
 const float SCREEN_NEAR = 0.3f;
 
 const float LIGHT_SPHERE_RADIUS = 0.3f;
@@ -86,6 +96,7 @@ public:
     void CreatePhysicsTestScene();
     void Shutdown();
     bool Frame(float dt);
+    bool IsEditorMode() const { return m_engineMode == EngineMode::Editor; }
     void SyncCompartmentPositions();
     void UpdatePhysics(float dt);
     void UpdateWaterAnimation(float dt);
@@ -144,6 +155,21 @@ private:
     void SetupTestRifleVisuals();
     void RemoveTestRifleVisuals();
     void UpdateTestRifleVisuals();
+    void UpdateNpcWeaponVisuals();
+    std::unordered_set<Entity> m_loadedWeaponProfiles;
+    struct WeaponViewSnapshot
+    {
+        PlayCameraComponent camera;
+        DirectX::XMFLOAT3 armsCameraOffset{};
+        DirectX::XMFLOAT3 armsRotationOffset{};
+        DirectX::XMFLOAT3 armsScale{ 1.0f, 1.0f, 1.0f };
+        float lookUpLimit = 65.0f;
+        float lookDownLimit = 70.0f;
+        bool hasCamera = false;
+        bool hasArms = false;
+    };
+    std::unordered_map<Entity, WeaponViewSnapshot> m_weaponViewSnapshots;
+    Entity m_activeWeaponView = INVALID_ENTITY;
 
 
     ShadowMap* m_shadowMap = nullptr;
@@ -253,11 +279,17 @@ private:
     ID3D11ShaderResourceView* m_skySRV = nullptr;  // ?? НОВОЕ
 
     bool m_wasF5Down = false;
+    bool m_weaponQA = false;
+    bool m_weaponDemo = false;
+    int m_weaponQAFrame = 0;
+    void UpdateWeaponQAInput();
+    void CaptureWeaponQAFrame();
     bool m_wasF1Down = false;
     bool m_wasF2Down = false;
     bool m_wasF6Down = false;
     bool m_wasDamageTestDown = false;
-    // F2 в Play Mode переключает владение мышью между камерой и ImGui.
+    // In normal player mode F2 switches between camera and ImGui. Observer
+    // mode and NPC Studio route the mouse automatically by ImGui hover/capture.
     bool m_playUiCursorActive = false;
     Entity m_worldRifleVisual = INVALID_ENTITY;
     Entity m_firstPersonRifleVisual = INVALID_ENTITY;
@@ -272,10 +304,16 @@ private:
 
     EventQueue m_events;
     InteractionSystem m_interactionSystem;
+    TriggerZoneSystem m_triggerZoneSystem;
+    TriggerActionSystem m_triggerActionSystem;
+    WeaponPickupSystem m_weaponPickupSystem;
+    GameplayInputSystem m_gameplayInputSystem;
     DoorSystem m_doorSystem;
     DamageSystem m_damageSystem;
     RepairSystem m_repairSystem;
     ParticleSystem m_particleSystem;
+    // Высокоуровневый «выбор намерения» NPC: сравнивает полезность ремонта,
+    // пробоины, тушения и прочих задач до выполнения StateSystem.
     NpcUtilitySystem m_npcUtilitySystem;
 
 	AreaDebugRenderer m_areaDebugRenderer;

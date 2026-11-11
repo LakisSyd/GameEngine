@@ -19,9 +19,12 @@ public:
     void MouseLeftUp() { m_leftButtonDown = false; }
     void MouseRightDown() { m_rightButtonDown = true; }
     void MouseRightUp() { m_rightButtonDown = false; }
+    void MouseMiddleDown() { m_middleButtonDown = true; }
+    void MouseMiddleUp() { m_middleButtonDown = false; }
 
     bool IsLeftButtonDown() const { return m_leftButtonDown; }
     bool IsRightButtonDown() const { return m_rightButtonDown; }
+    bool IsMiddleButtonDown() const { return m_middleButtonDown; }
 
     // 🔹 Мышь: позиция и дельта
     void SetMousePosition(int x, int y);
@@ -43,5 +46,6 @@ private:
     int m_mouseDeltaX = 0, m_mouseDeltaY = 0;
     bool m_leftButtonDown = false;
     bool m_rightButtonDown = false;
+    bool m_middleButtonDown = false;
     bool m_mouseCaptured = false;
 };

@@ -13,6 +13,13 @@ void PressureSystem::Update(ECSRegistry& registry, float deltaTime, float waterL
 
     for (auto& [entity, hull] : hullPool)
     {
+        if (registry.HasComponent<InvulnerableComponent>(entity))
+        {
+            hull.isLeaking = false;
+            hull.leakIntensity = 0.0f;
+            continue;
+        }
+
         // 1. Проверяем, есть ли у объекта физическое тело
         if (!registry.HasComponent<RigidBodyComponent>(entity))
             continue;

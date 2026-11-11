@@ -1,6 +1,8 @@
 ﻿#include "D3DClass.h"
 #include <string>
 #include <vector>
+#include <algorithm>
+#include <cmath>
 #include <wrl/client.h>
 #include "helper.h"
 //==============CHECK 
@@ -61,7 +63,7 @@ bool D3DClass::Initialize(
     D3D11_DEPTH_STENCIL_DESC depthStencilDesc;
     D3D11_DEPTH_STENCIL_VIEW_DESC depthStencilViewDesc;
     D3D11_RASTERIZER_DESC rasterDesc;
-    float fieldOfView, screenAspect;
+    float screenAspect;
 
     m_vsync_enabled = vsync;
 
@@ -353,18 +355,22 @@ bool D3DClass::Initialize(
     // 📐 МАТРИЦЫ
     // ========================================================================
 
-    fieldOfView = 3.141592654f / 4.0f;
+    m_screenWidth = screenWidth;
+    m_screenHeight = screenHeight;
+    m_screenNear = screenNear;
+    m_screenDepth = screenDepth;
+    m_fieldOfView = 3.141592654f / 4.0f;
     screenAspect = (float)screenWidth / (float)screenHeight;
-    fieldOfView = XMConvertToRadians(75.0f);
+    m_fieldOfView = XMConvertToRadians(75.0f);
 
 
-    m_projectionMatrix = XMMatrixPerspectiveFovLH(fieldOfView, screenAspect,
-        screenNear, screenDepth);
+    m_projectionMatrix = XMMatrixPerspectiveFovLH(m_fieldOfView, screenAspect,
+        m_screenNear, m_screenDepth);
     m_worldMatrix = XMMatrixIdentity();
     m_orthoMatrix = XMMatrixOrthographicOffCenterLH(
         0.0f, (float)screenWidth,
         (float)screenHeight, 0.0f,
-        screenNear, screenDepth);
+        m_screenNear, m_screenDepth);
 
     initializationGuard.committed = true;
     return true;
@@ -528,6 +534,30 @@ void D3DClass::GetProjectionMatrix(XMMATRIX& projectionMatrix)
 {
     projectionMatrix = m_projectionMatrix;
     return;
+}
+
+float D3DClass::SetRenderDistance(float distance)
+{
+    // NaN/Infinity не должны попадать в матрицу проекции: после этого весь
+    // трёхмерный кадр может исчезнуть. Минимум также обязан быть дальше near.
+    if (!std::isfinite(distance))
+        distance = m_screenDepth;
+
+    const float minimumDistance = (std::max)(1.0f, m_screenNear + 0.1f);
+    const float safeDistance = std::clamp(distance, minimumDistance, 10000.0f);
+    if (std::abs(safeDistance - m_screenDepth) <= 0.001f)
+        return m_screenDepth;
+
+    m_screenDepth = safeDistance;
+    const float aspect = static_cast<float>(m_screenWidth) /
+        static_cast<float>((std::max)(1, m_screenHeight));
+    m_projectionMatrix = XMMatrixPerspectiveFovLH(
+        m_fieldOfView, aspect, m_screenNear, m_screenDepth);
+    m_orthoMatrix = XMMatrixOrthographicOffCenterLH(
+        0.0f, static_cast<float>(m_screenWidth),
+        static_cast<float>(m_screenHeight), 0.0f,
+        m_screenNear, m_screenDepth);
+    return m_screenDepth;
 }
 
 void D3DClass::GetWorldMatrix(XMMATRIX& worldMatrix)

@@ -487,6 +487,8 @@ Renderer::Renderer(D3DClass* d3d, CameraClass* camera,
                 debugSettings.showCenterOfMass ||
                 debugSettings.showVelocity ||
                 debugSettings.showInteractionRays ||
+                debugSettings.showNpcSightRays ||
+                debugSettings.showWeaponShotRays ||
                 debugSettings.showGameplayParticles))
         {
             ID3D11RasterizerState* oldRS = nullptr;

@@ -28,6 +28,7 @@
     <ClCompile Include="src\Gameplay\Effects\ExplosionSystem.cpp" />
     <ClCompile Include="src\Editor\DragDropSystem.cpp" />
     <ClCompile Include="src\Gameplay\Player\GameplayController.cpp" />
+    <ClCompile Include="src\Gameplay\Player\GameplayInputSystem.cpp" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_dx11.cpp" />
     <ClCompile Include="lib\imgui-master\backends\imgui_impl_win32.cpp" />
     <ClCompile Include="lib\imgui-master\imgui.cpp" />
@@ -90,11 +91,26 @@
     <ClCompile Include="src\Render\Model\TinyGltfModelClass.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="DebugHud.h" />
     <ClInclude Include="GameTimer.h" />
+    <ClInclude Include="NpcCombatSystem.h" />
+    <ClInclude Include="NpcCoverSystem.h" />
+    <ClInclude Include="NpcCoverQuery.h" />
+    <ClInclude Include="NpcTacticalDecisionSystem.h" />
     <ClInclude Include="src\Gameplay\AI\NpcNavMeshSystem.h" />
+    <ClInclude Include="src\Gameplay\AI\CrewTaskCoordinator.h" />
+    <ClInclude Include="src\Gameplay\AI\NpcCombatDecisionRules.h" />
+    <ClInclude Include="src\Gameplay\AI\NpcCombatMath.h" />
+    <ClInclude Include="src\Gameplay\AI\NpcCombatModules.h" />
+    <ClInclude Include="src\Gameplay\AI\NpcCombatModuleSystem.h" />
+    <ClInclude Include="src\Gameplay\AI\NpcCombatDebugCommandSystem.h" />
+    <ClInclude Include="src\Gameplay\AI\NpcCoverLifecycle.h" />
+    <ClInclude Include="src\Gameplay\AI\NpcSimulationStudio.h" />
     <ClInclude Include="NPCComponents.h" />
+    <ClInclude Include="CharacterVitalsComponent.h" />
     <ClInclude Include="NpcCommandSystem.h" />
     <ClInclude Include="NpcUtilitySystem.h" />
+    <ClInclude Include="src\Gameplay\AI\NpcSquadCombatSystem.h" />
     <ClInclude Include="src\Gameplay\Lighting\SpotLightComponent.h" />
     <ClInclude Include="src\Gameplay\Power\GeneratorComponent.h" />
     <ClInclude Include="src\Gameplay\Power\GeneratorSystem.h" />
@@ -111,6 +127,7 @@
     <ClInclude Include="src\Gameplay\Ship\RoomCullingSystem.h" />
     <ClInclude Include="src\Gameplay\Ship\ShipAlertSystem.h" />
     <ClInclude Include="src\Animation\AnimationComponent.h" />
+    <ClInclude Include="src\Animation\MeleeActionJson.h" />
     <ClInclude Include="src\Animation\AnimationController.h" />
     <ClInclude Include="src\Animation\AnimationSystem.h" />
     <ClInclude Include="src\Debug\AreaDebugRenderer.h" />
@@ -126,11 +143,18 @@
     <ClInclude Include="src\Gameplay\Combat\DamageEvent.h" />
     <ClInclude Include="src\Gameplay\Combat\DamageSystem.h" />
     <ClInclude Include="src\Gameplay\Interaction\EventSystem.h" />
+    <ClInclude Include="src\Gameplay\Interaction\TriggerZoneComponent.h" />
+    <ClInclude Include="src\Gameplay\Interaction\TriggerZoneSystem.h" />
+    <ClInclude Include="src\Gameplay\Interaction\TriggerActionSystem.h" />
     <ClInclude Include="src\Gameplay\UI\GameHud.h" />
     <ClInclude Include="src\Gameplay\UI\GeneratorHud.h" />
     <ClInclude Include="src\Gameplay\Player\GameplayController.h" />
+    <ClInclude Include="src\Gameplay\Player\GameplayInputSystem.h" />
     <ClInclude Include="src\Gameplay\Player\FirstPersonViewSystem.h" />
     <ClInclude Include="src\Gameplay\Interaction\InteractionSystem.h" />
+    <ClInclude Include="src\Gameplay\Inventory\InventoryComponent.h" />
+    <ClInclude Include="src\Gameplay\Inventory\InventorySystem.h" />
+    <ClInclude Include="src\Gameplay\Inventory\WeaponPickupSystem.h" />
     <ClInclude Include="src\Core\JobSystem.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_dx11.h" />
     <ClInclude Include="lib\imgui-master\backends\imgui_impl_win32.h" />
@@ -140,6 +164,7 @@
     <ClInclude Include="src\Gameplay\Player\PlayerVitalsSystem.h" />
     <ClInclude Include="src\Gameplay\Combat\WeaponComponent.h" />
     <ClInclude Include="src\Gameplay\Combat\WeaponSystem.h" />
+    <ClInclude Include="src\Gameplay\Combat\PlayerPunchSystem.h" />
     <ClInclude Include="src\Gameplay\Effects\ParticleSystem.h" />
     <ClInclude Include="src\Gameplay\Effects\ParticleRenderer.h" />
     <ClInclude Include="src\Gameplay\Effects\ExplosionSystem.h" />
@@ -267,26 +292,26 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -308,8 +333,9 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros">
-    <EngineIncludeDirectories>$(ProjectDir)src;$(ProjectDir)src\Animation;$(ProjectDir)src\Assets;$(ProjectDir)src\Config;$(ProjectDir)src\Core;$(ProjectDir)src\Debug;$(ProjectDir)src\ECS;$(ProjectDir)src\ECS\Components;$(ProjectDir)src\ECS\System;$(ProjectDir)src\Editor;$(ProjectDir)src\Gameplay\Combat;$(ProjectDir)src\Gameplay\Interaction;$(ProjectDir)src\Gameplay\Player;$(ProjectDir)src\Gameplay\Ship;$(ProjectDir)src\Gameplay\UI;$(ProjectDir)src\HelpFunc;$(ProjectDir)src\Input;$(ProjectDir)src\Render;$(ProjectDir)src\Render\BitMap;$(ProjectDir)src\Render\Camera;$(ProjectDir)src\Render\Grass;$(ProjectDir)src\Render\Material;$(ProjectDir)src\Render\Model;$(ProjectDir)src\Render\Shader;$(ProjectDir)src\Render\Text;$(ProjectDir)src\Render\Texture;$(ProjectDir)src\Scene;$(ProjectDir)src\Scene\Light;$(ProjectDir)lib;$(ProjectDir)lib\assimp;$(ProjectDir)lib\imgui-master</EngineIncludeDirectories>
+    <EngineIncludeDirectories>$(ProjectDir);$(ProjectDir)src;$(ProjectDir)src\Animation;$(ProjectDir)src\Assets;$(ProjectDir)src\Config;$(ProjectDir)src\Core;$(ProjectDir)src\Debug;$(ProjectDir)src\ECS;$(ProjectDir)src\ECS\Components;$(ProjectDir)src\ECS\System;$(ProjectDir)src\Editor;$(ProjectDir)src\Gameplay\Combat;$(ProjectDir)src\Gameplay\Interaction;$(ProjectDir)src\Gameplay\Player;$(ProjectDir)src\Gameplay\Ship;$(ProjectDir)src\Gameplay\UI;$(ProjectDir)src\HelpFunc;$(ProjectDir)src\Input;$(ProjectDir)src\Render;$(ProjectDir)src\Render\BitMap;$(ProjectDir)src\Render\Camera;$(ProjectDir)src\Render\Grass;$(ProjectDir)src\Render\Material;$(ProjectDir)src\Render\Model;$(ProjectDir)src\Render\Shader;$(ProjectDir)src\Render\Text;$(ProjectDir)src\Render\Texture;$(ProjectDir)src\Scene;$(ProjectDir)src\Scene\Light;$(ProjectDir)lib;$(ProjectDir)lib\assimp;$(ProjectDir)lib\imgui-master</EngineIncludeDirectories>
     <BulletRoot Condition="'$(BulletRoot)'=='' and '$(VCPKG_ROOT)'!=''">$(VCPKG_ROOT)\installed\x64-windows</BulletRoot>
+    <BulletRoot Condition="'$(BulletRoot)'=='' and Exists('C:\vcpkg\installed\x64-windows\include\bullet\btBulletDynamicsCommon.h')">C:\vcpkg\installed\x64-windows</BulletRoot>
     <BulletRoot Condition="'$(BulletRoot)'==''">$(ProjectDir)..\..\vcpkg\installed\x64-windows</BulletRoot>
     <AssimpRuntimeDll Condition="'$(AssimpRuntimeDll)'=='' and Exists('$(ProjectDir)lib\Release\assimp-vc143-mt.dll')">$(ProjectDir)lib\Release\assimp-vc143-mt.dll</AssimpRuntimeDll>
     <AssimpRuntimeDll Condition="'$(AssimpRuntimeDll)'=='' and Exists('$(ProjectDir)lib\assimp-vc143-mt.dll')">$(ProjectDir)lib\assimp-vc143-mt.dll</AssimpRuntimeDll>
@@ -353,7 +379,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;NPC_NAVMESH_ENABLED=$(NpcNavMeshEnabled);%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>$(EngineIncludeDirectories);$(BulletRoot)\include;$(BulletRoot)\include\bullet;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\vcpkg\installed\x64-windows\include\recastnavigation;C:\vcpkg\installed\x64-windows\include\bullet;$(EngineIncludeDirectories);$(BulletRoot)\include;$(BulletRoot)\include\bullet;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
@@ -401,9 +427,6 @@
   </Target>
   <Target Name="CopyAssimpRuntime" AfterTargets="Build" Condition="'$(Platform)'=='x64'">
     <Warning Condition="'$(AssimpRuntimeDll)'==''" Text="assimp-vc143-mt.dll was not found. The executable will build but cannot start until the Assimp runtime is placed next to it or AssimpRuntimeDll is set." />
-    <Copy Condition="'$(AssimpRuntimeDll)'!=''"
-          SourceFiles="$(AssimpRuntimeDll)"
-          DestinationFolder="$(OutDir)"
-          SkipUnchangedFiles="true" />
+    <Copy Condition="'$(AssimpRuntimeDll)'!=''" SourceFiles="$(AssimpRuntimeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
 </Project>

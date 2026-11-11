@@ -118,8 +118,9 @@ void SystemClass::Run()
         // 2. Обработка сообщений Windows
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
         {
-            // Обработка хоткеев отладки
-            if (msg.message == WM_KEYDOWN)
+            // Editor-only time controls. In Play, Space belongs to Jump.
+            if (msg.message == WM_KEYDOWN &&
+                m_Application && m_Application->IsEditorMode())
             {
                 switch (msg.wParam)
                 {
@@ -164,8 +165,10 @@ bool SystemClass::Frame()
 {
     float dt = TimeManager::DeltaTime(); // Получаем "игровое" время
 
-    // Escape — запросить выход из приложения
-    if (m_Input->IsKeyDown(VK_ESCAPE))
+    // In Play, Escape closes an interaction panel through GameInputFrame.
+    // Window close still exits from either mode.
+    if (m_Application && m_Application->IsEditorMode() &&
+        m_Input->IsKeyDown(VK_ESCAPE))
         return false;
 
     // Обновление и рендер одного кадра в ApplicationClass
@@ -217,6 +220,8 @@ LRESULT CALLBACK SystemClass::MessageHandler(HWND hwnd, UINT msg, WPARAM wparam,
     case WM_LBUTTONUP:   m_Input->MouseLeftUp();    return 0;
     case WM_RBUTTONDOWN: m_Input->MouseRightDown(); return 0;
     case WM_RBUTTONUP:   m_Input->MouseRightUp();   return 0;
+    case WM_MBUTTONDOWN: m_Input->MouseMiddleDown(); return 0;
+    case WM_MBUTTONUP:   m_Input->MouseMiddleUp();   return 0;
 
     default:
         return DefWindowProc(hwnd, msg, wparam, lparam);
@@ -355,8 +360,17 @@ void SystemClass::ShutdownWindows()
 // ============================================================================
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
-    // Даём ImGui первым обработать сообщение (мышь, клавиатура)
-    if (ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam))
+    // ImGui must see every message, but keyboard state must also reach the
+    // gameplay input layer. Otherwise Shift/WASD can remain invisible while
+    // a runtime ImGui window is active.
+    const bool imguiHandled =
+        ImGui_ImplWin32_WndProcHandler(hwnd, msg, wparam, lparam) != 0;
+    const bool keyboardMessage =
+        msg == WM_KEYDOWN || msg == WM_KEYUP;
+    if (keyboardMessage && g_applicationHandle)
+        return g_applicationHandle->MessageHandler(hwnd, msg, wparam, lparam);
+
+    if (imguiHandled)
         return true;
 
     switch (msg)

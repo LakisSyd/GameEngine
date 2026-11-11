@@ -184,6 +184,70 @@ void ParticleSystem::ReloadTextures()
         m_renderer->ClearTextureCache();
 }
 
+void ParticleSystem::EmitMuzzleFlash(const XMFLOAT3& position, const XMFLOAT3& direction, float scale)
+{
+    if (!std::isfinite(scale)) return;
+    scale = (std::clamp)(scale, 0.1f, 4.0f);
+    const XMFLOAT3 forward = NormalizeOrUp(direction);
+    // Короткое горячее ядро, затем вытянутая струя и небольшое количество дыма.
+    // Это выброс на выстрел, не постоянный эмиттер: вспышка не горит между выстрелами.
+    ParticleEmitterDesc core;
+    core.position = { position.x + forward.x * 0.035f * scale,
+        position.y + forward.y * 0.035f * scale, position.z + forward.z * 0.035f * scale };
+    core.direction = forward;
+    core.positionRadius = 0.004f * scale;
+    core.directionSpread = 0.0f;
+    core.speedMin = core.speedMax = 0.0f;
+    core.lifetimeMin = 0.022f;
+    core.lifetimeMax = 0.038f;
+    core.startSizeMin = 0.075f * scale;
+    core.startSizeMax = 0.11f * scale;
+    core.endSizeMin = core.endSizeMax = 0.025f * scale;
+    core.startColor = { 3.5f, 2.8f, 1.5f, 0.95f };
+    core.endColor = { 1.0f, 0.28f, 0.025f, 0.0f };
+    core.blendMode = ParticleBlendMode::Additive;
+    EmitBurst(core, 1);
+
+    ParticleEmitterDesc flame = core;
+    flame.position = { position.x + forward.x * 0.12f * scale,
+        position.y + forward.y * 0.12f * scale, position.z + forward.z * 0.12f * scale };
+    flame.alignToDirection = true;
+    flame.aspectRatio = 0.32f;
+    flame.shape = ParticleShape::Flame;
+    flame.speedMin = 0.4f * scale;
+    flame.speedMax = 1.5f * scale;
+    flame.startSizeMin = 0.20f * scale;
+    flame.startSizeMax = 0.32f * scale;
+    flame.endSizeMin = 0.06f * scale;
+    flame.endSizeMax = 0.12f * scale;
+    flame.lifetimeMin = 0.035f;
+    flame.lifetimeMax = 0.055f;
+    flame.startColor = { 2.7f, 1.25f, 0.18f, 0.85f };
+    EmitBurst(flame, 2);
+
+    ParticleEmitterDesc smoke;
+    smoke.position = position;
+    smoke.direction = forward;
+    smoke.directionSpread = 0.25f;
+    smoke.positionRadius = 0.012f * scale;
+    smoke.speedMin = 0.3f * scale;
+    smoke.speedMax = 0.7f * scale;
+    smoke.lifetimeMin = 0.22f;
+    smoke.lifetimeMax = 0.45f;
+    smoke.startSizeMin = 0.035f * scale;
+    smoke.startSizeMax = 0.065f * scale;
+    smoke.endSizeMin = 0.16f * scale;
+    smoke.endSizeMax = 0.25f * scale;
+    smoke.startColor = { 0.42f, 0.43f, 0.45f, 0.13f };
+    smoke.endColor = { 0.30f, 0.32f, 0.34f, 0.0f };
+    smoke.acceleration = { 0.0f, 0.18f, 0.0f };
+    smoke.drag = 2.0f;
+    smoke.shape = ParticleShape::Smoke;
+    EmitBurst(smoke, 2);
+    // Выстрел происходит после Update частиц: показываем вспышку в этом же кадре.
+    RebuildRenderItems();
+}
+
 void ParticleSystem::EmitExplosion(const XMFLOAT3& position, float scale)
 {
     scale = (std::max)(0.05f, scale);
@@ -555,6 +619,7 @@ void ParticleSystem::SpawnParticle(const ParticleEmitterDesc& desc, bool debugTr
     const float speed = Lerp(desc.speedMin, desc.speedMax, NextRandom01());
 
     Particle particle;
+    if (desc.alignToDirection) particle.axis = normalizedDirection;
     particle.position = {
         desc.position.x + positionJitter.x * positionDistance,
         desc.position.y + positionJitter.y * positionDistance,
@@ -637,6 +702,7 @@ void ParticleSystem::RebuildRenderItems()
     {
         const float age01 = Clamp01(particle.age / particle.lifetime);
         ParticleRenderItem item;
+        item.axis = particle.axis;
         item.position = particle.position;
         item.color = LerpColor(particle.startColor, particle.endColor, age01);
         item.size = Lerp(particle.startSize, particle.endSize, age01);

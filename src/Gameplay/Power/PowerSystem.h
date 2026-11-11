@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <vector>
 
+#include <Components.h>
 #include <ECSRegistry.h>
 #include "GeneratorComponent.h"
 #include "PowerConsumerComponent.h"
@@ -16,17 +17,18 @@ public:
 
         float availableMw = 0.0f;
 
-        // 1. Генерация
+        // 1. Р“РµРЅРµСЂР°С†РёСЏ
         registry.ForEach<GeneratorComponent>(
-            [&](Entity, GeneratorComponent& generator)
+            [&](Entity entity, GeneratorComponent& generator)
             {
-                if (!generator.isOnline)
+                if (!registry.HasComponent<ActiveComponent>(entity) ||
+                    !generator.isOnline)
                     return;
 
                 availableMw += (std::max)(0.0f, generator.currentOutputMw);
             });
 
-        // 2. Сбрасываем питание прошлого кадра
+        // 2. РЎР±СЂР°СЃС‹РІР°РµРј РїРёС‚Р°РЅРёРµ РїСЂРѕС€Р»РѕРіРѕ РєР°РґСЂР°
         registry.ForEach<PowerConsumerComponent>(
             [&](Entity, PowerConsumerComponent& consumer)
             {
@@ -35,7 +37,7 @@ public:
                 consumer.hasPower = false;
             });
 
-        // 3. Подаём питание по приоритетам
+        // 3. РџРѕРґР°С‘Рј РїРёС‚Р°РЅРёРµ РїРѕ РїСЂРёРѕСЂРёС‚РµС‚Р°Рј
         for (int priorityIndex = 0; priorityIndex <= 3; ++priorityIndex)
         {
             const auto priority =
@@ -44,9 +46,10 @@ public:
             std::vector<PowerConsumerComponent*> consumers;
 
             registry.ForEach<PowerConsumerComponent>(
-                [&](Entity, PowerConsumerComponent& consumer)
+                [&](Entity entity, PowerConsumerComponent& consumer)
                 {
-                    if (consumer.priority != priority)
+                    if (!registry.HasComponent<ActiveComponent>(entity) ||
+                        consumer.priority != priority)
                         return;
 
                     if (consumer.requiredMw <= 0.0f)
@@ -61,10 +64,15 @@ public:
                 break;
         }
 
-        // 4. Итоговое состояние устройств
+        // 4. РС‚РѕРіРѕРІРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ СѓСЃС‚СЂРѕР№СЃС‚РІ
         registry.ForEach<PowerConsumerComponent>(
-            [&](Entity, PowerConsumerComponent& consumer)
+            [&](Entity entity, PowerConsumerComponent& consumer)
             {
+                // The reset pass above deliberately leaves inactive consumers
+                // at zero even when they require no power.
+                if (!registry.HasComponent<ActiveComponent>(entity))
+                    return;
+
                 if (consumer.requiredMw <= 0.0f)
                 {
                     consumer.powerRatio = 1.0f;
@@ -78,8 +86,8 @@ public:
                         0.0f,
                         1.0f);
 
-                // Для дверей, насосов и т.п. питание считается рабочим,
-                // только когда устройство получило всю требуемую мощность.
+                // Р”Р»СЏ РґРІРµСЂРµР№, РЅР°СЃРѕСЃРѕРІ Рё С‚.Рї. РїРёС‚Р°РЅРёРµ СЃС‡РёС‚Р°РµС‚СЃСЏ СЂР°Р±РѕС‡РёРј,
+                // С‚РѕР»СЊРєРѕ РєРѕРіРґР° СѓСЃС‚СЂРѕР№СЃС‚РІРѕ РїРѕР»СѓС‡РёР»Рѕ РІСЃСЋ С‚СЂРµР±СѓРµРјСѓСЋ РјРѕС‰РЅРѕСЃС‚СЊ.
                 consumer.hasPower = consumer.powerRatio >= 0.999f;
             });
     }

@@ -68,6 +68,9 @@ struct ParticleEmitterDesc
     float drag = 0.0f;
     float aspectRatio = 1.0f;
 
+    // Для струи из дула длинная ось следует стволу, а не случайному углу билборда.
+    bool alignToDirection = false;
+
     // If shape == Texture, this image is sampled by the pixel shader. PNG,
     // JPG and TGA are supported by TextureClass. PNG/TGA are recommended
     // because their alpha channel gives the particle a non-rectangular shape.
@@ -88,6 +91,7 @@ struct ParticleEmitterDesc
 // поэтому при желании ParticleRenderer можно заменить, не меняя игровую логику.
 struct ParticleRenderItem
 {
+    DirectX::XMFLOAT3 axis = { 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT3 position = { 0.0f, 0.0f, 0.0f };
     DirectX::XMFLOAT4 color = { 1.0f, 1.0f, 1.0f, 1.0f };
     float size = 0.1f;
@@ -130,6 +134,8 @@ public:
     // Универсальный разовый выброс и готовый многослойный взрыв.
     void EmitBurst(const ParticleEmitterDesc& desc, int particleCount);
     void EmitExplosion(const DirectX::XMFLOAT3& position, float scale = 1.0f);
+    void EmitMuzzleFlash(const DirectX::XMFLOAT3& position,
+        const DirectX::XMFLOAT3& direction, float scale = 1.0f);
     void ReloadTextures();
 
     // Совместимость с существующей системой повреждений корпуса.
@@ -155,6 +161,7 @@ public:
 private:
     struct Particle
     {
+        DirectX::XMFLOAT3 axis = { 0.0f, 0.0f, 0.0f };
         DirectX::XMFLOAT3 position{};
         DirectX::XMFLOAT3 velocity{};
         DirectX::XMFLOAT3 acceleration{};

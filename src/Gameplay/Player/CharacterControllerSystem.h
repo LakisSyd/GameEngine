@@ -19,6 +19,63 @@ public:
             {
                 aliveCharacters.insert(entity);
                 auto* movement = registry.GetComponent<CharacterMovement>(entity);
+
+                if (!registry.HasComponent<ActiveComponent>(entity))
+                {
+                    if (movement)
+                    {
+                        movement->walkDirection = { 0.0f, 0.0f, 0.0f };
+                        movement->currentSpeed = 0.0f;
+                        movement->isMoving = false;
+                        movement->wantsRun = false;
+                        movement->isRunning = false;
+                        movement->wantJump = false;
+                        movement->locomotionState = PlayerLocomotionState::Idle;
+                    }
+                    if (controller.controller)
+                    {
+                        controller.controller->setWalkDirection(
+                            btVector3(0.0f, 0.0f, 0.0f));
+                        controller.controller->setVelocityForTimeInterval(
+                            btVector3(0.0f, 0.0f, 0.0f), btScalar(0.0f));
+                    }
+                    if (!controller.suspendedByActiveState)
+                    {
+                        if (auto* world = PhysicsWorld::Get().GetWorld())
+                        {
+                            if (controller.controller)
+                                world->removeAction(controller.controller);
+                            if (controller.ghostObj &&
+                                controller.ghostObj->getBroadphaseHandle())
+                            {
+                                world->removeCollisionObject(controller.ghostObj);
+                            }
+                        }
+                        controller.suspendedByActiveState = true;
+                    }
+                    return;
+                }
+
+                if (controller.suspendedByActiveState)
+                {
+                    if (auto* world = PhysicsWorld::Get().GetWorld())
+                    {
+                        if (controller.ghostObj &&
+                            !controller.ghostObj->getBroadphaseHandle())
+                        {
+                            world->addCollisionObject(
+                                controller.ghostObj,
+                                btBroadphaseProxy::CharacterFilter,
+                                btBroadphaseProxy::DefaultFilter |
+                                btBroadphaseProxy::StaticFilter |
+                                btBroadphaseProxy::KinematicFilter);
+                        }
+                        if (controller.controller)
+                            world->addAction(controller.controller);
+                    }
+                    controller.suspendedByActiveState = false;
+                }
+
                 if (!movement || !controller.controller)
                     return;
 
@@ -57,6 +114,12 @@ public:
                     controller, *movement, transform, *tuning,
                     traversal, (std::max)(0.0f, dt),
                     stabilizeNavigationIntent);
+
+                if (!physicalStepSolved && hasGroundSupport)
+                {
+                    PushDynamicBodyInMovementDirection(
+                        controller, *movement, *tuning, dt);
+                }
 
                 constexpr float fixedPhysicsStep = 1.0f / 60.0f;
                 const DirectX::XMFLOAT3 externalVelocity =
@@ -200,6 +263,164 @@ public:
     }
 
 private:
+    struct DynamicBodySweepCallback final
+        : btCollisionWorld::ClosestConvexResultCallback
+    {
+        DynamicBodySweepCallback(
+            const btVector3& from,
+            const btVector3& to,
+            const btCollisionObject* ignoredObject)
+            : btCollisionWorld::ClosestConvexResultCallback(from, to)
+            , ignored(ignoredObject)
+        {
+            m_collisionFilterGroup = btBroadphaseProxy::CharacterFilter;
+            m_collisionFilterMask = btBroadphaseProxy::DefaultFilter;
+        }
+
+        bool needsCollision(btBroadphaseProxy* proxy) const override
+        {
+            if (!btCollisionWorld::ClosestConvexResultCallback::needsCollision(proxy))
+                return false;
+
+            const auto* object =
+                static_cast<const btCollisionObject*>(proxy->m_clientObject);
+            if (!object || object == ignored || !object->hasContactResponse())
+                return false;
+
+            const btRigidBody* body = btRigidBody::upcast(object);
+            return body && !body->isStaticOrKinematicObject() &&
+                body->getInvMass() > btScalar(0.0f);
+        }
+
+        const btCollisionObject* ignored = nullptr;
+    };
+
+    static void PushDynamicBodyInMovementDirection(
+        CharacterController& component,
+        const CharacterMovement& movement,
+        const CharacterPhysicsTuningComponent& tuning,
+        float dt)
+    {
+        if (!tuning.pushDynamicBodies || !component.ghostObj ||
+            !component.capsuleShape || !movement.isMoving ||
+            movement.currentSpeed <= 0.01f || dt <= 0.0f)
+        {
+            return;
+        }
+
+        auto* world = PhysicsWorld::Get().GetWorld();
+        if (!world)
+            return;
+
+        btVector3 direction(
+            movement.walkDirection.x,
+            0.0f,
+            movement.walkDirection.z);
+        if (direction.length2() <= btScalar(0.0001f))
+            return;
+        direction.normalize();
+
+        // Проверяем небольшое расстояние перед капсулой. Благодаря этому тело
+        // получает импульс до заметного взаимного проникновения коллизий.
+        const float frameTime = std::clamp(dt, 0.0f, 1.0f / 30.0f);
+        const float probeDistance = std::clamp(
+            movement.currentSpeed * frameTime +
+                (std::max)(0.0f, tuning.dynamicBodyPushProbe),
+            0.02f,
+            0.20f);
+        const btTransform from = component.ghostObj->getWorldTransform();
+        btTransform to = from;
+        to.setOrigin(from.getOrigin() + direction * probeDistance);
+
+        DynamicBodySweepCallback callback(
+            from.getOrigin(), to.getOrigin(), component.ghostObj);
+        if (component.ghostObj->getBroadphaseHandle())
+        {
+            callback.m_collisionFilterGroup = component.ghostObj
+                ->getBroadphaseHandle()->m_collisionFilterGroup;
+            callback.m_collisionFilterMask = component.ghostObj
+                ->getBroadphaseHandle()->m_collisionFilterMask;
+        }
+
+        world->convexSweepTest(
+            component.capsuleShape,
+            from,
+            to,
+            callback,
+            btScalar(0.0f));
+        if (!callback.hasHit() || !callback.m_hitCollisionObject)
+            return;
+
+        btRigidBody* body = btRigidBody::upcast(
+            const_cast<btCollisionObject*>(callback.m_hitCollisionObject));
+        if (!body || body->getInvMass() <= btScalar(0.0f))
+            return;
+
+        const float inverseBodyMass = static_cast<float>(body->getInvMass());
+        const float bodyMass = 1.0f / inverseBodyMass;
+        const float maxPushableMass =
+            (std::max)(0.0f, tuning.dynamicBodyMaxPushableMass);
+        if (!std::isfinite(bodyMass) || maxPushableMass <= 0.0f ||
+            bodyMass > maxPushableMass)
+        {
+            return;
+        }
+
+        btVector3 surfaceNormal = callback.m_hitNormalWorld;
+        surfaceNormal.setY(0.0f);
+        if (surfaceNormal.length2() <= btScalar(0.0001f))
+            return;
+        surfaceNormal.normalize();
+
+        // Толкаем только поверхность перед персонажем. Пол, наклонная верхняя
+        // грань и предмет, от которого персонаж уже отходит, сюда не попадут.
+        const float approach = std::clamp(
+            static_cast<float>(-direction.dot(surfaceNormal)),
+            0.0f,
+            1.0f);
+        if (approach <= 0.05f)
+            return;
+
+        const float bodySpeed = static_cast<float>(
+            body->getLinearVelocity().dot(direction));
+        // A constant force is integrated as force * dt. Reapplying it every
+        // frame is correct, but without a target-speed cap its impulses would
+        // accumulate forever. Stop adding impulse as soon as the body reaches
+        // the configured push speed.
+        const float targetPushSpeed = (std::min)(
+            movement.currentSpeed,
+            (std::max)(0.0f, tuning.dynamicBodyMaxPushSpeed));
+        if (targetPushSpeed <= 0.0f)
+            return;
+        const float remainingSpeed = targetPushSpeed - bodySpeed;
+        if (remainingSpeed <= 0.0f)
+            return;
+
+        const float speedFactor = std::clamp(
+            remainingSpeed / (std::max)(targetPushSpeed, 0.01f),
+            0.0f,
+            1.0f);
+        float impulseMagnitude =
+            (std::max)(0.0f, tuning.dynamicBodyPushForce) *
+            frameTime * approach * speedFactor;
+
+        // Ограничение не позволяет лёгкому предмету сразу разогнаться быстрее
+        // персонажа. Массу здесь не умножаем: Bullet сам применит inverse mass.
+        const float impulseForDesiredSpeed = remainingSpeed / inverseBodyMass;
+        impulseMagnitude = (std::min)(
+            impulseMagnitude,
+            impulseForDesiredSpeed);
+        if (impulseMagnitude <= 0.0f)
+            return;
+
+        const btVector3 relativeHitPoint =
+            callback.m_hitPointWorld - body->getCenterOfMassPosition();
+        body->activate(true);
+        body->applyImpulse(
+            direction * impulseMagnitude,
+            relativeHitPoint);
+    }
+
     struct TraversalState
     {
         btKinematicCharacterController* runtimeController = nullptr;

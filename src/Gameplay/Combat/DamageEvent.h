@@ -31,6 +31,10 @@ struct DamageEvent
 
 	DamageType damageType = DamageType::Physical;
 
+	// Будущее тихое убийство выставит true. Урон пройдёт как
+	// обычно, но жертва не получит underFire/направление на атаку.
+	bool silentKill = false;
+
 	// Hull damage capability and actual penetration are separate. The weapon may
 	// damage armor now, while the panel decides whether enough damage accumulated.
 	bool canDamageHull = false;
