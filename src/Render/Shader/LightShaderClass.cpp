@@ -20,6 +20,7 @@ LightShaderClass::LightShaderClass()
     // Инициализируем только свои поля
     m_matrixBuffer = m_lightBuffer = nullptr;
     m_lightPositionBuffer = m_lightColorBuffer = nullptr;
+    m_lightSpotBuffer = nullptr;
     m_selectedBuffer = nullptr;
     // Поля базового класса (m_vertexShader и т.д.) обнулятся в его конструкторе
 }
@@ -103,6 +104,7 @@ bool LightShaderClass::InitializeShader(
     if (!CreateConstantBuffer(device, sizeof(MatrixBufferType),        &m_matrixBuffer))        return false;
     if (!CreateConstantBuffer(device, sizeof(LightPositionBufferType), &m_lightPositionBuffer)) return false;
     if (!CreateConstantBuffer(device, sizeof(LightColorBufferType),    &m_lightColorBuffer))    return false;
+    if (!CreateConstantBuffer(device, sizeof(LightSpotBufferType),     &m_lightSpotBuffer))     return false;
     if (!CreateConstantBuffer(device, sizeof(SelectedBufferType),      &m_selectedBuffer))      return false;
 
     if (!CreateConstantBuffer(device, sizeof(DirectionalLightBufferType), &m_directionalLightBuffer))
@@ -153,7 +155,9 @@ bool LightShaderClass::Render(
     XMMATRIX projectionMatrix,
     ID3D11ShaderResourceView* texture,
     XMFLOAT4 lightColors[],
-    XMFLOAT4 lightPositions[])
+    XMFLOAT4 lightPositions[],
+    const XMFLOAT4* lightDirectionsAndOuterCos,
+    const XMFLOAT4* lightInnerCosAndFlags)
 {
     bool result;
 
@@ -165,7 +169,9 @@ bool LightShaderClass::Render(
         projectionMatrix,
         texture,
         lightColors,
-        lightPositions
+        lightPositions,
+        lightDirectionsAndOuterCos,
+        lightInnerCosAndFlags
     );
 
     if (!result)
@@ -187,6 +193,7 @@ void LightShaderClass::ShutdownShader()
 
     if (m_lightPositionBuffer) { m_lightPositionBuffer->Release(); m_lightPositionBuffer = nullptr; }
     if (m_lightColorBuffer) { m_lightColorBuffer->Release(); m_lightColorBuffer = nullptr; }
+    if (m_lightSpotBuffer) { m_lightSpotBuffer->Release(); m_lightSpotBuffer = nullptr; }
 
     if (m_lightBuffer)
     {
@@ -273,7 +280,9 @@ bool LightShaderClass::SetShaderParameters(
     XMMATRIX worldMatrix, XMMATRIX viewMatrix, XMMATRIX projectionMatrix,
     ID3D11ShaderResourceView* texture,
     XMFLOAT4 lightColors[],
-    XMFLOAT4 lightPositions[])
+    XMFLOAT4 lightPositions[],
+    const XMFLOAT4* lightDirectionsAndOuterCos,
+    const XMFLOAT4* lightInnerCosAndFlags)
 {
     HRESULT result;
     D3D11_MAPPED_SUBRESOURCE mappedResource;
@@ -326,6 +335,23 @@ bool LightShaderClass::SetShaderParameters(
     deviceContext->Unmap(m_lightColorBuffer, 0);
     bufferNumber = 0; // Слот 0 для цветов
     deviceContext->PSSetConstantBuffers(bufferNumber, 1, &m_lightColorBuffer);
+
+    // 5. Spotlight cone data (same b9 layout as the PBR shader).
+    result = deviceContext->Map(m_lightSpotBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
+    if (FAILED(result)) return false;
+
+    LightSpotBufferType* spotData = static_cast<LightSpotBufferType*>(mappedResource.pData);
+    for (int i = 0; i < NUM_LIGHTS; ++i)
+    {
+        spotData->directionAndOuterCos[i] = lightDirectionsAndOuterCos
+            ? lightDirectionsAndOuterCos[i]
+            : XMFLOAT4(0.0f, 0.0f, -1.0f, 0.0f);
+        spotData->innerCosAndFlags[i] = lightInnerCosAndFlags
+            ? lightInnerCosAndFlags[i]
+            : XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+    }
+    deviceContext->Unmap(m_lightSpotBuffer, 0);
+    deviceContext->PSSetConstantBuffers(9, 1, &m_lightSpotBuffer);
 
     return true;
 }

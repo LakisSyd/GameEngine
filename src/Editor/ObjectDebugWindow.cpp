@@ -1,10 +1,15 @@
 #include "ObjectDebugWindow.h"
 
 #include <algorithm>
+#include <string>
 
 #include <imgui.h>
 
 #include "SceneManager.h"
+#include "PlayerComponents.h"
+#include "Gameplay/Repair/RepairComponent.h"
+#include "Gameplay/Power/OxygenGeneratorComponent.h"
+#include "Gameplay/Ship/DecompressionSourceComponent.h"
 
 namespace EditorDebug
 {
@@ -18,6 +23,18 @@ static constexpr float BASE_HEIGHT = 1280.0f;
 static float DebugScaleX() { return ImGui::GetIO().DisplaySize.x / BASE_WIDTH; }
 static float DebugScaleY() { return ImGui::GetIO().DisplaySize.y / BASE_HEIGHT; }
 static float DebugScale() { return std::min(DebugScaleX(), DebugScaleY()); }
+
+static const char* PlayerLocomotionStateName(PlayerLocomotionState state)
+{
+    switch (state)
+    {
+    case PlayerLocomotionState::Idle: return "Idle";
+    case PlayerLocomotionState::Walk: return "Walk";
+    case PlayerLocomotionState::Run: return "Run";
+    case PlayerLocomotionState::Exhausted: return "Exhausted";
+    default: return "Unknown";
+    }
+}
 
 static const char* ShaderTypeName(ShaderType type)
 {
@@ -74,6 +91,29 @@ static void DebugVec4Line(const char* label, const XMFLOAT4& value)
     ImGui::Text("%s: %.3f, %.3f, %.3f, %.3f", label, value.x, value.y, value.z, value.w);
 }
 
+template <typename RegistryT>
+static std::string EntityDebugLabel(RegistryT& registry, Entity entity)
+{
+    if (entity == INVALID_ENTITY)
+        return "None";
+
+    if (auto* room = registry.GetComponent<RoomComponent>(entity))
+        return room->roomName + " [" + std::to_string(entity) + "]";
+
+    if (auto* name = registry.GetComponent<NameComponent>(entity))
+        return name->name + " [" + std::to_string(entity) + "]";
+
+    return "Entity " + std::to_string(entity);
+}
+
+template <typename RegistryT>
+static void DebugEntityLine(RegistryT& registry, const char* label, Entity entity)
+{
+    const std::string text = EntityDebugLabel(registry, entity);
+    ImGui::Text("%s: %s", label, text.c_str());
+}
+
+static void RenderDoorLinksDebug(SceneManager& sceneManager);
 static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity entity);
 
 void RenderObjectDebugWindow(SceneManager& sceneManager, Entity selectedEntity, bool& showWindow)
@@ -94,6 +134,9 @@ void RenderObjectDebugWindow(SceneManager& sceneManager, Entity selectedEntity, 
     showWindow = open;
 
     ImGui::TextColored(COL_ACCENT, "F1 toggles this window in Editor and Play Mode");
+    ImGui::Separator();
+
+    RenderDoorLinksDebug(sceneManager);
     ImGui::Separator();
 
     Entity debugEntity = selectedEntity;
@@ -117,6 +160,47 @@ void RenderObjectDebugWindow(SceneManager& sceneManager, Entity selectedEntity, 
     ImGui::End();
 }
 
+static void RenderDoorLinksDebug(SceneManager& sceneManager)
+{
+    auto& registry = sceneManager.GetECSRegistry();
+    auto& doorPool = registry.GetComponents<DoorComponent>();
+
+    if (!ImGui::CollapsingHeader("Door Links", ImGuiTreeNodeFlags_DefaultOpen))
+        return;
+
+    int activeDoorCount = 0;
+    for (auto& [doorEntity, door] : doorPool)
+    {
+        if (!sceneManager.IsObjectActive(doorEntity)) continue;
+        ++activeDoorCount;
+    }
+
+    ImGui::Text("Active doors: %d", activeDoorCount);
+
+    for (auto& [doorEntity, door] : doorPool)
+    {
+        if (!sceneManager.IsObjectActive(doorEntity)) continue;
+
+        const std::string doorName = EntityDebugLabel(registry, doorEntity);
+        const std::string roomA = EntityDebugLabel(registry, door.roomA);
+        const std::string roomB = EntityDebugLabel(registry, door.roomB);
+
+        ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanAvailWidth;
+        if (door.roomA == INVALID_ENTITY || door.roomB == INVALID_ENTITY)
+            flags |= ImGuiTreeNodeFlags_DefaultOpen;
+
+        if (ImGui::TreeNodeEx((void*)(uintptr_t)doorEntity, flags,
+            "%s: %s <-> %s", doorName.c_str(), roomA.c_str(), roomB.c_str()))
+        {
+            DebugEntityLine(registry, "Left leaf", door.leftLeaf);
+            DebugEntityLine(registry, "Right leaf", door.rightLeaf);
+            ImGui::Text("Progress: %.3f", door.openProgress);
+            ImGui::Text("Slide distance: %.3f", door.slideDistance);
+            ImGui::TreePop();
+        }
+    }
+}
+
 static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity entity)
 {
     auto& registry = sceneManager.GetECSRegistry();
@@ -125,6 +209,9 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
     const bool hasMesh = registry.HasComponent<MeshRendererComponent>(entity);
     const bool hasLight = registry.HasComponent<LightComponent>(entity);
     const bool hasActive = registry.HasComponent<ActiveComponent>(entity);
+    const bool hasRoom = registry.GetComponent<RoomComponent>(entity);
+
+        
 
     const char* typeName = hasLight ? "Light" : (hasMesh ? "Object" : "Entity");
     ImGui::Text("Entity: %u", entity);
@@ -137,19 +224,24 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
     ImGui::Spacing();
     ImGui::SeparatorText("Components");
     ImGui::TextWrapped(
-        "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
+        "%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
         hasTransform ? "Transform " : "",
         hasMesh ? "MeshRenderer " : "",
         hasActive ? "Active " : "",
         registry.HasComponent<NameComponent>(entity) ? "Name " : "",
         hasLight ? "Light " : "",
         registry.HasComponent<RigidBodyComponent>(entity) ? "RigidBody " : "",
+        registry.HasComponent<RoomComponent>(entity) ? "RoomComponent " : "",
         registry.HasComponent<StaticColliderComponent>(entity) ? "StaticCollider " : "",
         registry.HasComponent<BuoyancyComponent>(entity) ? "Buoyancy " : "",
         registry.HasComponent<CharacterController>(entity) ? "CharacterController " : "",
         registry.HasComponent<CharacterMovement>(entity) ? "CharacterMovement " : "",
         registry.HasComponent<PlayerGameTag>(entity) ? "PlayerGameTag " : "",
         registry.HasComponent<DoorComponent>(entity) ? "Door " : "",
+        registry.HasComponent<OxygenGeneratorComponent>(entity) ? "OxygenGenerator " : "",
+        registry.HasComponent<HullPanelComponent>(entity) ? "HullPanel " : "",
+        registry.HasComponent<HullBreachComponent>(entity) ? "HullBreach " : "",
+        registry.HasComponent<RepairableComponent>(entity) ? "Repairable " : "",
         registry.HasComponent<CompartmentComponent>(entity) ? "Compartment " : "",
         registry.HasComponent<SubmarineHullConfig>(entity) ? "SubmarineHullConfig " : "",
         registry.HasComponent<SubmarineComponent>(entity) ? "Submarine " : "",
@@ -171,6 +263,110 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
         ImGui::TextColored(COL_RED, "TransformComponent is missing");
     }
 
+    if (auto* room = registry.GetComponent<RoomComponent>(entity))
+    {
+        ImGui::Text("Room: %s", room->roomName.c_str());
+        ImGui::Text("Objects inside: %d", (int)room->objectsInRoom.size());
+        ImGui::Text("Oxygen: %.2f", room->oxygen);
+        ImGui::Text("Pressure: %.2f", room->pressure);
+        ImGui::Text("Temperature: %.2f", room->temperature);
+    }
+
+    if (auto* generator = registry.GetComponent<OxygenGeneratorComponent>(entity))
+    {
+        if (ImGui::CollapsingHeader("Oxygen Generator", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::Text("Oxygen/sec: %.3f", generator->oxygenPerSecond);
+            ImGui::Text("Power usage: %.3f", generator->powerUsage);
+            DebugBoolLine("Enabled", generator->enabled);
+            DebugBoolLine("Has power", generator->hasPower);
+            DebugBoolLine("Broken", generator->broken);
+        }
+    }
+
+    if (auto* panel = registry.GetComponent<HullPanelComponent>(entity))
+    {
+        if (ImGui::CollapsingHeader("Hull Panel", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::Text("Panel: %s", panel->panelName.c_str());
+            ImGui::Text("Room name: %s", panel->roomName.c_str());
+            ImGui::Text("Room entity: %u", panel->room);
+            ImGui::Text("Health: %.1f / %.1f (%.2f)", panel->health, panel->maxHealth, panel->Health01());
+            ImGui::Text("Damage: %.1f", panel->accumulatedDamage);
+            ImGui::DragFloat("Armor resistance", &panel->armorResistance, 0.1f, 0.01f, 100.0f, "%.2fx");
+            ImGui::Text("Breaches: %d / %d", panel->breachCount, panel->maxBreaches);
+            DebugBoolLine("External", panel->isExternal);
+            DebugBoolLine("Destroyed", panel->isDestroyed);
+            DebugBoolLine("Disable collision when destroyed", panel->collisionDisabledWhenDestroyed);
+        }
+    }
+
+    if (auto* breach = registry.GetComponent<HullBreachComponent>(entity))
+    {
+        if (ImGui::CollapsingHeader("Hull Breach"))
+        {
+            ImGui::Text("Panel: %u", breach->panel);
+            ImGui::Text("Room: %u", breach->room);
+            DebugVec3Line("Local position", breach->localPosition);
+            DebugVec3Line("Local normal", breach->localNormal);
+            DebugVec3Line("World position", breach->worldPosition);
+            ImGui::Text("Radius: %.3f", breach->radius);
+            ImGui::Text("Leak rate: %.3f", breach->leakRate);
+            DebugBoolLine("Sealed", breach->sealed);
+
+            if (auto* decompression =
+                registry.GetComponent<DecompressionSourceComponent>(entity))
+            {
+                ImGui::SeparatorText("Decompression tuning");
+                ImGui::DragFloat(
+                    "Suction strength",
+                    &decompression->suctionStrength,
+                    0.25f,
+                    0.0f,
+                    40.0f,
+                    "%.2f m/s");
+                ImGui::DragFloat(
+                    "Suction radius",
+                    &decompression->suctionRadius,
+                    0.25f,
+                    0.0f,
+                    30.0f,
+                    "%.2f m");
+                ImGui::DragFloat(
+                    "Max suction speed",
+                    &decompression->maxSuctionSpeed,
+                    0.25f,
+                    0.0f,
+                    50.0f,
+                    "%.2f m/s");
+                ImGui::DragFloat(
+                    "Cooling rate",
+                    &decompression->coolingRate,
+                    0.05f,
+                    0.0f,
+                    10.0f,
+                    "%.2f");
+                ImGui::DragFloat(
+                    "Outside temperature",
+                    &decompression->outsideTemperature,
+                    1.0f,
+                    -150.0f,
+                    30.0f,
+                    "%.1f C");
+            }
+        }
+    }
+    if (auto* repairable = registry.GetComponent<RepairableComponent>(entity))
+    {
+        if (ImGui::CollapsingHeader("Repairable"))
+        {
+            ImGui::Text("Progress: %.2f / %.2f", repairable->progress, repairable->requiredProgress);
+            ImGui::ProgressBar(repairable->Progress01(), ImVec2(-1.0f, 0.0f));
+            ImGui::Text("Repair rate: %.2f", repairable->repairRate);
+            ImGui::Text("Max ray distance: %.2f", repairable->maxRayDistance);
+            DebugBoolLine("Repaired", repairable->repaired);
+        }
+    }
     if (auto* mesh = registry.GetComponent<MeshRendererComponent>(entity))
     {
         if (ImGui::CollapsingHeader("MeshRenderer", ImGuiTreeNodeFlags_DefaultOpen))
@@ -324,9 +520,15 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
             ImGui::Text("Move speed: %.3f", movement->moveSpeed);
             ImGui::Text("Run speed: %.3f", movement->runSpeed);
             ImGui::Text("Rotation speed: %.3f", movement->rotationSpeed);
+            ImGui::SeparatorText("Runtime State");
+            ImGui::Text("Locomotion: %s", PlayerLocomotionStateName(movement->locomotionState));
             DebugBoolLine("Moving", movement->isMoving);
+            DebugBoolLine("Wants run", movement->wantsRun);
+            DebugBoolLine("Running", movement->isRunning);
             DebugBoolLine("Grounded", movement->isGrounded);
             ImGui::Text("Current speed: %.3f", movement->currentSpeed);
+            if (auto* player = registry.GetComponent<PlayerComponent>(entity))
+                ImGui::Text("Stamina: %.1f / %.1f", player->stamina, player->maxStamina);
         }
     }
 
@@ -353,8 +555,12 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
     {
         if (ImGui::CollapsingHeader("Door"))
         {
+            DebugEntityLine(registry, "Room A", door->roomA);
+            DebugEntityLine(registry, "Room B", door->roomB);
             ImGui::Text("Compartment A: %u", door->compartmentA);
             ImGui::Text("Compartment B: %u", door->compartmentB);
+            DebugEntityLine(registry, "Left leaf", door->leftLeaf);
+            DebugEntityLine(registry, "Right leaf", door->rightLeaf);
             DebugBoolLine("Open", door->isOpen);
             DebugBoolLine("Broken", door->isBroken);
             DebugBoolLine("Requires power", door->requiresPower);
@@ -362,6 +568,12 @@ static void RenderSelectedObjectDebugInfo(SceneManager& sceneManager, Entity ent
             ImGui::Text("Effective flow: %.3f", door->GetEffectiveFlowRate());
             ImGui::Text("Open progress: %.3f", door->openProgress);
             ImGui::Text("Open speed: %.3f", door->openSpeed);
+            ImGui::Text("Slide distance: %.3f", door->slideDistance);
+            DebugVec3Line("Slide axis", door->slideAxis);
+
+            const bool roomsLinked = (door->roomA != INVALID_ENTITY && door->roomB != INVALID_ENTITY);
+            ImGui::TextColored(roomsLinked ? COL_ACCENT : COL_RED,
+                "Room link: %s", roomsLinked ? "OK" : "Missing");
         }
     }
 

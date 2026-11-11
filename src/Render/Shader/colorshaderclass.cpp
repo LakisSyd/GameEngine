@@ -10,13 +10,14 @@ ColorShaderClass::ColorShaderClass()
 
 }
 
-ColorShaderClass::ColorShaderClass(const ColorShaderClass&)
-{
-	
-}
-
 ColorShaderClass::~ColorShaderClass()
 {
+    ShutDown();
+}
+
+void ColorShaderClass::ShutDown()
+{
+    ShutdownShader();
 }
 
 bool ColorShaderClass::Initialize(ID3D11Device* device, HWND hwnd)

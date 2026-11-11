@@ -1,5 +1,5 @@
 // ============================================================
-// pbr.ps — Пиксельный шейдер PBR (Cook-Torrance BRDF)
+// pbr.ps вЂ” РџРёРєСЃРµР»СЊРЅС‹Р№ С€РµР№РґРµСЂ PBR (Cook-Torrance BRDF)
 // ============================================================
 #define NUM_LIGHTS 4
 #define PI 3.14159265359f
@@ -8,15 +8,16 @@ Texture2D albedoMap    : register(t0);
 Texture2D normalMap    : register(t1);
 Texture2D metalnessMap : register(t2);
 Texture2D roughnessMap : register(t3);
-Texture2D crackMap : register(t6); // маска трещины: R=mask, G=roughness offset
-Texture2D environmentMap : register(t8); // equirectangular HDR sky для простого specular environment
+Texture2D crackMap : register(t6); // РјР°СЃРєР° С‚СЂРµС‰РёРЅС‹: R=mask, G=roughness offset
+Texture2D environmentMap : register(t8); // equirectangular HDR sky РґР»СЏ РїСЂРѕСЃС‚РѕРіРѕ specular environment
 
-// ── Буфер повреждений (decal трещин) — слот b7 ───────────────────────────────
+// в”Ђв”Ђ Р‘СѓС„РµСЂ РїРѕРІСЂРµР¶РґРµРЅРёР№ (decal С‚СЂРµС‰РёРЅ) вЂ” СЃР»РѕС‚ b7 в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 cbuffer DamageBuffer : register(b7)
 {
-    // xyz = позиция трещины в world space, w = радиус
+    // xyz = РїРѕР·РёС†РёСЏ С‚СЂРµС‰РёРЅС‹ РІ world space, w = СЂР°РґРёСѓСЃ
     float4 crackPositions[8];
-    // x = intensity (0=нет, 1=max), y = rotation, zw = pad
+    float4 crackNormals[8];
+    // x = intensity (0=РЅРµС‚, 1=max), y = rotation, zw = pad
     float4 crackParams[8];
     int    crackCount;
     float3 _damPad;
@@ -37,7 +38,15 @@ cbuffer LightPositionBuffer : register(b1)
     float4 lightPosition[NUM_LIGHTS];
 };
 
-#include "src/Render/Shader/Vs/fog_common.hlsli"
+cbuffer LightSpotBuffer : register(b9)
+{
+    // xyz = пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅ пїЅпїЅпїЅпїЅпїЅ, w = cos пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ.
+    float4 spotDirectionAndOuterCos[NUM_LIGHTS];
+    // x = cos пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅ, y = 1 пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ, 0 пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ.
+    float4 spotInnerCosAndFlags[NUM_LIGHTS];
+};
+
+#include "../fog_common.hlsli"
 
 cbuffer SelectedBuffer : register(b3)
 {
@@ -60,7 +69,12 @@ cbuffer ShadowBuffer : register(b5)
 cbuffer PBRParamsBuffer : register(b6)
 {
     float3 cameraPos;
-    float  glassOpacity;   // 0 = стекло полностью прозрачное, 1 = непрозрачное (было: padding)
+    float  glassOpacity;
+    float  environmentStrength;
+    float  emissiveStrength;
+    float2 pbrParamsPadding;
+    float3 emissiveColor;
+    float  pbrParamsPadding2;
 };
 
 struct PixelInputType
@@ -71,7 +85,10 @@ struct PixelInputType
     float3 tangent               : TANGENT;
     float3 binormal              : BINORMAL;
     float3 worldPos              : TEXCOORD5;
-    float3 lightVec[NUM_LIGHTS]  : TEXCOORD6;
+    float4 lightVectorAndDistance0 : TEXCOORD6;
+    float4 lightVectorAndDistance1 : TEXCOORD7;
+    float4 lightVectorAndDistance2 : TEXCOORD8;
+    float4 lightVectorAndDistance3 : TEXCOORD9;
     float  fogFactor             : FOG;
     bool   isFrontFace           : SV_IsFrontFace;
 };
@@ -125,10 +142,10 @@ float3 RepairEnvironmentPinholes(float2 uv, float3 color)
     return (Luminance(repaired) > 0.08f) ? repaired : color;
 }
 
-// ════════════════════════════════════════════════════════════
-// РАСЧЁТ ТЕНЕЙ
-// ════════════════════════════════════════════════════════════
-float CalculateShadow(float3 worldPos)
+// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+// Р РђРЎР§РЃРў РўР•РќР•Р™
+// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+float CalculateShadow(float3 worldPos, float3 surfaceNormal, float3 lightDirection)
 {
     float4 lightSpacePos = mul(float4(worldPos, 1.0f), lightViewProj);
     lightSpacePos.xyz /= lightSpacePos.w;
@@ -145,26 +162,29 @@ float CalculateShadow(float3 worldPos)
     if (currentDepth > 1.0f) return 1.0f;
 
     float shadow = 0.0f;
-    float texelSize = 1.0f / 2048.0f;
-    float bias = 0.01f;
+    float texelSize = 1.0f / 1024.0f;
+    // Keep the receiver close to its real depth. The previous 0.01 offset was
+    // several metres in this orthographic shadow range and leaked through hulls.
+    float NdotL = saturate(dot(surfaceNormal, lightDirection));
+    float bias = max(0.00015f, 0.0008f * (1.0f - NdotL));
 
     [unroll]
-    for (int x = -1; x <= 1; x++)
+    for (int x = 0; x < 2; x++)
     {
         [unroll]
-        for (int y = -1; y <= 1; y++)
+        for (int y = 0; y < 2; y++)
         {
-            float2 offset = float2(x, y) * texelSize;
+            float2 offset = (float2(x, y) - 0.5f) * texelSize;
             shadow += shadowMap.SampleCmp(shadowSampler,
                           shadowUV + offset, currentDepth - bias);
         }
     }
-    return shadow / 9.0f;
+    return shadow * 0.25f;
 }
 
-// ════════════════════════════════════════════════════════════
-// PBR функции (Cook-Torrance)
-// ════════════════════════════════════════════════════════════
+// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+// PBR С„СѓРЅРєС†РёРё (Cook-Torrance)
+// в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
 float DistributionGGX(float3 N, float3 H, float roughness)
 {
     roughness = max(roughness, 0.04f);
@@ -201,23 +221,23 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
 {
     float4 albedoSample = albedoMap.Sample(SampleType, input.tex);
     float3 albedo = saturate(SanitizeColor(albedoSample.rgb));
-    // alpha из текстуры используем только для масок (не для стекла)
+    // alpha РёР· С‚РµРєСЃС‚СѓСЂС‹ РёСЃРїРѕР»СЊР·СѓРµРј С‚РѕР»СЊРєРѕ РґР»СЏ РјР°СЃРѕРє (РЅРµ РґР»СЏ СЃС‚РµРєР»Р°)
     float  texAlpha = albedoSample.a;
 
     float4 mrSample  = metalnessMap.Sample(SampleType, input.tex);
     float4 roughSample = roughnessMap.Sample(SampleType, input.tex);
     float  metalness = saturate(mrSample.b);
 
-    // ════════════════════════════════════════════════════════
-    // ОПРЕДЕЛЯЕМ СТЕКЛО по glassOpacity из константного буфера:
-    //   glassOpacity = 0.0  → стекло (прозрачный материал)
-    //   glassOpacity = 1.0  → обычный непрозрачный PBR
-    // glassOpacity задаётся из MaterialClass::SetGlass(true, opacity)
-    // ════════════════════════════════════════════════════════
+    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // РћРџР Р•Р”Р•Р›РЇР•Рњ РЎРўР•РљР›Рћ РїРѕ glassOpacity РёР· РєРѕРЅСЃС‚Р°РЅС‚РЅРѕРіРѕ Р±СѓС„РµСЂР°:
+    //   glassOpacity = 0.0  в†’ СЃС‚РµРєР»Рѕ (РїСЂРѕР·СЂР°С‡РЅС‹Р№ РјР°С‚РµСЂРёР°Р»)
+    //   glassOpacity = 1.0  в†’ РѕР±С‹С‡РЅС‹Р№ РЅРµРїСЂРѕР·СЂР°С‡РЅС‹Р№ PBR
+    // glassOpacity Р·Р°РґР°С‘С‚СЃСЏ РёР· MaterialClass::SetGlass(true, opacity)
+    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
     bool  isGlass   = (glassOpacity < 0.99f);
     float baseAlpha = isGlass ? glassOpacity : texAlpha;
 
-    // Roughness: для стекла принудительно очень низкий (0.02-0.05)
+    // Roughness: РґР»СЏ СЃС‚РµРєР»Р° РїСЂРёРЅСѓРґРёС‚РµР»СЊРЅРѕ РѕС‡РµРЅСЊ РЅРёР·РєРёР№ (0.02-0.05)
     // glTF usually stores roughness in the G channel of the metallic-roughness map.
     // When Assimp exposes roughness as a separate grayscale texture, all channels are equal,
     // so reading G still works and keeps the convention consistent.
@@ -225,8 +245,8 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     float roughness;
     if (isGlass)
     {
-        // Если нет roughness текстуры (fallback = белый = 1.0), форсируем 0.02
-        // Иначе клампим до максимума 0.05 для чистого стекла
+        // Р•СЃР»Рё РЅРµС‚ roughness С‚РµРєСЃС‚СѓСЂС‹ (fallback = Р±РµР»С‹Р№ = 1.0), С„РѕСЂСЃРёСЂСѓРµРј 0.02
+        // РРЅР°С‡Рµ РєР»Р°РјРїРёРј РґРѕ РјР°РєСЃРёРјСѓРјР° 0.05 РґР»СЏ С‡РёСЃС‚РѕРіРѕ СЃС‚РµРєР»Р°
         roughness = (rawRoughness > 0.5f) ? 0.02f : min(rawRoughness, 0.05f);
     }
     else
@@ -250,15 +270,18 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     float3 V = SafeNormalize(cameraPos - input.worldPos, float3(0.0f, 0.0f, 1.0f));
     if (!input.isFrontFace) N = -N;
 
-    // F0: стекло = диэлектрик IOR~1.5 → F0 = 0.04
+    // F0: СЃС‚РµРєР»Рѕ = РґРёСЌР»РµРєС‚СЂРёРє IOR~1.5 в†’ F0 = 0.04
     float3 F0 = lerp(float3(0.04f, 0.04f, 0.04f), albedo, metalness);
 
-    float shadowFactor = CalculateShadow(input.worldPos);
+    float3 sunLightDirection = SafeNormalize(
+        -dirLightDirection.xyz,
+        float3(0.0f, -1.0f, 0.0f));
+    float shadowFactor = CalculateShadow(input.worldPos, N, sunLightDirection);
     float3 Lo = float3(0.0f, 0.0f, 0.0f);
 
-    // ── Направленный свет ──────────────────────────────────────────────────
+    // в”Ђв”Ђ РќР°РїСЂР°РІР»РµРЅРЅС‹Р№ СЃРІРµС‚ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     {
-        float3 L = SafeNormalize(-dirLightDirection.xyz, float3(0.0f, -1.0f, 0.0f));
+        float3 L = sunLightDirection;
         float3 H = SafeNormalize(V + L, N);
         float NdotL = saturate(dot(N, L));
         if (NdotL > 0.0f)
@@ -270,18 +293,37 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
             float  denominator = 4.0f * max(dot(N, V), 0.001f) * NdotL;
             float3 specular    = numerator / max(denominator, 0.001f);
             float3 kD = (1.0f - F) * (1.0f - metalness);
-            // Стекло: диффуз масштабируем по прозрачности
+            // РЎС‚РµРєР»Рѕ: РґРёС„С„СѓР· РјР°СЃС€С‚Р°Р±РёСЂСѓРµРј РїРѕ РїСЂРѕР·СЂР°С‡РЅРѕСЃС‚Рё
             if (isGlass) kD *= baseAlpha;
             float3 radiance = SanitizeColor(dirLightColor.rgb * max(dirLightDirection.w, 0.0f));
             Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadowFactor;
         }
     }
 
-    // ── Точечные источники света ──────────────────────────────────────────
+    // в”Ђв”Ђ РўРѕС‡РµС‡РЅС‹Рµ РёСЃС‚РѕС‡РЅРёРєРё СЃРІРµС‚Р° в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     for (int i = 0; i < NUM_LIGHTS; i++)
     {
         if (diffuseColor[i].w < 0.001f) continue;
-        float3 L = SafeNormalize(input.lightVec[i], float3(0.0f, -1.0f, 0.0f));
+        const float4 lightVectorAndDistance = (i == 0) ? input.lightVectorAndDistance0 :
+            (i == 1) ? input.lightVectorAndDistance1 :
+            (i == 2) ? input.lightVectorAndDistance2 : input.lightVectorAndDistance3;
+        const float radius = max(lightPosition[i].w, 0.01f);
+        const float normalizedDistance = lightVectorAndDistance.w / radius;
+        if (normalizedDistance >= 1.0f) continue;
+        const float attenuation = pow(saturate(1.0f - normalizedDistance), 2.0f);
+        float3 L = SafeNormalize(lightVectorAndDistance.xyz, float3(0.0f, -1.0f, 0.0f));
+        float spotAttenuation = 1.0f;
+        if (spotInnerCosAndFlags[i].y > 0.5f)
+        {
+            const float3 lightToPixel = -L;
+            const float coneCos = dot(
+                SafeNormalize(spotDirectionAndOuterCos[i].xyz, float3(0.0f, 0.0f, -1.0f)),
+                lightToPixel);
+            const float outerCos = spotDirectionAndOuterCos[i].w;
+            const float innerCos = max(spotInnerCosAndFlags[i].x, outerCos + 0.0001f);
+            spotAttenuation = smoothstep(outerCos, innerCos, coneCos);
+            if (spotAttenuation < 0.0001f) continue;
+        }
         float3 H = SafeNormalize(V + L, N);
         float NdotL = saturate(dot(N, L));
         if (NdotL > 0.0f)
@@ -295,56 +337,67 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
             float3 kD = (1.0f - F) * (1.0f - metalness);
             if (isGlass) kD *= baseAlpha;
             float3 radiance = SanitizeColor(diffuseColor[i].rgb * max(diffuseColor[i].w, 0.0f));
-            Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+            Lo += (kD * albedo / PI + specular) * radiance * NdotL * attenuation * spotAttenuation;
         }
     }
 
-    // ── Ambient ──────────────────────────────────────────────────────────────
+    // в”Ђв”Ђ Ambient в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     float3 ambientLight = SanitizeColor(dirLightAmbient.rgb * max(dirLightAmbient.w, 0.0f));
-    if (dot(ambientLight, float3(1,1,1)) < 0.001f)
-        ambientLight = float3(0.15f, 0.15f, 0.15f);
+    // Until room light probes are available, the sun visibility is also used as
+    // a coarse sky-visibility term. It keeps exteriors readable and darkens the
+    // sealed interior instead of applying global daylight through the hull.
+    float ambientVisibility = lerp(0.10f, 1.0f, shadowFactor);
+    ambientLight *= ambientVisibility;
 
     float NdotV = max(dot(N, V), 0.0f);
     float3 F_ambient = FresnelSchlick(NdotV, F0);
     float3 kD_ambient = (1.0f - F_ambient) * (1.0f - metalness);
 
-    // Диффузный ambient: для стекла подавляем (оно прозрачное — почти не рассеивает)
+    // Р”РёС„С„СѓР·РЅС‹Р№ ambient: РґР»СЏ СЃС‚РµРєР»Р° РїРѕРґР°РІР»СЏРµРј (РѕРЅРѕ РїСЂРѕР·СЂР°С‡РЅРѕРµ вЂ” РїРѕС‡С‚Рё РЅРµ СЂР°СЃСЃРµРёРІР°РµС‚)
     float3 ambient_diffuse = kD_ambient * albedo * ambientLight
                            * (isGlass ? (baseAlpha * baseAlpha) : 1.0f);
 
-    // Зеркальный ambient: Fresnel-отражение (для стекла — это и есть его главный эффект)
+    // Р—РµСЂРєР°Р»СЊРЅС‹Р№ ambient: Fresnel-РѕС‚СЂР°Р¶РµРЅРёРµ (РґР»СЏ СЃС‚РµРєР»Р° вЂ” СЌС‚Рѕ Рё РµСЃС‚СЊ РµРіРѕ РіР»Р°РІРЅС‹Р№ СЌС„С„РµРєС‚)
     float3 specularTint     = lerp(float3(1.0f, 1.0f, 1.0f), albedo, metalness);
     float  roughnessBias    = roughness * roughness;
     float3 R = SafeNormalize(reflect(-V, N), N);
     float2 envUV = EquirectUV(R);
-    float3 envReflection = SanitizeColor(environmentMap.Sample(SampleType, envUV).rgb);
-    envReflection = RepairEnvironmentPinholes(envUV, envReflection);
-    float  envSpecStrength = saturate(1.0f - roughnessBias) * 0.65f;
+    // Most opaque ship panels intentionally have no environment reflection.
+    // Avoid the HDR lookup and the four-sample repair path for those pixels.
+    float3 envReflection = float3(0.0f, 0.0f, 0.0f);
+    if (environmentStrength > 0.001f)
+    {
+        envReflection = SanitizeColor(environmentMap.Sample(SampleType, envUV).rgb);
+        envReflection = RepairEnvironmentPinholes(envUV, envReflection);
+    }
+    float  envSpecStrength = saturate(1.0f - roughnessBias) * 0.65f *
+        saturate(environmentStrength) * ambientVisibility;
 
     float3 ambient_specular = F_ambient * specularTint *
         (ambientLight * lerp(1.0f, 0.1f, roughnessBias) + envReflection * envSpecStrength);
 
     float3 ambient = ambient_diffuse + ambient_specular;
-    float3 color   = SanitizeColor(ambient + Lo);
+    float3 emission = SanitizeColor(emissiveColor) * max(emissiveStrength, 0.0f);
+    float3 color   = SanitizeColor(ambient + Lo + emission);
 
-    // ── Tone mapping + Gamma ─────────────────────────────────────────────────
+    // в”Ђв”Ђ Tone mapping + Gamma в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     color = min(SanitizeColor(color), float3(64.0f, 64.0f, 64.0f));
     color = (color * (2.51f * color + 0.03f)) / (color * (2.43f * color + 0.59f) + 0.14f);
     color = pow(saturate(SanitizeColor(color)), 1.0f / 2.2f);
 
-    // ════════════════════════════════════════════════════════
-    // ФИНАЛЬНАЯ ПРОЗРАЧНОСТЬ
-    // ════════════════════════════════════════════════════════
+    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // Р¤РРќРђР›Р¬РќРђРЇ РџР РћР—Р РђР§РќРћРЎРўР¬
+    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
     float finalAlpha;
     if (isGlass)
     {
-        // Fresnel-эффект: края стекла более непрозрачны (реалистичный эффект)
+        // Fresnel-СЌС„С„РµРєС‚: РєСЂР°СЏ СЃС‚РµРєР»Р° Р±РѕР»РµРµ РЅРµРїСЂРѕР·СЂР°С‡РЅС‹ (СЂРµР°Р»РёСЃС‚РёС‡РЅС‹Р№ СЌС„С„РµРєС‚)
         float fresnelEdge = SafePow01(1.0f - NdotV, 4.0f);
-        // Основа: baseAlpha (0.1-0.3 для чистого стекла)
-        // + усиление на краях через Fresnel
+        // РћСЃРЅРѕРІР°: baseAlpha (0.1-0.3 РґР»СЏ С‡РёСЃС‚РѕРіРѕ СЃС‚РµРєР»Р°)
+        // + СѓСЃРёР»РµРЅРёРµ РЅР° РєСЂР°СЏС… С‡РµСЂРµР· Fresnel
         finalAlpha = saturate(baseAlpha + fresnelEdge * 0.5f);
 
-        // Лёгкий tint стекла цветом albedo только если albedo не нейтральный
+        // Р›С‘РіРєРёР№ tint СЃС‚РµРєР»Р° С†РІРµС‚РѕРј albedo С‚РѕР»СЊРєРѕ РµСЃР»Рё albedo РЅРµ РЅРµР№С‚СЂР°Р»СЊРЅС‹Р№
         float albedoLum = dot(albedo, float3(0.299f, 0.587f, 0.114f));
         float tintStrength = saturate(1.0f - albedoLum) * 0.4f;
         color = lerp(color, color * albedo, tintStrength);
@@ -355,11 +408,11 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
     }
 
 
-      // ════════════════════════════════════════════════════════
-    // ТРЕЩИНЫ — накладываем crack decal поверх albedo
-    // Для каждой трещины: если worldPos близко к crackPosition →
-    // смешиваем crack-текстуру, темним albedo, повышаем roughness
-    // ════════════════════════════════════════════════════════
+      // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
+    // РўР Р•Р©РРќР« вЂ” РЅР°РєР»Р°РґС‹РІР°РµРј crack decal РїРѕРІРµСЂС… albedo
+    // Р”Р»СЏ РєР°Р¶РґРѕР№ С‚СЂРµС‰РёРЅС‹: РµСЃР»Рё worldPos Р±Р»РёР·РєРѕ Рє crackPosition в†’
+    // СЃРјРµС€РёРІР°РµРј crack-С‚РµРєСЃС‚СѓСЂСѓ, С‚РµРјРЅРёРј albedo, РїРѕРІС‹С€Р°РµРј roughness
+    // в•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђв•ђ
     float totalCrackMask = 0.0f;
 
     [unroll]
@@ -372,26 +425,37 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
 
         if (crackIntensity < 0.001f) continue;
 
-        // Расстояние от пикселя до центра трещины
-        float dist = length(input.worldPos - crackWorldPos);
+        // Р Р°СЃСЃС‚РѕСЏРЅРёРµ РѕС‚ РїРёРєСЃРµР»СЏ РґРѕ С†РµРЅС‚СЂР° С‚СЂРµС‰РёРЅС‹
+        float3 crackNormal = normalize(crackNormals[ci].xyz);
+        float3 relative = input.worldPos - crackWorldPos;
 
-        // Нормализованное расстояние [0=центр, 1=граница]
+        // Keep the decal on the hit skin of thick geometry.
+        float planeDistance = abs(dot(relative, crackNormal));
+        if (planeDistance > crackRadius * 0.12f) continue;
+
+        float3 referenceAxis = abs(crackNormal.y) < 0.9f
+            ? float3(0.0f, 1.0f, 0.0f)
+            : float3(1.0f, 0.0f, 0.0f);
+        float3 axisU = normalize(cross(referenceAxis, crackNormal));
+        float3 axisV = normalize(cross(crackNormal, axisU));
+        float2 planar = float2(dot(relative, axisU), dot(relative, axisV));
+        float dist = length(planar);
+
+        // РќРѕСЂРјР°Р»РёР·РѕРІР°РЅРЅРѕРµ СЂР°СЃСЃС‚РѕСЏРЅРёРµ [0=С†РµРЅС‚СЂ, 1=РіСЂР°РЅРёС†Р°]
         float normDist = saturate(dist / max(crackRadius, 0.001f));
 
-        // Плавный переход от центра к краю (1 = в центре, 0 = снаружи)
+        // РџР»Р°РІРЅС‹Р№ РїРµСЂРµС…РѕРґ РѕС‚ С†РµРЅС‚СЂР° Рє РєСЂР°СЋ (1 = РІ С†РµРЅС‚СЂРµ, 0 = СЃРЅР°СЂСѓР¶Рё)
         float falloff = saturate(1.0f - normDist * normDist);
 
         if (falloff < 0.001f) continue;
 
-        // UV для crack-текстуры: проецируем worldPos на плоскость нормали
-        // Используем XZ проекцию с поворотом
+        // UV РґР»СЏ crack-С‚РµРєСЃС‚СѓСЂС‹: РїСЂРѕРµС†РёСЂСѓРµРј worldPos РЅР° РїР»РѕСЃРєРѕСЃС‚СЊ РЅРѕСЂРјР°Р»Рё
+        // РСЃРїРѕР»СЊР·СѓРµРј XZ РїСЂРѕРµРєС†РёСЋ СЃ РїРѕРІРѕСЂРѕС‚РѕРј
         float2 crackUV;
         float  sinR = sin(crackRotation);
         float  cosR = cos(crackRotation);
-        float2 planarXZ = float2(input.worldPos.x - crackWorldPos.x,
-                                 input.worldPos.z - crackWorldPos.z);
-        crackUV.x = (planarXZ.x * cosR - planarXZ.y * sinR) / crackRadius * 0.5f + 0.5f;
-        crackUV.y = (planarXZ.x * sinR + planarXZ.y * cosR) / crackRadius * 0.5f + 0.5f;
+        crackUV.x = (planar.x * cosR - planar.y * sinR) / crackRadius * 0.5f + 0.5f;
+        crackUV.y = (planar.x * sinR + planar.y * cosR) / crackRadius * 0.5f + 0.5f;
 
         float4 crackSample = crackMap.Sample(SampleType, crackUV);
         float  crackMask   = crackSample.r * falloff * crackIntensity;
@@ -399,19 +463,19 @@ float4 PBRPixelShader(PixelInputType input) : SV_TARGET
         totalCrackMask = saturate(totalCrackMask + crackMask);
     }
 
-    // Применяем трещину: темним albedo, повышаем roughness, добавляем синеватый "мокрый" оттенок
+    // РџСЂРёРјРµРЅСЏРµРј С‚СЂРµС‰РёРЅСѓ: С‚РµРјРЅРёРј albedo, РїРѕРІС‹С€Р°РµРј roughness, РґРѕР±Р°РІР»СЏРµРј СЃРёРЅРµРІР°С‚С‹Р№ "РјРѕРєСЂС‹Р№" РѕС‚С‚РµРЅРѕРє
     if (totalCrackMask > 0.001f)
     {
-        float3 crackColor = float3(0.04f, 0.04f, 0.06f); // тёмно-синий (мокрый металл)
+        float3 crackColor = float3(0.04f, 0.04f, 0.06f); // С‚С‘РјРЅРѕ-СЃРёРЅРёР№ (РјРѕРєСЂС‹Р№ РјРµС‚Р°Р»Р»)
         color    = lerp(color, color * crackColor, totalCrackMask * 0.85f);
-        // roughness уже посчитан выше — визуально он уже в Lo/ambient
-        // просто ещё добавляем тёмный ореол
+        // roughness СѓР¶Рµ РїРѕСЃС‡РёС‚Р°РЅ РІС‹С€Рµ вЂ” РІРёР·СѓР°Р»СЊРЅРѕ РѕРЅ СѓР¶Рµ РІ Lo/ambient
+        // РїСЂРѕСЃС‚Рѕ РµС‰С‘ РґРѕР±Р°РІР»СЏРµРј С‚С‘РјРЅС‹Р№ РѕСЂРµРѕР»
     }
 
 
     float4 finalColor = float4(saturate(SanitizeColor(color)), saturate(finalAlpha));
 
-    // ── Выделение объекта в редакторе ────────────────────────────────────────
+    // в”Ђв”Ђ Р’С‹РґРµР»РµРЅРёРµ РѕР±СЉРµРєС‚Р° РІ СЂРµРґР°РєС‚РѕСЂРµ в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
     if (selectedFactor > 1.5f)
     {
         float edge = 0.5f - saturate(dot(N, float3(0, 0, 1)));

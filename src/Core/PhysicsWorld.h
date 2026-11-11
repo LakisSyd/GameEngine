@@ -2,7 +2,10 @@
 #include <btBulletDynamicsCommon.h>
 #include <BulletCollision/Gimpact/btGImpactCollisionAlgorithm.h>
 #include <BulletCollision/Gimpact/btGImpactShape.h>
+#include <algorithm>
+#include <cstdint>
 #include <memory>
+#include <utility>
 
 class PhysicsWorld
 {
@@ -15,71 +18,103 @@ public:
 
     bool Initialize()
     {
-        m_collisionConfig = std::make_unique<btDefaultCollisionConfiguration>();
-        m_dispatcher = std::make_unique<btCollisionDispatcher>(m_collisionConfig.get());
-        m_broadphase = std::make_unique<btDbvtBroadphase>();
-        m_solver = std::make_unique<btSequentialImpulseConstraintSolver>();
-        m_dynamicsWorld = std::make_unique<btDiscreteDynamicsWorld>(
-            m_dispatcher.get(),
-            m_broadphase.get(),
-            m_solver.get(),
-            m_collisionConfig.get()
+        // Treat repeated initialization as idempotent. Replacing Bullet's
+        // dependencies under a live world would invalidate both the world and
+        // every ECS component currently registered in it.
+        if (m_dynamicsWorld)
+            return true;
+
+        // Clear any incomplete state left by an exceptional construction.
+        Shutdown();
+        m_accumulator = 0.0f;
+        m_interpolationAlpha = 0.0f;
+        m_stepIndex = 0;
+        auto collisionConfig = std::make_unique<btDefaultCollisionConfiguration>();
+        auto dispatcher = std::make_unique<btCollisionDispatcher>(collisionConfig.get());
+        auto broadphase = std::make_unique<btDbvtBroadphase>();
+        auto solver = std::make_unique<btSequentialImpulseConstraintSolver>();
+        auto ghostCallback = std::make_unique<btGhostPairCallback>();
+        auto dynamicsWorld = std::make_unique<btDiscreteDynamicsWorld>(
+            dispatcher.get(),
+            broadphase.get(),
+            solver.get(),
+            collisionConfig.get()
         );
 
-        m_dynamicsWorld->setGravity(btVector3(0, -9.81f, 0));
-        m_ghostCallback = std::make_unique<btGhostPairCallback>();
-        m_dynamicsWorld->getPairCache()->setInternalGhostPairCallback(m_ghostCallback.get());
+        dynamicsWorld->setGravity(btVector3(0, -9.81f, 0));
+        dynamicsWorld->getPairCache()->setInternalGhostPairCallback(ghostCallback.get());
 
         // ===============================================================
         // ?? REGISTER GImpact algorithm for dynamic concave mesh collision
         // Without this, btGImpactMeshShape won't detect collisions!
         // ===============================================================
-        btGImpactCollisionAlgorithm::registerAlgorithm(m_dispatcher.get());
+        btGImpactCollisionAlgorithm::registerAlgorithm(dispatcher.get());
 
         // ===============================================================
-        // ?? FIX: Увеличиваем итерации солвера для стабильных джойнтов.
-        //    По умолчанию Bullet использует 10 итераций — этого мало
-        //    для btFixedConstraint между тяжёлыми телами.
-        //    50 итераций дают стабильные соединения отсеков подлодки.
+        // ?? FIX: РЈРІРµР»РёС‡РёРІР°РµРј РёС‚РµСЂР°С†РёРё СЃРѕР»РІРµСЂР° РґР»СЏ СЃС‚Р°Р±РёР»СЊРЅС‹С… РґР¶РѕР№РЅС‚РѕРІ.
+        //    РџРѕ СѓРјРѕР»С‡Р°РЅРёСЋ Bullet РёСЃРїРѕР»СЊР·СѓРµС‚ 10 РёС‚РµСЂР°С†РёР№ вЂ” СЌС‚РѕРіРѕ РјР°Р»Рѕ
+        //    РґР»СЏ btFixedConstraint РјРµР¶РґСѓ С‚СЏР¶С‘Р»С‹РјРё С‚РµР»Р°РјРё.
+        //    50 РёС‚РµСЂР°С†РёР№ РґР°СЋС‚ СЃС‚Р°Р±РёР»СЊРЅС‹Рµ СЃРѕРµРґРёРЅРµРЅРёСЏ РѕС‚СЃРµРєРѕРІ РїРѕРґР»РѕРґРєРё.
         // ===============================================================
-        m_dynamicsWorld->getSolverInfo().m_numIterations = 50;
+        dynamicsWorld->getSolverInfo().m_numIterations = 50;
 
-        // ?? FIX: Split impulse предотвращает "отскок" от penetration
-        //    correction. Без этого тела, проникшие друг в друга,
-        //    получают огромный импульс, который рвёт джойнты.
-        m_dynamicsWorld->getSolverInfo().m_splitImpulse = true;
-        m_dynamicsWorld->getSolverInfo().m_splitImpulsePenetrationThreshold = -0.04f;
+        // ?? FIX: Split impulse РїСЂРµРґРѕС‚РІСЂР°С‰Р°РµС‚ "РѕС‚СЃРєРѕРє" РѕС‚ penetration
+        //    correction. Р‘РµР· СЌС‚РѕРіРѕ С‚РµР»Р°, РїСЂРѕРЅРёРєС€РёРµ РґСЂСѓРі РІ РґСЂСѓРіР°,
+        //    РїРѕР»СѓС‡Р°СЋС‚ РѕРіСЂРѕРјРЅС‹Р№ РёРјРїСѓР»СЊСЃ, РєРѕС‚РѕСЂС‹Р№ СЂРІС‘С‚ РґР¶РѕР№РЅС‚С‹.
+        dynamicsWorld->getSolverInfo().m_splitImpulse = true;
+        dynamicsWorld->getSolverInfo().m_splitImpulsePenetrationThreshold = -0.04f;
 
-        // ?? FIX: ERP (Error Reduction Parameter) — скорость коррекции
-        //    ошибки позиционирования. Слишком высокое значение = жёсткие
-        //    рывки. 0.2 — мягкая коррекция, не рвёт джойнты.
-        m_dynamicsWorld->getSolverInfo().m_erp = 0.2f;
-        m_dynamicsWorld->getSolverInfo().m_erp2 = 0.2f;
+        // ?? FIX: ERP (Error Reduction Parameter) вЂ” СЃРєРѕСЂРѕСЃС‚СЊ РєРѕСЂСЂРµРєС†РёРё
+        //    РѕС€РёР±РєРё РїРѕР·РёС†РёРѕРЅРёСЂРѕРІР°РЅРёСЏ. РЎР»РёС€РєРѕРј РІС‹СЃРѕРєРѕРµ Р·РЅР°С‡РµРЅРёРµ = Р¶С‘СЃС‚РєРёРµ
+        //    СЂС‹РІРєРё. 0.2 вЂ” РјСЏРіРєР°СЏ РєРѕСЂСЂРµРєС†РёСЏ, РЅРµ СЂРІС‘С‚ РґР¶РѕР№РЅС‚С‹.
+        dynamicsWorld->getSolverInfo().m_erp = 0.2f;
+        dynamicsWorld->getSolverInfo().m_erp2 = 0.2f;
+
+        // Commit only after every allocation and configuration step succeeds.
+        // Moving unique_ptr does not move the Bullet objects, so the world's
+        // non-owning dependency pointers remain valid.
+        m_collisionConfig = std::move(collisionConfig);
+        m_dispatcher = std::move(dispatcher);
+        m_broadphase = std::move(broadphase);
+        m_solver = std::move(solver);
+        m_ghostCallback = std::move(ghostCallback);
+        m_dynamicsWorld = std::move(dynamicsWorld);
 
         return true;
     }
 
     void Update(float deltaTime)
     {
-        static float accumulator = 0.0f;
-        const float timestep = 1.0f / 60.0f;
-        accumulator += deltaTime;
+        if (!m_dynamicsWorld)
+            return;
 
-        // ?? FIX: Ограничиваем максимальный accumulator,
-        //    чтобы не было "spiral of death" при лагах
-        if (accumulator > 0.25f)
-            accumulator = 0.25f;
+        constexpr float timestep = 1.0f / 60.0f;
+        m_accumulator += (std::max)(0.0f, deltaTime);
 
-        while (accumulator >= timestep)
+        // ?? FIX: РћРіСЂР°РЅРёС‡РёРІР°РµРј РјР°РєСЃРёРјР°Р»СЊРЅС‹Р№ accumulator,
+        //    С‡С‚РѕР±С‹ РЅРµ Р±С‹Р»Рѕ "spiral of death" РїСЂРё Р»Р°РіР°С…
+        if (m_accumulator > 0.25f)
+            m_accumulator = 0.25f;
+
+        while (m_accumulator >= timestep)
         {
             m_dynamicsWorld->stepSimulation(timestep, 1, timestep);
-            accumulator -= timestep;
+            m_accumulator -= timestep;
+            ++m_stepIndex;
            
             
         }
+
+        // Rendering interpolates between the previous and current fixed state.
+        // Without this, a 120/144 Hz renderer displays the same 60 Hz character
+        // transform for several frames and movement looks like tiny stops even
+        // though both the renderer and the physics simulation are healthy.
+        m_interpolationAlpha = std::clamp(m_accumulator / timestep, 0.0f, 1.0f);
     }
 
     btDiscreteDynamicsWorld* GetWorld() { return m_dynamicsWorld.get(); }
+    float GetInterpolationAlpha() const { return m_interpolationAlpha; }
+    std::uint64_t GetStepIndex() const { return m_stepIndex; }
 
     void Shutdown()
     {
@@ -102,6 +137,9 @@ public:
         m_broadphase.reset();
         m_dispatcher.reset();
         m_collisionConfig.reset();
+        m_accumulator = 0.0f;
+        m_interpolationAlpha = 0.0f;
+        m_stepIndex = 0;
     }
 private:
     PhysicsWorld() = default;
@@ -112,8 +150,10 @@ private:
     std::unique_ptr<btBroadphaseInterface> m_broadphase;
     std::unique_ptr<btSequentialImpulseConstraintSolver> m_solver;
     std::unique_ptr<btDiscreteDynamicsWorld> m_dynamicsWorld;
+    float m_accumulator = 0.0f;
+    float m_interpolationAlpha = 0.0f;
+    std::uint64_t m_stepIndex = 0;
 
-    btActionInterface* action;
 };
-// Удалите или закомментируйте строку ниже, так как она не нужна и вызывает ошибку E0077
+// РЈРґР°Р»РёС‚Рµ РёР»Рё Р·Р°РєРѕРјРјРµРЅС‚РёСЂСѓР№С‚Рµ СЃС‚СЂРѕРєСѓ РЅРёР¶Рµ, С‚Р°Рє РєР°Рє РѕРЅР° РЅРµ РЅСѓР¶РЅР° Рё РІС‹Р·С‹РІР°РµС‚ РѕС€РёР±РєСѓ E0077
 // btActionInterface* action;

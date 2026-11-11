@@ -9,10 +9,6 @@ RenderTextureClass::RenderTextureClass()
     m_depthStencilView = nullptr;
 }
 
-RenderTextureClass::RenderTextureClass(const RenderTextureClass&)
-{
-}
-
 RenderTextureClass::~RenderTextureClass()
 {
     Shutdown();

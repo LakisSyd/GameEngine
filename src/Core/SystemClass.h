@@ -18,7 +18,7 @@
 
 //////////////////////////////////////////////////////////////////////////////// 
 // 📌 SystemClass — "корневой" класс всего приложения
-// 💡 Паттерн: "Singleton-like" (один экземпляр на приложение), но без строгого запрета на копирование
+// 💡 Паттерн: один владеющий экземпляр на приложение.
 // 🔜 В будущем: будет владеть устройством DirectX (ID3D11Device), swap chain и другими ресурсами
 //////////////////////////////////////////////////////////////////////////////// 
 class SystemClass
@@ -26,7 +26,8 @@ class SystemClass
 public:
     // 📌 Конструктор/деструктор
     SystemClass();
-    SystemClass(const SystemClass&);  // ⚠️ Пустой — копирование НЕ поддерживается (но компилятор не ругается)
+    SystemClass(const SystemClass&) = delete;
+    SystemClass& operator=(const SystemClass&) = delete;
     ~SystemClass();
 
     // 📌 Публичный интерфейс для WinMain
@@ -58,30 +59,13 @@ private:
     void ShutdownWindows();
 
     // ── Данные окна ──────────────────────────────────────────────────────────
-    LPCWSTR   m_applicationName; // имя класса окна и заголовок (L"Engine")
-    HINSTANCE m_hinstance;       // дескриптор экземпляра приложения
-    HWND      m_hwnd;            // дескриптор окна — «адрес» окна в системе
+    LPCWSTR   m_applicationName = nullptr;
+    HINSTANCE m_hinstance = nullptr;
+    HWND      m_hwnd = nullptr;
 
     // ── Подсистемы ──────────────────────────────────────────────────────────
     // SystemClass владеет InputClass через unique_ptr — автоочистка
     std::unique_ptr<InputClass> m_Input;
 
-    // ApplicationClass владеется через обычный указатель (для совместимости с legacy кодом).
-    // Освобождается вручную в Shutdown().
-    ApplicationClass* m_Application;
+    std::unique_ptr<ApplicationClass> m_Application;
 };
-
-//////////////////////////////////////////////////////////////////////////////// 
-// 📌 Глобальные элементы для связи WinAPI с ООП
-// 💡 Проблема: Windows требует СИ-функцию для обработки сообщений (WndProc),
-//    но мы хотим использовать методы класса (объектно-ориентированный подход).
-//    Решение: глобальный указатель + маршрутизация.
-//////////////////////////////////////////////////////////////////////////////// 
-
-// 📌 Глобальный указатель на экземпляр SystemClass
-// ⚠️ Подводный камень: не потокобезопасен! Но для однопоточной игры — нормально.
-static SystemClass* ApplicationHandle = nullptr;
-
-// 📌 Глобальная функция-обработчик сообщений окна
-//    Вызывается ОС Windows напрямую при любых событиях с окном
-static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);

@@ -28,7 +28,8 @@ private:
 public:
     ShaderType GetType() const override { return ShaderType::Color; }
     ColorShaderClass();
-    ColorShaderClass(const ColorShaderClass&);
+    ColorShaderClass(const ColorShaderClass&) = delete;
+    ColorShaderClass& operator=(const ColorShaderClass&) = delete;
     ~ColorShaderClass();
 
     bool Initialize(ID3D11Device* device, HWND hwnd);

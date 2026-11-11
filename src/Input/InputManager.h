@@ -3,7 +3,7 @@
 #include <functional>
 #include "InputClass.h"
 #include <memory>
-
+#include <array>
 
 
 class InputManager {
@@ -24,8 +24,11 @@ public:
     int GetDragStartX() const { return m_clickStartX; }
     int GetDragStartY() const { return m_clickStartY; }
 
+    
+
     void SetDragging(bool value) { m_isDragging = value; }
     bool IsLeftDown() const { return m_isLeftDown; }  // ← геттер для HandleDragDrop
+    bool WasLeftPressed() const { return m_leftPressed; }
 
     void SetMouseCapture(InputClass* input, bool capture);
 
@@ -41,6 +44,12 @@ public:
     // ===== 🔥 НОВОЕ: Запросы клавиш (для WASD/RF движения) =====
     bool IsKeyDown(InputClass* input, unsigned int key) const;
 
+    bool IsKeyPressed(InputClass* input, unsigned int key) const;
+    bool WasKeyPressed(unsigned int key) const
+    {
+        return key < m_pressedKeys.size() && m_pressedKeys[key];
+    }
+
     // Сброс состояния при выходе из фокуса окна
     void Reset();
 
@@ -53,8 +62,12 @@ private:
     bool m_isLeftDown = false;
     bool m_isRightDown = false;
     bool m_wasLeftDown = false;
+    bool m_leftPressed = false;
     bool m_isDragging = false;
     bool m_potentialDrag = false;
+
+    std::array<bool, 256> m_previousKeys{};
+    std::array<bool, 256> m_pressedKeys{};
 
     int m_mouseX = 0, m_mouseY = 0;
     int m_clickStartX = 0, m_clickStartY = 0;

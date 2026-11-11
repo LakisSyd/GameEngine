@@ -26,7 +26,18 @@ void SubmarineJointSystem::CreateJoint(ECSRegistry& registry, Entity a, Entity b
     frameA.setOrigin(pivotA_local);
     frameB.setOrigin(pivotB_local);
 
-    btFixedConstraint* joint = new btFixedConstraint(*rbA->body, *rbB->body, frameA, frameB);
+    btDiscreteDynamicsWorld* world = PhysicsWorld::Get().GetWorld();
+    if (!world)
+    {
+        OutputDebugStringA("[Joint] ERROR: Physics world is null!\n");
+        return;
+    }
+
+    SubmarineJointComponent jointComp{};
+    jointComp.compartmentA = a;
+    jointComp.compartmentB = b;
+    jointComp.joint = new btFixedConstraint(*rbA->body, *rbB->body, frameA, frameB);
+    jointComp.breakForce = breakForce;
 
     // ═══════════════════════════════════════════════════════════════════
     // 🔥 FIX: Убрана двойная перезапись breakForce.
@@ -37,34 +48,40 @@ void SubmarineJointSystem::CreateJoint(ECSRegistry& registry, Entity a, Entity b
     //    Теперь используем переданное значение как есть.
     //    Если нужно масштабировать по массе — делайте это ДО вызова.
     // ═══════════════════════════════════════════════════════════════════
-    joint->setBreakingImpulseThreshold(breakForce);
+    jointComp.joint->setBreakingImpulseThreshold(breakForce);
 
     // 🔥 FIX: Настраиваем параметры стабильности constraint
-    joint->setOverrideNumSolverIterations(100);  // Больше итераций = стабильнее
+    jointComp.joint->setOverrideNumSolverIterations(100);  // Больше итераций = стабильнее
 
-    Entity jointEntity = registry.CreateEntity();
-
-    SubmarineJointComponent jointComp{};
-    jointComp.compartmentA = a;
-    jointComp.compartmentB = b;
-    jointComp.joint = joint;
-    jointComp.breakForce = breakForce;
-    registry.AddComponent<SubmarineJointComponent>(jointEntity, jointComp);
-
-    btDiscreteDynamicsWorld* world = PhysicsWorld::Get().GetWorld();
-    if (world)
+    // Transfer ownership to ECS before registering the constraint in Bullet.
+    // If entity/pool allocation throws, the local component deletes the joint
+    // and no non-owned constraint is left behind in the physics world.
+    Entity jointEntity = INVALID_ENTITY;
+    try
     {
-        world->addConstraint(joint, true);  // true = disable collisions
-
-        char buf[256];
-        sprintf_s(buf, "[Joint] Created: %u <-> %u, breakForce=%.0f\n", a, b, breakForce);
-        OutputDebugStringA(buf);
+        jointEntity = registry.CreateEntity();
+        registry.AddComponent<SubmarineJointComponent>(jointEntity, std::move(jointComp));
     }
-    else
+    catch (...)
     {
-        OutputDebugStringA("[Joint] ERROR: Physics world is null!\n");
-        delete joint;
+        if (jointEntity != INVALID_ENTITY)
+            registry.DestroyEntity(jointEntity);
+        throw;
     }
+
+    auto* storedJoint = registry.GetComponent<SubmarineJointComponent>(jointEntity);
+    if (!storedJoint || !storedJoint->joint)
+    {
+        registry.DestroyEntity(jointEntity);
+        OutputDebugStringA("[Joint] ERROR: ECS failed to retain joint ownership.\n");
+        return;
+    }
+    world->addConstraint(storedJoint->joint, true);  // true = disable collisions
+    storedJoint->registeredInPhysicsWorld = true;
+
+    char buf[256];
+    sprintf_s(buf, "[Joint] Created: %u <-> %u, breakForce=%.0f\n", a, b, breakForce);
+    OutputDebugStringA(buf);
 }
 
 void SubmarineJointSystem::Update(ECSRegistry& registry, float deltaTime)
@@ -89,9 +106,7 @@ void SubmarineJointSystem::Update(ECSRegistry& registry, float deltaTime)
         // ═══════════════════════════════════════════════════════════════
         if (!jointComp.joint->isEnabled() || appliedImpulse > jointComp.breakForce)
         {
-            PhysicsWorld::Get().GetWorld()->removeConstraint(jointComp.joint);
-            delete jointComp.joint;
-            jointComp.joint = nullptr;
+            jointComp.ResetJoint();
             jointComp.isBroken = true;
 
             if (auto* subA = registry.GetComponent<SubmarineComponent>(jointComp.compartmentA))
@@ -112,12 +127,7 @@ void SubmarineJointSystem::RemoveJoint(ECSRegistry& registry, Entity jointEntity
     auto* jointComp = registry.GetComponent<SubmarineJointComponent>(jointEntity);
     if (!jointComp) return;
 
-    if (jointComp->joint)
-    {
-        PhysicsWorld::Get().GetWorld()->removeConstraint(jointComp->joint);
-        delete jointComp->joint;
-        jointComp->joint = nullptr;
-    }
+    jointComp->ResetJoint();
 
     registry.DestroyEntity(jointEntity);
 }

@@ -32,7 +32,8 @@ private:
 
 public:
     FogShaderClass();
-    FogShaderClass(const FogShaderClass&);
+    FogShaderClass(const FogShaderClass&) = delete;
+    FogShaderClass& operator=(const FogShaderClass&) = delete;
     ~FogShaderClass();
 
     bool Initialize(ID3D11Device*, HWND);

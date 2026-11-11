@@ -5,6 +5,8 @@
 #include <iostream>
 #include <algorithm>
 #include <cctype>
+#include <cwctype>
+#include <optional>
 
 namespace fs = std::filesystem;
 
@@ -30,7 +32,7 @@ struct FileEntry {
     bool MatchesName(const std::string& query) const {
         auto toLower = [](std::string s) {
             std::transform(s.begin(), s.end(), s.begin(),
-                [](unsigned char c) { return std::tolower(c); });
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             return s;
             };
         return toLower(name).find(toLower(query)) != std::string::npos;
@@ -42,13 +44,37 @@ struct FileEntry {
 // ============================================================================
 class FileSystem {
 public:
-    explicit FileSystem(const fs::path& rootPath) : m_rootPath{ rootPath } {
+    explicit FileSystem(const fs::path& rootPath) {
+        if (rootPath.empty()) {
+            std::cerr << "FileSystem: root path must not be empty\n";
+            return;
+        }
+
         std::error_code ec;
+        m_rootPath = fs::absolute(rootPath, ec).lexically_normal();
+        if (ec) {
+            std::cerr << "FileSystem: invalid root path: " << ec.message() << "\n";
+            m_rootPath.clear();
+            return;
+        }
+
         if (!fs::exists(m_rootPath, ec) || ec) {
             std::cout << "Creating root directory: "
-                << ToString(m_rootPath) << "\n"; // Исправлено
+                << ToString(m_rootPath) << "\n";
+            ec.clear();
             fs::create_directories(m_rootPath, ec);
         }
+
+        if (ec || !fs::is_directory(m_rootPath, ec)) {
+            std::cerr << "FileSystem: root directory is unavailable: "
+                << ToString(m_rootPath) << "\n";
+            m_rootPath.clear();
+            return;
+        }
+
+        fs::path canonicalRoot = fs::weakly_canonical(m_rootPath, ec);
+        if (!ec)
+            m_rootPath = std::move(canonicalRoot);
     }
 
     void ScanFileSystem() {
@@ -62,12 +88,16 @@ public:
 
         auto options = fs::directory_options::skip_permission_denied;
 
-        for (const auto& entry : fs::recursive_directory_iterator(m_rootPath, options, ec)) {
+        fs::recursive_directory_iterator it(m_rootPath, options, ec);
+        const fs::recursive_directory_iterator end;
+        while (it != end) {
             if (ec) {
                 ec.clear();
+                it.increment(ec);
                 continue;
             }
 
+            const auto& entry = *it;
             FileEntry fe;
 
             // ИСПОЛЬЗУЕМ НАШУ ФУНКЦИЮ ToString ВМЕСТО .u8string()
@@ -77,9 +107,14 @@ public:
             fe.extension = ToString(entry.path().extension());
             std::transform(fe.extension.begin(), fe.extension.end(),
                 fe.extension.begin(),
-                [](unsigned char c) { return std::tolower(c); });
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-            fe.isDirectory = entry.is_directory();
+            fe.isDirectory = entry.is_directory(ec);
+            if (ec) {
+                ec.clear();
+                it.increment(ec);
+                continue;
+            }
 
             if (fe.isDirectory) {
                 fe.size = 0;
@@ -93,16 +128,19 @@ public:
             }
 
             m_files.push_back(std::move(fe));
+            it.increment(ec);
         }
 
         std::cout << "FileSystem: Scanned " << m_files.size() << " entries\n";
     }
 
     bool DeleteFile(const fs::path& relativePath) {
-        fs::path fullPath = m_rootPath / relativePath;
+        const auto resolvedPath = ResolvePath(relativePath, false);
+        if (!resolvedPath) return false;
+        const fs::path& fullPath = *resolvedPath;
         std::error_code ec;
 
-        if (!fs::exists(fullPath, ec) || ec) {
+        if (!fs::is_regular_file(fullPath, ec) || ec) {
             std::cerr << "Delete warning: " << ToString(relativePath) << "\n";
             RemoveFromCache(ToString(fullPath));
             return false;
@@ -127,7 +165,9 @@ public:
     }
 
     bool DeleteDirectory(const fs::path& relativePath) {
-        fs::path fullPath = m_rootPath / relativePath;
+        const auto resolvedPath = ResolvePath(relativePath, false);
+        if (!resolvedPath) return false;
+        const fs::path& fullPath = *resolvedPath;
         std::error_code ec;
 
         if (!fs::is_directory(fullPath, ec) || ec) {
@@ -186,7 +226,7 @@ public:
         }
         std::transform(normalizedExt.begin(), normalizedExt.end(),
             normalizedExt.begin(),
-            [](unsigned char c) { return std::tolower(c); });
+            [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
         for (const auto& entry : m_files) {
             if (!entry.isDirectory && entry.extension == normalizedExt) {
@@ -199,7 +239,9 @@ public:
     std::vector<const FileEntry*> GetEntriesInDirectory(const fs::path& relativeDir) const {
         std::vector<const FileEntry*> results;
 
-        fs::path targetPath = m_rootPath / relativeDir;
+        const auto resolvedPath = ResolvePath(relativeDir, true);
+        if (!resolvedPath) return results;
+        const fs::path& targetPath = *resolvedPath;
         std::string targetStr = ToString(targetPath);
 
         // ✅ FIX: Нормализуем слэши в targetStr
@@ -262,7 +304,9 @@ public:
     }
 
     bool CreateDirectory(const fs::path& relativePath) {
-        fs::path fullPath = m_rootPath / relativePath;
+        const auto resolvedPath = ResolvePath(relativePath, false);
+        if (!resolvedPath) return false;
+        const fs::path& fullPath = *resolvedPath;
         std::error_code ec;
 
         bool created = fs::create_directories(fullPath, ec);
@@ -292,6 +336,65 @@ public:
     }
 
 private:
+    static bool PathComponentEquals(const fs::path& left, const fs::path& right) {
+#ifdef _WIN32
+        std::wstring leftText = left.wstring();
+        std::wstring rightText = right.wstring();
+        std::transform(leftText.begin(), leftText.end(), leftText.begin(),
+            [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+        std::transform(rightText.begin(), rightText.end(), rightText.begin(),
+            [](wchar_t c) { return static_cast<wchar_t>(std::towlower(c)); });
+        return leftText == rightText;
+#else
+        return left == right;
+#endif
+    }
+
+    bool IsWithinRoot(const fs::path& candidate, bool allowRoot) const {
+        auto rootPart = m_rootPath.begin();
+        auto candidatePart = candidate.begin();
+
+        for (; rootPart != m_rootPath.end(); ++rootPart, ++candidatePart) {
+            if (candidatePart == candidate.end()
+                || !PathComponentEquals(*rootPart, *candidatePart)) {
+                return false;
+            }
+        }
+
+        return allowRoot || candidatePart != candidate.end();
+    }
+
+    std::optional<fs::path> ResolvePath(
+        const fs::path& relativePath,
+        bool allowRoot) const
+    {
+        if (m_rootPath.empty() || relativePath.is_absolute()
+            || relativePath.has_root_name() || relativePath.has_root_directory()) {
+            std::cerr << "FileSystem: rejected path outside project root: "
+                << ToString(relativePath) << "\n";
+            return std::nullopt;
+        }
+
+        for (const auto& part : relativePath) {
+            if (part == "..") {
+                std::cerr << "FileSystem: rejected parent traversal: "
+                    << ToString(relativePath) << "\n";
+                return std::nullopt;
+            }
+        }
+
+        const fs::path candidate = (m_rootPath / relativePath).lexically_normal();
+        std::error_code ec;
+        const fs::path canonicalCandidate = fs::weakly_canonical(candidate, ec);
+        if (ec || !IsWithinRoot(canonicalCandidate, allowRoot)) {
+            std::cerr << "FileSystem: rejected path outside project root: "
+                << ToString(relativePath) << "\n";
+            return std::nullopt;
+        }
+
+        return candidate;
+    }
+
     void RemoveFromCache(const std::string& fullPath) {
         std::string normalizedPath = fullPath;
         std::replace(normalizedPath.begin(), normalizedPath.end(), '\\', '/');

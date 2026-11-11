@@ -10,7 +10,8 @@ class RenderTextureClass
 {
 public:
     RenderTextureClass();
-    RenderTextureClass(const RenderTextureClass&);
+    RenderTextureClass(const RenderTextureClass&) = delete;
+    RenderTextureClass& operator=(const RenderTextureClass&) = delete;
     ~RenderTextureClass();
 
     // Инициализация: создаёт текстуру, целевое представление и буфер глубины

@@ -24,7 +24,8 @@ private:
 
 public:
     MultiTextureShaderClass();
-    MultiTextureShaderClass(const MultiTextureShaderClass&);
+    MultiTextureShaderClass(const MultiTextureShaderClass&) = delete;
+    MultiTextureShaderClass& operator=(const MultiTextureShaderClass&) = delete;
     ~MultiTextureShaderClass();
 
 

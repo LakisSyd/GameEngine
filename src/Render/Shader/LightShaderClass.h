@@ -35,7 +35,9 @@ public:
         XMMATRIX projectionMatrix,
         ID3D11ShaderResourceView* texture,
         XMFLOAT4 lightColors[],
-        XMFLOAT4 lightPositions[]);
+        XMFLOAT4 lightPositions[],
+        const XMFLOAT4* lightDirectionsAndOuterCos = nullptr,
+        const XMFLOAT4* lightInnerCosAndFlags = nullptr);
 
     bool SetSelectedFactor(ID3D11DeviceContext* deviceContext, float factor);
 
@@ -53,6 +55,7 @@ private:
     ID3D11Buffer* m_lightBuffer;
     ID3D11Buffer* m_lightPositionBuffer;
     ID3D11Buffer* m_lightColorBuffer;
+    ID3D11Buffer* m_lightSpotBuffer;
     ID3D11Buffer* m_selectedBuffer;
     ID3D11SamplerState* m_shadowSampler;
     ID3D11ShaderResourceView* m_shadowMapSRV = nullptr; // external, owned by ShadowMap
@@ -87,7 +90,9 @@ private:
         XMMATRIX worldMatrix, XMMATRIX viewMatrix, XMMATRIX projectionMatrix,
         ID3D11ShaderResourceView* texture,
         XMFLOAT4 lightColors[],
-        XMFLOAT4 lightPositions[]);
+        XMFLOAT4 lightPositions[],
+        const XMFLOAT4* lightDirectionsAndOuterCos,
+        const XMFLOAT4* lightInnerCosAndFlags);
     void RenderShader(ID3D11DeviceContext* deviceContext, int indexCount);
 
     // === Структуры (твои текущие) ===
@@ -95,5 +100,10 @@ private:
     struct LightBufferType { /* твои поля */ };
     struct LightPositionBufferType { XMFLOAT4 lightPosition[NUM_LIGHTS]; };
     struct LightColorBufferType { XMFLOAT4 diffuseColor[NUM_LIGHTS]; };
+    struct LightSpotBufferType
+    {
+        XMFLOAT4 directionAndOuterCos[NUM_LIGHTS];
+        XMFLOAT4 innerCosAndFlags[NUM_LIGHTS];
+    };
     struct SelectedBufferType { float selectedFactor; float padding[3]; };
 };
