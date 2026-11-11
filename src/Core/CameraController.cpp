@@ -50,6 +50,11 @@ void CameraController::SetFirstPersonEyeHeight(float value)
     m_firstPersonEyeHeight = std::clamp(value, 0.1f, 3.0f);
 }
 
+void CameraController::SetFirstPersonEyeRightOffset(float value)
+{
+    m_firstPersonEyeRightOffset = std::clamp(value, -1.0f, 1.0f);
+}
+
 void CameraController::SetFirstPersonForwardOffset(float value)
 {
     m_firstPersonForwardOffset = std::clamp(value, -1.0f, 1.0f);
@@ -60,21 +65,99 @@ void CameraController::SetThirdPersonDistance(float value)
     m_followDistance = std::clamp(value, 1.0f, 30.0f);
 }
 
+void CameraController::SetThirdPersonTargetOffset(const XMFLOAT3& value)
+{
+    m_thirdPersonTargetOffset = {
+        std::clamp(value.x, -2.0f, 2.0f),
+        std::clamp(value.y, 0.1f, 3.0f),
+        std::clamp(value.z, -2.0f, 2.0f) };
+}
+
+void CameraController::SetPlayViewMode(PlayViewMode mode)
+{
+    m_playViewMode = mode;
+    const float minPitch = IsFirstPerson() ? m_firstPersonMinPitch : m_followMinPitch;
+    const float maxPitch = IsFirstPerson() ? m_firstPersonMaxPitch : m_followMaxPitch;
+    m_followPitch = std::clamp(m_followPitch, minPitch, maxPitch);
+    if (IsFirstPerson())
+        m_socketStudioPitch = std::clamp(
+            m_socketStudioPitch, minPitch, maxPitch);
+}
+
 void CameraController::SetFollowPitch(float value)
 {
-    m_followPitch = std::clamp(value, m_followMinPitch, m_followMaxPitch);
+    m_followPitch = IsFirstPerson()
+        ? std::clamp(value, m_firstPersonMinPitch, m_firstPersonMaxPitch)
+        : std::clamp(value, m_followMinPitch, m_followMaxPitch);
 }
 
 void CameraController::SetLookUpLimit(float degrees)
 {
     m_followMinPitch = -std::clamp(degrees, 0.0f, 89.0f);
-    m_followPitch = std::clamp(m_followPitch, m_followMinPitch, m_followMaxPitch);
+    if (!IsFirstPerson())
+        m_followPitch = std::clamp(m_followPitch, m_followMinPitch, m_followMaxPitch);
 }
 
 void CameraController::SetLookDownLimit(float degrees)
 {
     m_followMaxPitch = std::clamp(degrees, 0.0f, 89.0f);
-    m_followPitch = std::clamp(m_followPitch, m_followMinPitch, m_followMaxPitch);
+    if (!IsFirstPerson())
+        m_followPitch = std::clamp(m_followPitch, m_followMinPitch, m_followMaxPitch);
+}
+
+void CameraController::SetFirstPersonLookUpLimit(float degrees)
+{
+    m_firstPersonMinPitch = -std::clamp(degrees, 0.0f, 89.0f);
+    if (IsFirstPerson())
+    {
+        m_followPitch = std::clamp(
+            m_followPitch, m_firstPersonMinPitch, m_firstPersonMaxPitch);
+        m_socketStudioPitch = std::clamp(
+            m_socketStudioPitch, m_firstPersonMinPitch, m_firstPersonMaxPitch);
+    }
+}
+
+void CameraController::SetFirstPersonLookDownLimit(float degrees)
+{
+    m_firstPersonMaxPitch = std::clamp(degrees, 0.0f, 89.0f);
+    if (IsFirstPerson())
+    {
+        m_followPitch = std::clamp(
+            m_followPitch, m_firstPersonMinPitch, m_firstPersonMaxPitch);
+        m_socketStudioPitch = std::clamp(
+            m_socketStudioPitch, m_firstPersonMinPitch, m_firstPersonMaxPitch);
+    }
+}
+
+void CameraController::SetSocketStudioEnabled(bool enabled)
+{
+    if (enabled && !m_socketStudioEnabled)
+    {
+        m_socketStudioYaw = m_followYaw;
+        m_socketStudioPitch = m_followPitch;
+        m_socketStudioDistance = (std::max)(0.35f, m_followDistance);
+        m_socketStudioTargetOffset = { 0.0f, 1.4f, 0.0f };
+    }
+    m_socketStudioEnabled = enabled;
+}
+
+void CameraController::SetSocketStudioFreeFly(bool enabled)
+{
+    if (m_socketStudioFreeFly == enabled) return;
+    m_socketStudioFreeFly = enabled;
+    ReleaseMouseCapture();
+}
+
+void CameraController::SetSocketStudioPitch(float degrees)
+{
+    m_socketStudioPitch = IsFirstPerson()
+        ? std::clamp(degrees, m_firstPersonMinPitch, m_firstPersonMaxPitch)
+        : std::clamp(degrees, -85.0f, 85.0f);
+}
+
+void CameraController::SetSocketStudioDistance(float distance)
+{
+    m_socketStudioDistance = std::clamp(distance, 0.35f, 15.0f);
 }
 
 float CameraController::GetFollowYaw() const
@@ -82,15 +165,19 @@ float CameraController::GetFollowYaw() const
     return m_followYaw;
 }
 
-void CameraController::UpdateFollow(
-    float dt,
-    const TransformComponent* targetTransform,
-    bool inputBlockedByUi)
+void CameraController::UpdateFollowLook(float dt, bool inputBlockedByUi)
 {
-    if (!m_camera || !targetTransform || !m_inputManager || !m_input)
+    if (!m_inputManager || !m_input)
         return;
 
-    dt = std::min(dt, 0.05f);
+    if (m_socketStudioFreeFly)
+    {
+        // Observer/Studio uses the same mouse contract as the editor camera:
+        // the cursor remains available for ImGui, RMB outside UI captures it
+        // only while looking around, and WASD + R/F move the free camera.
+        UpdateFree(dt, inputBlockedByUi);
+        return;
+    }
 
     if (inputBlockedByUi)
     {
@@ -117,23 +204,43 @@ void CameraController::UpdateFollow(
         m_followPitch += dy * sensitivity;
     }
 
-    m_followPitch = std::clamp(
-        m_followPitch,
-        m_followMinPitch,
-        m_followMaxPitch
-    );
-    
-   
+    SetFollowPitch(m_followPitch);
+}
 
+void CameraController::UpdateFollow(const TransformComponent* targetTransform)
+{
+    if (m_socketStudioFreeFly) return;
+    if (!m_camera || !targetTransform)
+        return;
+
+    // The character transform is already interpolated between physics steps.
+    // Keep the orbit at the current input angle: smoothing the camera's world
+    // position while turning made it trail around a different pivot than the
+    // character and caused visible lateral drift.
     using namespace DirectX;
 
-    const float yawRad = XMConvertToRadians(m_followYaw);
-    const float pitchRad = XMConvertToRadians(m_followPitch);
+    const float viewYaw = m_socketStudioEnabled ? m_socketStudioYaw : m_followYaw;
+    const float viewPitch = m_socketStudioEnabled ? m_socketStudioPitch : m_followPitch;
+    const float distance = m_socketStudioEnabled ? m_socketStudioDistance : m_followDistance;
+    const float yawRad = XMConvertToRadians(viewYaw);
+    const float pitchRad = XMConvertToRadians(viewPitch);
 
     XMFLOAT3 target = targetTransform->position;
 
-    // Небольшая высота точки, в которую смотрим
-    target.y += 1.5f;
+    if (m_socketStudioEnabled)
+    {
+        target.x += m_socketStudioTargetOffset.x;
+        target.y += m_socketStudioTargetOffset.y;
+        target.z += m_socketStudioTargetOffset.z;
+    }
+    else
+    {
+        target.x += cosf(yawRad) * m_thirdPersonTargetOffset.x +
+            sinf(yawRad) * m_thirdPersonTargetOffset.z;
+        target.y += m_thirdPersonTargetOffset.y;
+        target.z += -sinf(yawRad) * m_thirdPersonTargetOffset.x +
+            cosf(yawRad) * m_thirdPersonTargetOffset.z;
+    }
 
     const float cosPitch = cosf(pitchRad);
     const float sinPitch = sinf(pitchRad);
@@ -144,51 +251,25 @@ void CameraController::UpdateFollow(
     {
         XMFLOAT3 eye = targetTransform->position;
         eye.y += m_firstPersonEyeHeight;
-        eye.x += sinYaw * m_firstPersonForwardOffset;
-        eye.z += cosYaw * m_firstPersonForwardOffset;
+        eye.x += cosYaw * m_firstPersonEyeRightOffset +
+            sinYaw * m_firstPersonForwardOffset;
+        eye.z += -sinYaw * m_firstPersonEyeRightOffset +
+            cosYaw * m_firstPersonForwardOffset;
 
         m_camera->SetPosition(eye.x, eye.y, eye.z);
-        m_camera->SetRotation(m_followPitch, m_followYaw, 0.0f);
+        m_camera->SetRotation(viewPitch, viewYaw, 0.0f);
         return;
     }
 
     XMFLOAT3 desired =
     {
-        target.x - sinYaw * cosPitch * m_followDistance,
-        target.y + sinPitch * m_followDistance,
-        target.z - cosYaw * cosPitch * m_followDistance
+        target.x - sinYaw * cosPitch * distance,
+        target.y + sinPitch * distance,
+        target.z - cosYaw * cosPitch * distance
     };
 
-    XMFLOAT3 current = m_camera->GetPosition();
-
-    const float followSpeed = 12.0f;
-    const float t = std::clamp(followSpeed * dt, 0.0f, 1.0f);
-
-    XMFLOAT3 next =
-    {
-        current.x + (desired.x - current.x) * t,
-        current.y + (desired.y - current.y) * t,
-        current.z + (desired.z - current.z) * t
-    };
-        
-    m_camera->SetPosition(next.x, next.y, next.z);
-
-    XMVECTOR cameraPos = XMLoadFloat3(&next);
-    XMVECTOR targetPos = XMLoadFloat3(&target);
-    XMVECTOR direction = XMVector3Normalize(
-        XMVectorSubtract(targetPos, cameraPos)
-    );
-
-    XMFLOAT3 dir;
-    XMStoreFloat3(&dir, direction);
-
-    const float yaw =
-        XMConvertToDegrees(std::atan2(dir.x, dir.z));
-
-    const float pitch =
-        XMConvertToDegrees(std::asin(std::clamp(-dir.y, -1.0f, 1.0f)));
-
-    m_camera->SetRotation(pitch, yaw, 0.0f);
+    m_camera->SetPosition(desired.x, desired.y, desired.z);
+    m_camera->SetRotation(viewPitch, viewYaw, 0.0f);
 }
 
 
@@ -279,5 +360,7 @@ void CameraController::EnterPlayMode()
 
 void CameraController::ExitPlayMode()
 {
+    m_socketStudioEnabled = false;
+    m_socketStudioFreeFly = false;
     ReleaseMouseCapture();
 }

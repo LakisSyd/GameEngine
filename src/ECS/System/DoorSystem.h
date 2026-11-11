@@ -48,7 +48,9 @@ public:
                     });
             }
 
-            if (!door || door->isBroken)
+            if (!door ||
+                !registry.HasComponent<ActiveComponent>(doorEntity) ||
+                door->isBroken)
                 continue;
 
             door->isOpen = !door->isOpen;
@@ -72,6 +74,8 @@ public:
         registry.ForEach<DoorComponent>(
             [&](Entity entity, DoorComponent& door)
             {
+                if (!registry.HasComponent<ActiveComponent>(entity))
+                    return;
                 // isOpen — желаемое состояние, openProgress — фактическая фаза
                 // анимации [0..1]. Сломанная дверь всегда движется к открытому виду.
                 const float direction = (door.isOpen || door.isBroken) ? 1.0f : -1.0f;

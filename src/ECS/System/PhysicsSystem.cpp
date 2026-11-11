@@ -939,6 +939,21 @@
 
         world->addRigidBody(rb->body, group, mask);
 
+        rb->suspendedByActiveState = false;
+        if (!registry.HasComponent<ActiveComponent>(entity))
+        {
+            rb->collisionFlagsBeforeSuspend = rb->body->getCollisionFlags();
+            rb->activationStateBeforeSuspend = rb->body->getActivationState();
+            rb->suspendedByActiveState = true;
+            rb->body->setCollisionFlags(
+                rb->collisionFlagsBeforeSuspend |
+                btCollisionObject::CF_NO_CONTACT_RESPONSE);
+            rb->body->setLinearVelocity(btVector3(0, 0, 0));
+            rb->body->setAngularVelocity(btVector3(0, 0, 0));
+            rb->body->clearForces();
+            rb->body->forceActivationState(DISABLE_SIMULATION);
+        }
+
         rb->lastSyncedPosition = transform->position;
         rb->lastSyncedRotation = transform->rotation;
         rb->lastSyncedScale = transform->scale;
@@ -988,6 +1003,42 @@
         for (auto& [entity, rb] : rigidBodies)
         {
             if (!rb.body) continue;
+
+            const bool entityActive =
+                registry.HasComponent<ActiveComponent>(entity);
+            if (!entityActive)
+            {
+                if (!rb.suspendedByActiveState)
+                {
+                    rb.collisionFlagsBeforeSuspend =
+                        rb.body->getCollisionFlags();
+                    rb.activationStateBeforeSuspend =
+                        rb.body->getActivationState();
+                    rb.suspendedByActiveState = true;
+                }
+
+                rb.body->setCollisionFlags(
+                    rb.collisionFlagsBeforeSuspend |
+                    btCollisionObject::CF_NO_CONTACT_RESPONSE);
+                rb.body->setLinearVelocity(btVector3(0, 0, 0));
+                rb.body->setAngularVelocity(btVector3(0, 0, 0));
+                rb.body->clearForces();
+                rb.body->forceActivationState(DISABLE_SIMULATION);
+                continue;
+            }
+
+            if (rb.suspendedByActiveState)
+            {
+                rb.body->setCollisionFlags(rb.collisionFlagsBeforeSuspend);
+                const int restoredState =
+                    rb.activationStateBeforeSuspend == DISABLE_SIMULATION
+                    ? ACTIVE_TAG
+                    : rb.activationStateBeforeSuspend;
+                rb.body->forceActivationState(restoredState);
+                rb.body->activate(true);
+                rb.suspendedByActiveState = false;
+            }
+
             auto* transform = transforms.Get(entity);
             if (!transform) continue;
 
@@ -1097,6 +1148,8 @@
         // =======================================================================
         for (auto& [entity, buoyancy] : buoyancyPool)
         {
+            if (!registry.HasComponent<ActiveComponent>(entity))
+                continue;
             if (!registry.HasComponent<RigidBodyComponent>(entity))
                 continue;
 
@@ -1300,6 +1353,7 @@
         for (auto& [entity, rb] : rigidBodies)
         {
             if (!rb.body) continue;
+            if (!registry.HasComponent<ActiveComponent>(entity)) continue;
         
             // ?? Пропускаем KINEMATIC тела — они контролируются из ECS
             bool isKinematic = (rb.body->getCollisionFlags() & btCollisionObject::CF_KINEMATIC_OBJECT) != 0;

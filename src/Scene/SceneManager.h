@@ -3,6 +3,7 @@
 #include <array>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <DirectXMath.h>
 
 // ============================================================================
@@ -26,6 +27,8 @@ using json = nlohmann::json;
 
 class AssetLoadSystem;
 struct WeaponComponent;
+class CameraClass;
+class btDynamicsWorld;
 
 struct AsyncShipImportSnapshot
 {
@@ -156,10 +159,15 @@ public:
         ID3D11Device* device, ID3D11DeviceContext* deviceContext);
     bool SaveWeaponProfile(
         const WeaponComponent& weapon,
-        const std::string& filename = "assets/config/weapon_grip.json") const;
+        const std::string& filename = "");
     bool LoadWeaponProfile(
         WeaponComponent& weapon,
-        const std::string& filename = "assets/config/weapon_grip.json") const;
+        const std::string& filename = "");
+    bool ImportBlenderWeaponSockets(
+        WeaponComponent& weapon, std::string& status,
+        const std::string& filename =
+            "assets/model/Kevin_Combat_Game.sockets.json") const;
+    static std::string WeaponProfilePath(const std::string& profileName);
 
     // =========================================================================
     // РЎРІРµС‚
@@ -167,7 +175,9 @@ public:
 
     void UpdateLights();
 
-    void RemapEntityReferences(const std::unordered_map<uint32_t, Entity>& remap);
+    void RemapEntityReferences(
+        const std::unordered_map<uint32_t, Entity>& remap,
+        const std::unordered_set<Entity>& restoredEntities);
 
     void ResolveRepairZones();
 
@@ -216,7 +226,8 @@ public:
     // =========================================================================
     // РћР±РЅРѕРІР»РµРЅРёРµ Рё СЂРµРЅРґРµСЂ
     // =========================================================================
-    void UpdateAll(float deltaTime, Entity player);
+    void UpdateAll(float deltaTime, Entity player,
+        CameraClass* previewCamera = nullptr, btDynamicsWorld* previewWorld = nullptr);
 
     int RenderAllECS(
         ID3D11DeviceContext* context,

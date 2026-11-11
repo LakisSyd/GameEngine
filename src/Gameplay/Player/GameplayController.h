@@ -4,7 +4,9 @@
 #include "CharacterMovementSystem.h"
 #include "CharacterSpawnSystem.h"
 #include "Gameplay/Combat/WeaponComponent.h"
-
+#include "PlayerComponents.h"
+#include "Gameplay/Inventory/InventoryComponent.h"
+#include "DebugHud.h"
 #include <windows.h>
 #include "PlayerComponents.h"
 
@@ -13,6 +15,7 @@ enum class EngineMode
     Editor,
     Play
 };
+
 
 class GamePlayController
 {
@@ -25,7 +28,7 @@ public:
     void Update(
         ECSRegistry& registry,
         float dt,
-        InputClass* input,
+        const GameInputFrame& input,
         bool gameplayBlocked,
         float cameraYaw)
     {
@@ -41,12 +44,42 @@ public:
                 movement->wantsRun = false;
                 movement->isRunning = false;
                 movement->isMoving = false;
+                movement->wantJump = false;
                 movement->locomotionState = PlayerLocomotionState::Idle;
             }
             return;
         }
 
+
         CharacterMovementSystem::Update(registry, dt, input, cameraYaw);
+
+        auto* player = registry.GetComponent<PlayerComponent>(m_player);
+
+        if (!player)
+            return;
+
+        if (input.Down(GameAction::PrecisionAim))
+        {
+            player->aimMode = PlayerComponent::AimMode::Precise;
+
+            DebugHud::Get().Show(
+                "Precision Aim Mode",
+                DebugHudMessageKind::Info,
+                1.0f);
+        }
+        else if (input.Down(GameAction::Aim))
+        {
+            player->aimMode = PlayerComponent::AimMode::Shoulder;
+
+            DebugHud::Get().Show(
+                "Shoulder Aim Mode",
+                DebugHudMessageKind::Info,
+                1.0f);
+        }
+        else
+        {
+            player->aimMode = PlayerComponent::AimMode::Hip;
+        }
 
         // Future gameplay systems:
         // InteractionSystem::Update(...);
@@ -69,8 +102,12 @@ public:
 
         if (player == INVALID_ENTITY)
         {
-            OutputDebugStringA("[Gameplay] EnterPlayMode failed: no entity with PlayerGameTag found.\n");
-            return false;
+            // A player is optional for AI test scenes.  Keep m_player invalid:
+            // player-only systems already use this value as their guard, while
+            // world physics and the NPC pipeline may continue in observer mode.
+            OutputDebugStringA(
+                "[Gameplay] No PlayerGameTag found; entering observer simulation mode.\n");
+            return true;
         }
 
         if (playerCount > 1)
@@ -99,6 +136,22 @@ public:
             registry.AddComponent<PlayerComponent>(player, PlayerComponent{});
             playerComp = registry.GetComponent<PlayerComponent>(player);
             OutputDebugStringA("[Gameplay] Added PlayerComponent to player.\n");
+        }
+        if (!registry.HasComponent<CharacterVitalsComponent>(player))
+        {
+            registry.AddComponent<CharacterVitalsComponent>(
+                player, CharacterVitalsComponent{});
+            OutputDebugStringA("[Gameplay] Added CharacterVitalsComponent to player.\n");
+        }
+        if (playerComp)
+        {
+            // При повторном запуске Play не продолжаем незаконченный удар.
+            playerComp->punchActive = false;
+            playerComp->punchHitApplied = false;
+            playerComp->punchConsumedPrimary = false;
+            playerComp->punchTime = 0.0f;
+            playerComp->punchDuration = 0.0f;
+            playerComp->punchLastHit = INVALID_ENTITY;
         }
         auto* movement = registry.GetComponent<CharacterMovement>(player);
         if (!movement)
@@ -171,6 +224,14 @@ private:
             }
         }
 
+        // An existing inventory is authoritative even when its active slot is
+        // empty. The player may have deliberately holstered or dropped the
+        // last rifle; creating another starter weapon on every Play session
+        // would duplicate items. InventorySystem repairs/synchronizes the
+        // EquippedWeapon link immediately after EnterPlayMode.
+        if (registry.HasComponent<InventoryComponent>(player))
+            return;
+
         WeaponComponent weaponTemplate{};
         const bool hadLegacyWeapon = registry.HasComponent<WeaponComponent>(player);
         if (auto* legacyWeapon = registry.GetComponent<WeaponComponent>(player))
@@ -197,4 +258,6 @@ private:
     }
 
     Entity m_player = INVALID_ENTITY;
+
+
 };

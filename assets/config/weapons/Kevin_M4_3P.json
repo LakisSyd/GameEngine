@@ -1,0 +1,55 @@
+{
+    "enable_left_hand_ik": true,
+    "left_forearm_bone": "mixamorig:LeftForeArm",
+    "left_hand_bone": "mixamorig:LeftHand",
+    "left_hand_grip": [
+        -0.13039180636405945,
+        0.07605255395174026,
+        0.26683247089385986
+    ],
+    "left_hand_rotation": [
+        1.7256410121917725,
+        2.108236312866211,
+        0.8078575134277344
+    ],
+    "left_upper_arm_bone": "mixamorig:LeftArm",
+    "muzzle_position": [
+        0.0,
+        0.10999999940395355,
+        0.6069999933242798
+    ],
+    "profile_name": "Kevin_M4_3P",
+    "rifle_gun_animation": "Kevin_Aim_Shoot_R",
+    "rifle_idle_animation": "Kevin_Aim_Rifle",
+    "right_hand_bone": "mixamorig:RightHand",
+    "show_world_visual": true,
+    "third_person_distance": 4.0,
+    "third_person_target_offset": [
+        0.0,
+        1.5,
+        0.0
+    ],
+    "version": 4,
+    "view": "third_person",
+    "visual_model": "assets/model/Rifle_M4_CC0.glb",
+    "world_pivot": [
+        0.0,
+        0.0,
+        0.0
+    ],
+    "world_position": [
+        0.041999999433755875,
+        0.09300000220537186,
+        -0.017999999225139618
+    ],
+    "world_rotation": [
+        -1.4013092517852783,
+        2.861553430557251,
+        1.5676206350326538
+    ],
+    "world_scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+    ]
+}

@@ -7,7 +7,7 @@
 #include <windows.h>
 
 #include <ECSRegistry.h>
-#include <InputClass.h>
+#include "Gameplay/Player/GameplayInputSystem.h"
 #include <Physics/PhysicsRaycast.h>
 #include <MeshCuttingTest.h>
 
@@ -17,6 +17,7 @@
 
 #include "../../WorldEventLog.h"
 #include "RepairComponent.h"
+#include "Gameplay/AI/CrewTaskCoordinator.h"
 
 
 namespace{
@@ -46,7 +47,7 @@ public:
     void Update(
         ECSRegistry& registry,
         float deltaTime,
-        InputClass* input,
+        const GameInputFrame& input,
         CameraClass* camera,
         btDynamicsWorld* world,
         JobSystem& jobs,
@@ -71,7 +72,7 @@ public:
             worldTime);
 
 
-        if (!input || !camera || !world)
+        if (!camera || !world)
             return;
 
 
@@ -108,7 +109,7 @@ public:
         // Ремонт выполняется при удержании L
         // ---------------------------------------------------------
 
-        if (!input->IsKeyDown('L'))
+        if (!input.Down(GameAction::Repair))
             return;
 
 
@@ -654,6 +655,27 @@ private:
 
             OutputDebugStringA(
                 "[Repair] Hull breach sealed.\n");
+
+
+            // A breach entity is destroyed below, so the coordinator cannot
+            // discover the completed claim on its next cleanup pass. Record
+            // the result while both the claim and its assignee still exist.
+            if (const auto* claim =
+                registry.GetComponent<CrewTaskClaimComponent>(repairEntity))
+            {
+                if (claim->assignee != INVALID_ENTITY &&
+                    registry.IsAlive(claim->assignee))
+                {
+                    if (auto* crew =
+                        registry.GetComponent<CrewMemberComponent>(
+                            claim->assignee))
+                    {
+                        ++crew->completedTasks;
+                        if (crew->assignedTask == repairEntity)
+                            crew->assignedTask = INVALID_ENTITY;
+                    }
+                }
+            }
 
 
             // -----------------------------------------------------

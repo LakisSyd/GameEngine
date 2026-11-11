@@ -31,6 +31,11 @@ public:
     void GetWorldMatrix(XMMATRIX&);
     void GetOrthoMatrix(XMMATRIX&);  // ✅ Уже есть — для 2D
 
+    // Меняет дальнюю плоскость перспективной камеры без пересоздания D3D.
+    // Возвращает фактически применённое (ограниченное) значение.
+    float SetRenderDistance(float distance);
+    float GetRenderDistance() const { return m_screenDepth; }
+
     void GetVideoCardInfo(char*, int&);
     void SetBackBufferRenderTarget();
     void ResetViewport();
@@ -66,6 +71,12 @@ private:
     XMMATRIX m_projectionMatrix = XMMatrixIdentity();
     XMMATRIX m_worldMatrix = XMMatrixIdentity();
     XMMATRIX m_orthoMatrix = XMMatrixIdentity();
+
+    int m_screenWidth = 1;
+    int m_screenHeight = 1;
+    float m_fieldOfView = XMConvertToRadians(75.0f);
+    float m_screenNear = 0.3f;
+    float m_screenDepth = 15.0f;
 
     D3D11_VIEWPORT m_viewport{};
 };

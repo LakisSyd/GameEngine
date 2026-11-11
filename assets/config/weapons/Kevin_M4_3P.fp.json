@@ -1,0 +1,61 @@
+{
+    "arms_camera_offset": [
+        0.019999999552965164,
+        -2.059999942779541,
+        -0.07000000029802322
+    ],
+    "arms_rotation_offset": [
+        0.0,
+        3.1415927410125732,
+        0.0
+    ],
+    "arms_scale": [
+        1.0,
+        1.0,
+        1.0
+    ],
+    "enable_left_hand_ik": true,
+    "first_person_eye_offset": [
+        0.0,
+        2.0299999713897705,
+        0.15000000596046448
+    ],
+    "first_person_pitch_offset": 0.0,
+    "first_person_pitch_scale": 1.0,
+    "first_person_pivot": [
+        0.05000000074505806,
+        0.4320000112056732,
+        0.0
+    ],
+    "first_person_position": [
+        0.3281214237213135,
+        -0.3015154004096985,
+        0.08232640475034714
+    ],
+    "first_person_rotation": [
+        -1.6137309074401855,
+        0.14756757020950317,
+        -2.032104253768921
+    ],
+    "first_person_scale": [
+        0.800000011920929,
+        0.800000011920929,
+        0.800000011920929
+    ],
+    "left_hand_grip": [
+        -0.13600000739097595,
+        0.07400000095367432,
+        0.15922310948371887
+    ],
+    "left_hand_rotation": [
+        1.7178995609283447,
+        1.2867612838745117,
+        0.3035855293273926
+    ],
+    "look_down_limit": 70.0,
+    "look_up_limit": 65.0,
+    "profile_name": "Kevin_M4_3P",
+    "show_visual": true,
+    "version": 2,
+    "view": "first_person"
+}

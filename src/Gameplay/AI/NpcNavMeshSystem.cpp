@@ -23,30 +23,52 @@
 #include <bullet/BulletCollision/CollisionShapes/btConcaveShape.h>
 #include <bullet/BulletCollision/CollisionShapes/btShapeHull.h>
 
+// =============================================================================
+// ВНУТРЕННОСТИ NAVMESH NPC — КАК ЧИТАТЬ ЭТОТ ФАЙЛ
+// =============================================================================
+//
+//   Collect*Geometry()  -> собирает треугольники пола и коробки препятствий;
+//   BuildRoomNavMesh()  -> Recast превращает геометрию в проходимые полигоны;
+//   BuildPath()         -> Detour строит коридор и прямые waypoint-точки;
+//   FindNextWaypoint()  -> отдаёт StateSystem только ближайшую нужную точку;
+//   FindDynamicAvoidanceWaypoint() -> локально обходит незапечённый подвижный
+//                                     Bullet-объект;
+//   Invalidate*()       -> выкидывает устаревший путь/сетку из кеша.
+//
+// Координаты в публичном API мировые. Recast/Detour-типы намеренно остаются
+// только в этом .cpp. Комната INVALID_ENTITY означает общую открытую сетку мира.
+// Если любой этап не сработал, функция возвращает false, а StateSystem имеет
+// право использовать прямое движение — отсутствие NavMesh не должно стопорить AI.
 namespace
 {
+    // Флаг проходимого полигона и номер обычной наземной области Detour.
     constexpr unsigned short NAV_FLAG_WALK = 0x01;
     constexpr unsigned char NAV_AREA_GROUND = 0;
+    // Жёсткие пределы временных массивов запроса защищают от бесконечного пути.
     constexpr int MAX_POLY_PATH = 256;
     constexpr int MAX_STRAIGHT_PATH = 64;
 
+    // Сырьё для одного запуска Recast: вершины xyz, индексы треугольников,
+    // тип каждой области и AABB препятствий для debug-отрисовки.
     struct BuildGeometry
     {
         struct ObstacleBox
         {
+            // Минимальный и максимальный угол AABB в мировых координатах.
             float minimum[3]{};
             float maximum[3]{};
         };
 
-        std::vector<float> vertices;
-        std::vector<int> indices;
-        std::vector<unsigned char> areas;
-        std::vector<ObstacleBox> obstacles;
-        int panelTriangleCount = 0;
-        int walkablePanelTriangleCount = 0;
-        int stairTriangleCount = 0;
-        int walkableStairTriangleCount = 0;
+        std::vector<float> vertices; // Плоский массив x,y,z,x,y,z...
+        std::vector<int> indices; // По три индекса на треугольник.
+        std::vector<unsigned char> areas; // Одна Recast area на треугольник.
+        std::vector<ObstacleBox> obstacles; // Только для диагностики границ.
+        int surfaceTriangleCount = 0; // Всего треугольников поверхностей.
+        int walkableSurfaceTriangleCount = 0; // Из них прошли проверку уклона.
+        int stairTriangleCount = 0; // Треугольники объектов-лестниц.
+        int walkableStairTriangleCount = 0; // Проходимая часть лестниц.
 
+        // Добавляет одну вершину и возвращает её индекс для AddTriangle().
         int AddVertex(float x, float y, float z)
         {
             const int index = static_cast<int>(vertices.size() / 3);
@@ -56,6 +78,7 @@ namespace
             return index;
         }
 
+        // Добавляет один ориентированный треугольник и его тип области.
         void AddTriangle(int a, int b, int c, unsigned char area)
         {
             indices.push_back(a);
@@ -65,13 +88,15 @@ namespace
         }
     };
 
+    // Полностью готовая сетка одной комнаты либо всего открытого мира.
     struct RoomNavMesh
     {
-        dtNavMesh* mesh = nullptr;
-        dtNavMeshQuery* query = nullptr;
-        int polygonCount = 0;
-        bool floorOnlyFallback = false;
-        std::string status;
+        dtNavMesh* mesh = nullptr; // Владение Detour-сеткой.
+        dtNavMeshQuery* query = nullptr; // Объект поиска ближайших полигонов/пути.
+        int polygonCount = 0; // Быстрая диагностика пустой сетки.
+        bool floorOnlyFallback = false; // Использован упрощённый пол комнаты.
+        std::string status; // Итог построения понятным текстом.
+        // Пары точек для отладочной отрисовки рёбер сетки и препятствий.
         std::vector<DirectX::XMFLOAT3> debugMeshEdges;
         std::vector<DirectX::XMFLOAT3> debugObstacleEdges;
         // Дешёвая цифровая подпись статических коллайдеров этой комнаты.
@@ -80,6 +105,7 @@ namespace
         std::uint64_t geometryFingerprint = 0;
         std::chrono::steady_clock::time_point nextGeometryCheck{};
 
+        // Освобождает C-объекты Detour, которыми владеет эта структура.
         ~RoomNavMesh()
         {
             if (query) dtFreeNavMeshQuery(query);
@@ -87,15 +113,18 @@ namespace
         }
     };
 
+    // Кеш пути конкретного NPC. Он переиспользуется, пока комната, цель и
+    // revision команды не изменились.
     struct CachedPath
     {
-        Entity room = INVALID_ENTITY;
-        DirectX::XMFLOAT3 requestedTarget{};
-        std::uint32_t revision = 0;
-        std::vector<DirectX::XMFLOAT3> points;
-        std::size_t nextPoint = 0;
-        bool buildAttempted = false;
-        std::string status;
+        Entity room = INVALID_ENTITY; // Сетка, на которой строился путь.
+        DirectX::XMFLOAT3 requestedTarget{}; // Исходная мировая цель запроса.
+        std::uint32_t revision = 0; // Версия команды/маршрута мозга.
+        std::vector<DirectX::XMFLOAT3> points; // Прямые waypoint в мире.
+        std::size_t nextPoint = 0; // Индекс следующей ещё не пройденной точки.
+        bool buildAttempted = false; // Не повторять провальный запрос каждый кадр.
+        std::string status; // Результат последней операции.
+        // Диагностика временного объезда динамического препятствия.
         bool dynamicAvoidanceActive = false;
         Entity dynamicObstacle = INVALID_ENTITY;
         DirectX::XMFLOAT3 avoidanceStart{};
@@ -103,18 +132,24 @@ namespace
         std::vector<DirectX::XMFLOAT3> dynamicObstacleEdges;
     };
 
+    // Короткая память выбора стороны объезда. Без неё NPC мог бы каждый кадр
+    // переключаться «слева/справа» и дрожать перед движущимся ящиком.
     struct DynamicAvoidanceMemory
     {
-        Entity obstacle = INVALID_ENTITY;
-        float side = 1.0f;
-        std::chrono::steady_clock::time_point keepSideUntil{};
+        Entity obstacle = INVALID_ENTITY; // Какой объект сейчас обходим.
+        float side = 1.0f; // -1 = слева, +1 = справа относительно пути.
+        std::chrono::steady_clock::time_point keepSideUntil{}; // До какого момента не менять сторону.
     };
 
-    std::unordered_map<Entity, std::unique_ptr<RoomNavMesh>> g_roomMeshes;
-    std::unordered_map<Entity, CachedPath> g_paths;
-    std::unordered_map<Entity, DynamicAvoidanceMemory> g_dynamicAvoidance;
-    NpcNavMeshDebugDrawSettings g_debugDrawSettings;
+    // Все значения ниже — внутренние кеши текущей сцены, а не сериализуемые
+    // компоненты. InvalidateAll() полностью очищает их при смене геометрии.
+    std::unordered_map<Entity, std::unique_ptr<RoomNavMesh>> g_roomMeshes; // Room Entity -> сетка.
+    std::unique_ptr<RoomNavMesh> g_worldMesh; // Общая сетка вне комнат.
+    std::unordered_map<Entity, CachedPath> g_paths; // NPC Entity -> текущий путь.
+    std::unordered_map<Entity, DynamicAvoidanceMemory> g_dynamicAvoidance; // NPC -> сторона объезда.
+    NpcNavMeshDebugDrawSettings g_debugDrawSettings; // Общие флаги визуализации.
 
+    // Превращает AABB в 12 пар точек-линий для debug renderer.
     void AppendDebugBoxEdges(
         std::vector<DirectX::XMFLOAT3>& lines,
         const BuildGeometry::ObstacleBox& box)
@@ -140,6 +175,7 @@ namespace
         }
     }
 
+    // Извлекает рёбра Recast-полигонов в простой мировой формат XMFLOAT3.
     void CapturePolyMeshEdges(const rcPolyMesh& mesh, RoomNavMesh& result)
     {
         result.debugMeshEdges.clear();
@@ -172,6 +208,7 @@ namespace
         }
     }
 
+    // Горизонтальная дистанция: высота этажа не влияет на прохождение waypoint.
     float DistanceXZ(const DirectX::XMFLOAT3& a, const DirectX::XMFLOAT3& b)
     {
         const float dx = b.x - a.x;
@@ -179,6 +216,7 @@ namespace
         return std::sqrt(dx * dx + dz * dz);
     }
 
+    // Обычное преобразование локальной точки полной мировой матрицей.
     DirectX::XMFLOAT3 TransformPoint(
         const DirectX::XMFLOAT3& point,
         const DirectX::XMMATRIX& matrix)
@@ -190,6 +228,7 @@ namespace
         return result;
     }
 
+    // Добавляет в BuildGeometry прямоугольный участок пола из двух треугольников.
     void AddFloorQuad(
         BuildGeometry& geometry,
         const RoomComponent& room,
@@ -238,6 +277,7 @@ namespace
         geometry.AddTriangle(vertexIndices[0], vertexIndices[3], vertexIndices[2], RC_WALKABLE_AREA);
     }
 
+    // Добавляет закрытый AABB препятствия в геометрию и debug-список.
     void AddObstacleBox(
         BuildGeometry& geometry,
         const btVector3& minimum,
@@ -287,6 +327,8 @@ namespace
 #endif
     }
 
+    // Проверяет, является ли Entity частью корабельной панели, которую надо
+    // учитывать как геометрию/препятствие при запекании.
     bool IsShipPanelEntity(ECSRegistry& registry, Entity entity)
     {
         const auto* name = registry.GetComponent<NameComponent>(entity);
@@ -303,6 +345,15 @@ namespace
         return upper.rfind("SHIP_PANEL", 0) == 0;
     }
 
+    // Явная авторская пометка NavMeshSurfaceComponent имеет приоритет над
+    // догадками по имени и типу объекта.
+    bool IsMarkedWalkableSurface(ECSRegistry& registry, Entity entity)
+    {
+        const auto* surface = registry.GetComponent<NavMeshSurfaceComponent>(entity);
+        return surface && surface->enabled;
+    }
+
+    // Определяет лестницу/рамп по компонентам и имени, чтобы разрешить её уклон.
     bool IsStairSurfaceEntity(
         ECSRegistry& registry,
         Entity entity,
@@ -326,10 +377,10 @@ namespace
             upper.find("RAMP") != std::string::npos;
     }
 
-    class ShipPanelTriangleCollector final : public btTriangleCallback
+    class WalkableTriangleCollector final : public btTriangleCallback
     {
     public:
-        ShipPanelTriangleCollector(
+        WalkableTriangleCollector(
             BuildGeometry& geometry,
             const btTransform& worldTransform,
             const DirectX::XMFLOAT3& roomMin,
@@ -379,9 +430,9 @@ namespace
             const int c = m_geometry.AddVertex(world[2].x(), world[2].y(), world[2].z());
             m_geometry.AddTriangle(
                 a, b, c, walkable ? RC_WALKABLE_AREA : RC_NULL_AREA);
-            ++m_geometry.panelTriangleCount;
+            ++m_geometry.surfaceTriangleCount;
             if (walkable)
-                ++m_geometry.walkablePanelTriangleCount;
+                ++m_geometry.walkableSurfaceTriangleCount;
             if (m_stairSurface)
             {
                 ++m_geometry.stairTriangleCount;
@@ -398,7 +449,9 @@ namespace
         bool m_stairSurface = false;
     };
 
-    void CollectShipPanelShapeTriangles(
+    // Разбирает Bullet collision shape (включая compound/concave) и добавляет
+    // его проходимые мировые треугольники в сырьё Recast.
+    void CollectWalkableShapeTriangles(
         BuildGeometry& geometry,
         btCollisionShape* shape,
         const btTransform& worldTransform,
@@ -414,7 +467,7 @@ namespace
             auto* compound = static_cast<btCompoundShape*>(shape);
             for (int i = 0; i < compound->getNumChildShapes(); ++i)
             {
-                CollectShipPanelShapeTriangles(
+                CollectWalkableShapeTriangles(
                     geometry,
                     compound->getChildShape(i),
                     worldTransform * compound->getChildTransform(i),
@@ -425,7 +478,7 @@ namespace
             return;
         }
 
-        ShipPanelTriangleCollector collector(
+        WalkableTriangleCollector collector(
             geometry, worldTransform, roomMin, roomMax, stairSurface);
         if (shape->isConcave())
         {
@@ -459,7 +512,8 @@ namespace
         }
     }
 
-    void CollectShipPanelSurface(
+    // Собирает одну явно проходимую поверхность из ECS/Bullet.
+    void CollectWalkableSurface(
         BuildGeometry& geometry,
         btCollisionObject* body,
         const DirectX::XMFLOAT3& roomMin,
@@ -468,7 +522,7 @@ namespace
     {
         if (!body || !body->getCollisionShape())
             return;
-        CollectShipPanelShapeTriangles(
+        CollectWalkableShapeTriangles(
             geometry,
             body->getCollisionShape(),
             body->getWorldTransform(),
@@ -477,6 +531,7 @@ namespace
             stairSurface);
     }
 
+    // Двери исключаются из постоянной сетки: их доступность меняется во время игры.
     bool IsDoorEntity(ECSRegistry& registry, Entity entity)
     {
         if (registry.HasComponent<DoorComponent>(entity))
@@ -491,11 +546,13 @@ namespace
         return false;
     }
 
+    // Смешивает одно значение в цифровую подпись геометрии.
     void HashCombine(std::uint64_t& seed, std::uint64_t value)
     {
         seed ^= value + 0x9E3779B97F4A7C15ull + (seed << 6) + (seed >> 2);
     }
 
+    // Округляет float перед хешированием: микрошум физики не перестраивает сетку.
     void HashQuantizedFloat(std::uint64_t& seed, btScalar value)
     {
         // Миллиметровой точности для навигации достаточно. Округление не даёт
@@ -505,6 +562,7 @@ namespace
         HashCombine(seed, static_cast<std::uint64_t>(quantized));
     }
 
+    // Проверяет пересечение мирового AABB Bullet-тела с bounds комнаты.
     bool BodyIntersectsRoom(
         btCollisionObject* body,
         const DirectX::XMFLOAT3& roomMin,
@@ -522,6 +580,7 @@ namespace
             outMaximum.z() < roomMin.z || outMinimum.z() > roomMax.z);
     }
 
+    // Добавляет форму и Transform одного значимого Bullet-тела в fingerprint.
     void HashNavigationBody(
         std::uint64_t& signature,
         Entity entity,
@@ -545,6 +604,8 @@ namespace
         HashQuantizedFloat(signature, maximum.z());
     }
 
+    // Подпись всей навигационной геометрии комнаты для автоматической
+    // инвалидизации кеша после перемещения/добавления препятствия.
     std::uint64_t CalculateRoomGeometryFingerprint(
         ECSRegistry& registry,
         Entity roomEntity)
@@ -596,9 +657,121 @@ namespace
                     signature, entity, collider.body, roomMin, roomMax);
             }
         }
+        for (auto& [entity, surface] : registry.GetComponents<NavMeshSurfaceComponent>())
+        {
+            HashCombine(signature, static_cast<std::uint64_t>(entity));
+            HashCombine(signature, surface.enabled ? 1 : 0);
+        }
         return signature;
     }
 
+    btCollisionObject* GetWorldSurfaceBody(ECSRegistry& registry, Entity entity)
+    {
+        if (!registry.IsAlive(entity) || IsDoorEntity(registry, entity) ||
+            registry.HasComponent<CharacterController>(entity))
+            return nullptr;
+        if (auto* rigidBody = registry.GetComponent<RigidBodyComponent>(entity))
+        {
+            // Bullet's mathematical Plane has an unbounded AABB and cannot be
+            // rasterized into a finite scene mesh. Use a thin Box for ground.
+            if (rigidBody->shapeType != RigidBodyComponent::Plane &&
+                rigidBody->body && rigidBody->body->isStaticOrKinematicObject() &&
+                rigidBody->body->getCollisionShape())
+                return rigidBody->body;
+        }
+        if (auto* collider = registry.GetComponent<StaticColliderComponent>(entity))
+        {
+            if (collider->body && collider->body->getCollisionShape())
+                return collider->body;
+        }
+        return nullptr;
+    }
+
+    // Находит общие мировые границы явно отмеченных навигационных поверхностей.
+    bool GetWorldSurfaceBounds(
+        ECSRegistry& registry,
+        DirectX::XMFLOAT3& outMin,
+        DirectX::XMFLOAT3& outMax)
+    {
+        bool found = false;
+        for (auto& [entity, surface] : registry.GetComponents<NavMeshSurfaceComponent>())
+        {
+            if (!surface.enabled)
+                continue;
+            btCollisionObject* body = GetWorldSurfaceBody(registry, entity);
+            if (!body)
+                continue;
+            btVector3 minimum{}, maximum{};
+            body->getCollisionShape()->getAabb(body->getWorldTransform(), minimum, maximum);
+            if (!std::isfinite(minimum.x()) || !std::isfinite(minimum.y()) ||
+                !std::isfinite(minimum.z()) || !std::isfinite(maximum.x()) ||
+                !std::isfinite(maximum.y()) || !std::isfinite(maximum.z()) ||
+                maximum.x() - minimum.x() > 10000.0f ||
+                maximum.z() - minimum.z() > 10000.0f)
+                continue;
+            if (!found)
+            {
+                outMin = { minimum.x(), minimum.y(), minimum.z() };
+                outMax = { maximum.x(), maximum.y(), maximum.z() };
+                found = true;
+            }
+            else
+            {
+                outMin.x = (std::min)(outMin.x, minimum.x());
+                outMin.y = (std::min)(outMin.y, minimum.y());
+                outMin.z = (std::min)(outMin.z, minimum.z());
+                outMax.x = (std::max)(outMax.x, maximum.x());
+                outMax.y = (std::max)(outMax.y, maximum.y());
+                outMax.z = (std::max)(outMax.z, maximum.z());
+            }
+        }
+        if (found)
+        {
+            outMin.y -= 2.0f;
+            outMax.y += 4.0f;
+        }
+        return found;
+    }
+
+    // То же, что fingerprint комнаты, но для общей открытой сетки сцены.
+    std::uint64_t CalculateWorldGeometryFingerprint(ECSRegistry& registry)
+    {
+        std::uint64_t signature = 1469598103934665603ull;
+        DirectX::XMFLOAT3 boundsMin{}, boundsMax{};
+        const bool hasSurfaces = GetWorldSurfaceBounds(registry, boundsMin, boundsMax);
+        HashCombine(signature, hasSurfaces ? 1 : 0);
+        for (auto& [entity, surface] : registry.GetComponents<NavMeshSurfaceComponent>())
+        {
+            HashCombine(signature, static_cast<std::uint64_t>(entity));
+            HashCombine(signature, surface.enabled ? 1 : 0);
+            btCollisionObject* body = GetWorldSurfaceBody(registry, entity);
+            HashCombine(signature, reinterpret_cast<std::uintptr_t>(body));
+        }
+        if (!hasSurfaces)
+            return signature;
+
+        std::unordered_set<const btCollisionObject*> addedBodies;
+        for (auto& [entity, rigidBody] : registry.GetComponents<RigidBodyComponent>())
+        {
+            if (!rigidBody.body || !rigidBody.body->isStaticOrKinematicObject() ||
+                IsDoorEntity(registry, entity) ||
+                registry.HasComponent<CharacterController>(entity))
+                continue;
+            if (addedBodies.insert(rigidBody.body).second)
+                HashNavigationBody(signature, entity, rigidBody.body, boundsMin, boundsMax);
+        }
+        for (auto& [entity, collider] : registry.GetComponents<StaticColliderComponent>())
+        {
+            if (!collider.body || IsDoorEntity(registry, entity) ||
+                registry.HasComponent<CharacterController>(entity))
+                continue;
+            if (addedBodies.insert(collider.body).second)
+                HashNavigationBody(signature, entity, collider.body, boundsMin, boundsMax);
+        }
+        return signature;
+    }
+
+    // Добавляет одно неподвижное/кинематическое тело как вырезаемое препятствие.
     void CollectObstacle(
         BuildGeometry& geometry,
         btCollisionObject* body,
@@ -650,6 +823,7 @@ namespace
         AddObstacleBox(geometry, clippedMin, clippedMax);
     }
 
+    // Собирает полы, лестницы и препятствия внутри заданной комнаты.
     void CollectRoomGeometry(
         ECSRegistry& registry,
         Entity roomEntity,
@@ -693,10 +867,11 @@ namespace
             {
                 const bool stairSurface =
                     IsStairSurfaceEntity(registry, entity, &rigidBody);
-                if (IsShipPanelEntity(registry, entity) || stairSurface)
+                if (IsShipPanelEntity(registry, entity) || stairSurface ||
+                    IsMarkedWalkableSurface(registry, entity))
                 {
                     if (useShipPanelSurface)
-                        CollectShipPanelSurface(
+                        CollectWalkableSurface(
                             geometry, rigidBody.body, roomMin, roomMax, stairSurface);
                 }
                 else
@@ -713,10 +888,11 @@ namespace
             if (addedBodies.insert(collider.body).second)
             {
                 const bool stairSurface = IsStairSurfaceEntity(registry, entity);
-                if (IsShipPanelEntity(registry, entity) || stairSurface)
+                if (IsShipPanelEntity(registry, entity) || stairSurface ||
+                    IsMarkedWalkableSurface(registry, entity))
                 {
                     if (useShipPanelSurface)
-                        CollectShipPanelSurface(
+                        CollectWalkableSurface(
                             geometry, collider.body, roomMin, roomMax, stairSurface);
                 }
                 else
@@ -727,23 +903,65 @@ namespace
         }
     }
 
+    // Собирает геометрию открытого мира без RoomComponent.
+    bool CollectWorldGeometry(
+        ECSRegistry& registry,
+        BuildGeometry& geometry,
+        DirectX::XMFLOAT3& boundsMin,
+        DirectX::XMFLOAT3& boundsMax)
+    {
+        if (!GetWorldSurfaceBounds(registry, boundsMin, boundsMax))
+            return false;
+
+        std::unordered_set<const btCollisionObject*> addedBodies;
+        for (auto& [entity, surface] : registry.GetComponents<NavMeshSurfaceComponent>())
+        {
+            if (!surface.enabled)
+                continue;
+            btCollisionObject* body = GetWorldSurfaceBody(registry, entity);
+            if (body && addedBodies.insert(body).second)
+                CollectWalkableSurface(geometry, body, boundsMin, boundsMax);
+        }
+
+        // Unmarked static colliders are obstacles, never extra walkable islands.
+        for (auto& [entity, rigidBody] : registry.GetComponents<RigidBodyComponent>())
+        {
+            if (!rigidBody.body || !rigidBody.body->isStaticOrKinematicObject() ||
+                IsDoorEntity(registry, entity) ||
+                registry.HasComponent<CharacterController>(entity))
+                continue;
+            if (addedBodies.insert(rigidBody.body).second)
+                CollectObstacle(geometry, rigidBody.body, boundsMin, boundsMax);
+        }
+        for (auto& [entity, collider] : registry.GetComponents<StaticColliderComponent>())
+        {
+            if (!collider.body || IsDoorEntity(registry, entity) ||
+                registry.HasComponent<CharacterController>(entity))
+                continue;
+            if (addedBodies.insert(collider.body).second)
+                CollectObstacle(geometry, collider.body, boundsMin, boundsMax);
+        }
+        return true;
+    }
+
+    // Один конкретный запуск конвейера Recast с переданными настройками.
+    // Возвращает nullptr и текст причины, если любой этап не удался.
     std::unique_ptr<RoomNavMesh> BuildRoomNavMeshAttempt(
         ECSRegistry& registry,
         Entity roomEntity,
         bool includeObstacles,
-        bool useShipPanelSurface)
+        bool useShipPanelSurface,
+        bool worldSurfaces = false)
     {
         auto result = std::make_unique<RoomNavMesh>();
         BuildGeometry geometry;
         DirectX::XMFLOAT3 roomMin{};
         DirectX::XMFLOAT3 roomMax{};
-        CollectRoomGeometry(
-            registry,
-            roomEntity,
-            geometry,
-            roomMin,
-            roomMax,
-            useShipPanelSurface);
+        if (worldSurfaces)
+            CollectWorldGeometry(registry, geometry, roomMin, roomMax);
+        else
+            CollectRoomGeometry(
+                registry, roomEntity, geometry, roomMin, roomMax, useShipPanelSurface);
 
         // AABB сохраняются даже если полноценная сборка ниже провалится. Именно
         // эти красные коробки помогут глазами найти коллайдер, который случайно
@@ -761,9 +979,11 @@ namespace
         const int triangleCount = static_cast<int>(geometry.indices.size() / 3);
         if (vertexCount < 3 || triangleCount < 1)
         {
-            result->status = useShipPanelSurface
-                ? "NavMesh build skipped: no SHIP_PANEL collision triangles intersect room"
-                : "NavMesh build skipped: room has no usable fallback geometry";
+            result->status = worldSurfaces
+                ? "NavMesh build skipped: add NavMesh Surface to static walkable collision"
+                : useShipPanelSurface
+                    ? "NavMesh build skipped: no walkable collision triangles intersect room"
+                    : "NavMesh build skipped: room has no usable fallback geometry";
             return result;
         }
 
@@ -773,10 +993,10 @@ namespace
         config.ch = 0.10f;
         config.walkableSlopeAngle = 45.0f;
         config.walkableHeight = static_cast<int>(std::ceil(1.80f / config.ch));
-        // Keep route generation within the physical capsule solver's guaranteed
-        // range. Recast used to accept 45 cm ledges while the controller capped
-        // safe automatic stepping lower, so NPCs planned routes they could not
-        // physically execute.
+        // Ограничиваем маршруты возможностями физического контроллера-капсулы.
+        // Раньше Recast разрешал ступени высотой 45 см, хотя контроллер безопасно
+        // переступал только более низкие: NPC строил правильный на бумаге маршрут,
+        // который затем физически не мог пройти.
         constexpr float physicalWalkableClimb = 0.30f;
         config.walkableClimb = static_cast<int>(
             std::floor(physicalWalkableClimb / config.ch));
@@ -794,7 +1014,22 @@ namespace
         config.bmax[0] = roomMax.x + 0.5f;
         config.bmax[1] = roomMax.y + 0.5f;
         config.bmax[2] = roomMax.z + 0.5f;
+        if (config.bmax[0] - config.bmin[0] > 10000.0f ||
+            config.bmax[2] - config.bmin[2] > 10000.0f)
+        {
+            result->status = "NavMesh bounds exceed single-mesh limit; split the level into smaller areas";
+            return result;
+        }
         rcCalcGridSize(config.bmin, config.bmax, config.cs, &config.width, &config.height);
+        // A single Recast heightfield is intentionally bounded. Very large
+        // worlds will need tiled streaming rather than an unbounded allocation.
+        constexpr std::int64_t maxGridCells = 4'000'000;
+        if (config.width <= 0 || config.height <= 0 ||
+            static_cast<std::int64_t>(config.width) * config.height > maxGridCells)
+        {
+            result->status = "NavMesh bounds exceed single-mesh limit; split the level into smaller areas";
+            return result;
+        }
 
         rcHeightfield* solid = rcAllocHeightfield();
         rcCompactHeightfield* compact = nullptr;
@@ -888,9 +1123,9 @@ namespace
                 "Recast produced empty room mesh (verts=" +
                 std::to_string(polyMesh->nverts) +
                 ", polys=" + std::to_string(polyMesh->npolys) +
-                ", panelTris=" + std::to_string(geometry.panelTriangleCount) +
-                ", walkablePanelTris=" +
-                std::to_string(geometry.walkablePanelTriangleCount) +
+                ", surfaceTris=" + std::to_string(geometry.surfaceTriangleCount) +
+                ", walkableSurfaceTris=" +
+                std::to_string(geometry.walkableSurfaceTriangleCount) +
                 ", obstacles=" + std::to_string(geometry.obstacles.size()) + ")";
             cleanup();
             return result;
@@ -969,12 +1204,16 @@ namespace
         }
 
         result->polygonCount = polyMesh->npolys;
-        result->floorOnlyFallback = !useShipPanelSurface;
-        result->status = useShipPanelSurface
-            ? "Room NavMesh ready from SHIP_PANEL collision (triangles=" +
-                std::to_string(geometry.panelTriangleCount) +
+        result->floorOnlyFallback = !useShipPanelSurface && !worldSurfaces;
+        result->status = worldSurfaces
+            ? "World NavMesh ready from marked collision surfaces (triangles=" +
+                std::to_string(geometry.surfaceTriangleCount) +
+                ", walkable=" + std::to_string(geometry.walkableSurfaceTriangleCount) + ")"
+            : useShipPanelSurface
+            ? "Room NavMesh ready from walkable collision (triangles=" +
+                std::to_string(geometry.surfaceTriangleCount) +
                 ", walkable=" +
-                std::to_string(geometry.walkablePanelTriangleCount) +
+                std::to_string(geometry.walkableSurfaceTriangleCount) +
                 ", stairs=" + std::to_string(geometry.stairTriangleCount) +
                 ", walkableStairs=" +
                 std::to_string(geometry.walkableStairTriangleCount) + ")"
@@ -983,6 +1222,8 @@ namespace
         return result;
     }
 
+    // Высокоуровневая сборка: пробует полную геометрию, затем безопасный
+    // floor-only fallback, чтобы простая комната всё равно оставалась проходимой.
     std::unique_ptr<RoomNavMesh> BuildRoomNavMesh(ECSRegistry& registry, Entity roomEntity)
     {
         // Сначала пытаемся построить полноценную сетку с препятствиями. Если
@@ -1010,6 +1251,7 @@ namespace
         return fallback;
     }
 
+    // Удаляет пути всех NPC, рассчитанные на перестроенной сетке комнаты.
     void ErasePathsForRoom(Entity roomEntity)
     {
         for (auto pathIt = g_paths.begin(); pathIt != g_paths.end();)
@@ -1066,6 +1308,38 @@ namespace
         return result;
     }
 
+    RoomNavMesh* GetOrBuildWorld(ECSRegistry& registry)
+    {
+        const auto now = std::chrono::steady_clock::now();
+        if (g_worldMesh && now < g_worldMesh->nextGeometryCheck)
+            return g_worldMesh.get();
+
+        const std::uint64_t fingerprint = CalculateWorldGeometryFingerprint(registry);
+        if (g_worldMesh && g_worldMesh->geometryFingerprint == fingerprint)
+        {
+            g_worldMesh->nextGeometryCheck = now + std::chrono::milliseconds(750);
+            return g_worldMesh.get();
+        }
+
+        ErasePathsForRoom(INVALID_ENTITY);
+        auto rebuilt = BuildRoomNavMeshAttempt(
+            registry, INVALID_ENTITY, true, true, true);
+        rebuilt->geometryFingerprint = fingerprint;
+        rebuilt->nextGeometryCheck = now + std::chrono::milliseconds(750);
+        g_worldMesh = std::move(rebuilt);
+        OutputDebugStringA(("[NPC NavMesh] " + g_worldMesh->status + "\n").c_str());
+        return g_worldMesh.get();
+    }
+
+    RoomNavMesh* GetOrBuildNavigationMesh(ECSRegistry& registry, Entity roomEntity)
+    {
+        return roomEntity == INVALID_ENTITY
+            ? GetOrBuildWorld(registry)
+            : GetOrBuildRoom(registry, roomEntity);
+    }
+
+    // Строит и кеширует путь одного NPC: ближайшие полигоны -> коридор Detour ->
+    // набор прямых мировых waypoint. true означает, что есть следующая точка.
     bool BuildPath(
         RoomNavMesh& room,
         const DirectX::XMFLOAT3& start,
@@ -1167,6 +1441,7 @@ namespace
         return true;
     }
 
+    // Проецирует desiredPoint только на связный остров, достижимый от start.
     bool FindConnectedProjectedPoint(
         RoomNavMesh& room,
         const DirectX::XMFLOAT3& start,
@@ -1215,6 +1490,8 @@ namespace
 
 namespace NpcNavMeshSystem
 {
+    // Возвращает следующую точку кешированного пути. При изменении цели,
+    // комнаты, revision или fingerprint геометрии путь строится заново.
     bool FindNextWaypoint(
         ECSRegistry& registry,
         Entity npc,
@@ -1224,12 +1501,9 @@ namespace NpcNavMeshSystem
         std::uint32_t requestRevision,
         DirectX::XMFLOAT3& outWaypoint)
     {
-        RoomNavMesh* room = GetOrBuildRoom(registry, currentRoom);
+        RoomNavMesh* room = GetOrBuildNavigationMesh(registry, currentRoom);
         if (!room)
         {
-            // Не показываем старый путь предыдущей комнаты, когда NPC оказался
-            // вне любого SHIP_ROOM: это и создавало впечатление, что NavMesh
-            // работает в зоне с Room=None, хотя движение уже шло direct fallback.
             g_paths.erase(npc);
             return false;
         }
@@ -1266,6 +1540,7 @@ namespace NpcNavMeshSystem
         return true;
     }
 
+    // Публичная обёртка проекции желаемой точки на достижимый остров сетки.
     bool FindReachablePoint(
         ECSRegistry& registry,
         Entity currentRoom,
@@ -1273,11 +1548,13 @@ namespace NpcNavMeshSystem
         const DirectX::XMFLOAT3& desiredPoint,
         DirectX::XMFLOAT3& outPoint)
     {
-        RoomNavMesh* room = GetOrBuildRoom(registry, currentRoom);
+        RoomNavMesh* room = GetOrBuildNavigationMesh(registry, currentRoom);
         return room && FindConnectedProjectedPoint(
             *room, start, desiredPoint, outPoint);
     }
 
+    // Ищет динамический AABB на коротком отрезке до desiredWaypoint и выдаёт
+    // боковую точку объезда. Сторона запоминается, чтобы убрать дрожание.
     bool FindDynamicAvoidanceWaypoint(
         ECSRegistry& registry,
         Entity npc,
@@ -1386,7 +1663,7 @@ namespace NpcNavMeshSystem
             memory.keepSideUntil = now + std::chrono::milliseconds(900);
         }
 
-        RoomNavMesh* room = GetOrBuildRoom(registry, currentRoom);
+        RoomNavMesh* room = GetOrBuildNavigationMesh(registry, currentRoom);
         DirectX::XMFLOAT3 selectedPoint{};
         bool pointFound = false;
         for (int sideAttempt = 0; sideAttempt < 2 && !pointFound; ++sideAttempt)
@@ -1441,6 +1718,7 @@ namespace NpcNavMeshSystem
         return true;
     }
 
+    // Удаляет только путь и память объезда одного NPC.
     void InvalidatePath(Entity npc)
     {
         const auto pathIt = g_paths.find(npc);
@@ -1450,6 +1728,11 @@ namespace NpcNavMeshSystem
             // работу каждый кадр. Force repath обязан удалить и этот плохой кеш,
             // иначе после исправления коллайдера UI продолжит показывать старую
             // ошибку вплоть до полной перезагрузки сцены.
+            if (pathIt->second.room == INVALID_ENTITY && g_worldMesh &&
+                (!g_worldMesh->mesh || !g_worldMesh->query))
+            {
+                g_worldMesh.reset();
+            }
             const auto roomIt = g_roomMeshes.find(pathIt->second.room);
             if (roomIt != g_roomMeshes.end() &&
                 (!roomIt->second || !roomIt->second->mesh || !roomIt->second->query))
@@ -1461,20 +1744,36 @@ namespace NpcNavMeshSystem
         g_dynamicAvoidance.erase(npc);
     }
 
+    // Полный сброс кешей после загрузки сцены или ручной команды Rebuild.
     void InvalidateAll()
     {
         g_paths.clear();
         g_roomMeshes.clear();
+        g_worldMesh.reset();
         g_dynamicAvoidance.clear();
-        OutputDebugStringA("[NPC NavMesh] All cached room meshes invalidated.\n");
+        OutputDebugStringA("[NPC NavMesh] All cached meshes invalidated.\n");
     }
 
+    // Собирает безопасную копию runtime-данных для UI и debug renderer.
     NpcNavMeshDebugInfo GetDebugInfo(Entity npc)
     {
         NpcNavMeshDebugInfo info;
         const auto pathIt = g_paths.find(npc);
         if (pathIt == g_paths.end())
+        {
+            // Поиск мог построить сетку, но не найти ни одного маршрута.
+            // В таком случае всё равно показываем сетку полигона и её ошибку.
+            if (g_worldMesh)
+            {
+                info.roomMeshBuilt = g_worldMesh->mesh != nullptr;
+                info.floorOnlyFallback = g_worldMesh->floorOnlyFallback;
+                info.polygonCount = g_worldMesh->polygonCount;
+                info.meshEdges = g_worldMesh->debugMeshEdges;
+                info.obstacleEdges = g_worldMesh->debugObstacleEdges;
+                info.status = g_worldMesh->status;
+            }
             return info;
+        }
 
         const CachedPath& cache = pathIt->second;
         info.room = cache.room;
@@ -1497,18 +1796,21 @@ namespace NpcNavMeshSystem
         }
 
         const auto roomIt = g_roomMeshes.find(cache.room);
-        if (roomIt != g_roomMeshes.end() && roomIt->second)
+        const RoomNavMesh* debugMesh = cache.room == INVALID_ENTITY
+            ? g_worldMesh.get()
+            : roomIt != g_roomMeshes.end() ? roomIt->second.get() : nullptr;
+        if (debugMesh)
         {
-            info.roomMeshBuilt = roomIt->second->mesh != nullptr;
-            info.floorOnlyFallback = roomIt->second->floorOnlyFallback;
-            info.polygonCount = roomIt->second->polygonCount;
-            info.meshEdges = roomIt->second->debugMeshEdges;
+            info.roomMeshBuilt = debugMesh->mesh != nullptr;
+            info.floorOnlyFallback = debugMesh->floorOnlyFallback;
+            info.polygonCount = debugMesh->polygonCount;
+            info.meshEdges = debugMesh->debugMeshEdges;
             info.obstacleEdges.insert(
                 info.obstacleEdges.begin(),
-                roomIt->second->debugObstacleEdges.begin(),
-                roomIt->second->debugObstacleEdges.end());
+                debugMesh->debugObstacleEdges.begin(),
+                debugMesh->debugObstacleEdges.end());
             if (!info.roomMeshBuilt)
-                info.status = roomIt->second->status;
+                info.status = debugMesh->status;
         }
         return info;
     }

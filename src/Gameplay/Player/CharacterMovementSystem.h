@@ -2,16 +2,15 @@
 
 #include "Components.h"
 #include "ECSRegistry.h"
-#include "InputClass.h"
+#include "GameplayInputSystem.h"
 #include <DirectXMath.h>
 #include "PlayerComponents.h"
 class CharacterMovementSystem
 {
 public:
-    static void Update(ECSRegistry& registry, float deltaTime, InputClass* input, float cameraYaw)
+    static void Update(ECSRegistry& registry, float deltaTime, const GameInputFrame& input, float cameraYaw)
     {
         (void)deltaTime;
-        if (!input) return;
 
         Entity player = INVALID_ENTITY;
 
@@ -47,37 +46,66 @@ public:
 
         XMVECTOR direction = XMVectorZero();
 
-        if (input->IsKeyDown('W')) direction = XMVectorAdd(direction, forward);
-        if (input->IsKeyDown('S')) direction = XMVectorSubtract(direction, forward);
-        if (input->IsKeyDown('D')) direction = XMVectorAdd(direction, right);
-        if (input->IsKeyDown('A')) direction = XMVectorSubtract(direction, right);
+        if (input.Down(GameAction::MoveForward)) direction = XMVectorAdd(direction, forward);
+        if (input.Down(GameAction::MoveBackward)) direction = XMVectorSubtract(direction, forward);
+        if (input.Down(GameAction::MoveRight)) direction = XMVectorAdd(direction, right);
+        if (input.Down(GameAction::MoveLeft)) direction = XMVectorSubtract(direction, right);
 
         const float lengthSq = XMVectorGetX(XMVector3LengthSq(direction));
 
         movement->isMoving = lengthSq > 0.0001f;
         movement->walkDirection = { 0.0f, 0.0f, 0.0f };
         movement->currentSpeed = 0.0f;
-        constexpr unsigned int KEY_SPACE = 0x20;
-        movement->wantJump = input->IsKeyDown(KEY_SPACE);
+        movement->wantJump = input.Down(GameAction::Jump);
+
+        // Pressed срабатывает только один кадр в момент нажатия C.
+        // Поэтому каждое новое нажатие переключает сохранённое состояние:
+        // стоял -> присел, приседал -> встал.
+        if (input.Pressed(GameAction::Crouch))
+            movement->isCrouching = !movement->isCrouching;
 
         movement->isRunning = false;
         movement->wantsRun = false;
+
         if (!movement->isMoving)
         {
+            // Стоящий персонаж остаётся в выбранной позе приседа.
+            // isCrouching здесь не сбрасываем: анимация прочитает этот флаг.
             movement->locomotionState = PlayerLocomotionState::Idle;
             return;
         }
 
-      
-
         direction = XMVector3Normalize(direction);
         XMStoreFloat3(&movement->walkDirection, direction);
 
-        auto* playerComp = registry.GetComponent<PlayerComponent>(player);
+        if (movement->isCrouching)
+        {
+            // Присевший персонаж движется вдвое медленнее обычного шага.
+            // moveSpeed не изменяем: это настроечное значение обычной ходьбы.
+            movement->currentSpeed = movement->moveSpeed * 0.5f;
+            movement->wantsRun = false;
+            movement->isRunning = false;
+            movement->locomotionState = PlayerLocomotionState::Walk;
 
-        constexpr unsigned int KEY_SHIFT = 0x10;
-        const bool shiftDown = input->IsKeyDown(KEY_SHIFT);
-        const bool hasEnoughStaminaToRun = playerComp && playerComp->stamina > 5.0f;
+            // Не выполняем расположенную ниже логику Shift и стамины,
+            // иначе она снова перезапишет скорость и разрешит ускорение.
+            return;
+        }
+
+        auto* vitals = registry.GetComponent<CharacterVitalsComponent>(player);
+
+        const bool shiftDown = input.Down(GameAction::Sprint);
+        if (vitals)
+        {
+            if (vitals->stamina <= 0.0f)
+                vitals->staminaExhausted = true;
+            else if (vitals->staminaExhausted &&
+                vitals->stamina >= vitals->sprintStartThreshold)
+                vitals->staminaExhausted = false;
+        }
+
+        const bool hasEnoughStaminaToRun = vitals &&
+            !vitals->staminaExhausted && vitals->stamina > 0.0f;
         movement->wantsRun = movement->isMoving && shiftDown;
 
         movement->isRunning = movement->wantsRun && hasEnoughStaminaToRun;
@@ -98,5 +126,6 @@ public:
             movement->locomotionState = PlayerLocomotionState::Walk;
             movement->currentSpeed = movement->moveSpeed;
         }
+
     }
 };

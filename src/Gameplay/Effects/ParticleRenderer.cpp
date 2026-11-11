@@ -452,6 +452,19 @@ void ParticleRenderer::AppendBillboard(
         cameraUp.z * cosine - cameraRight.z * sine
     };
 
+    if (XMVectorGetX(XMVector3LengthSq(XMLoadFloat3(&particle.axis))) > 0.0001f)
+    {
+        const XMVECTOR axis = XMVector3Normalize(XMLoadFloat3(&particle.axis));
+        const XMVECTOR viewForward = XMVector3Cross(XMLoadFloat3(&cameraRight), XMLoadFloat3(&cameraUp));
+        const XMVECTOR side = XMVector3Cross(axis, viewForward);
+        // Взгляд прямо в ствол: оставляем фронтальный билборд ядра/струи.
+        if (XMVectorGetX(XMVector3LengthSq(side)) > 0.01f)
+        {
+            XMStoreFloat3(&right, XMVector3Normalize(side));
+            XMStoreFloat3(&up, axis);
+        }
+    }
+
     const float halfWidth = particle.size * particle.aspectRatio * 0.5f;
     const float halfHeight = particle.size * 0.5f;
     right = { right.x * halfWidth, right.y * halfWidth, right.z * halfWidth };

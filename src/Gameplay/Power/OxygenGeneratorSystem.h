@@ -24,9 +24,8 @@ public:
         registry.ForEach<OxygenGeneratorComponent>(
             [&](Entity entity, OxygenGeneratorComponent& generator)
             {
-                (void)entity;
-
-                if (!generator.enabled || !generator.hasPower || generator.broken)
+                if (!registry.HasComponent<ActiveComponent>(entity) ||
+                    !generator.enabled || !generator.hasPower || generator.broken)
                     return;
 
                 totalOxygenPerSecond += generator.oxygenPerSecond;
@@ -46,8 +45,6 @@ public:
         registry.ForEach<RoomComponent>(
             [&](Entity roomEntity, RoomComponent& room)
             {
-                (void)roomEntity;
-
                 const bool needsOxygen = room.oxygen < 1.0f;
                 const bool needsPressure = room.pressure < 1.0f;
                 const float targetTemperature = totalTemperatureRecoveryPerSecond > 0.0f
@@ -56,7 +53,9 @@ public:
                 const bool needsTemperature =
                     std::abs(room.temperature - targetTemperature) > 0.01f;
 
-                if (!room.isActive || (!needsOxygen && !needsPressure && !needsTemperature))
+                if (!registry.HasComponent<ActiveComponent>(roomEntity) ||
+                    !room.isActive ||
+                    (!needsOxygen && !needsPressure && !needsTemperature))
                     return;
 
                 ++activeRoomCount;
@@ -76,9 +75,8 @@ public:
         registry.ForEach<RoomComponent>(
             [&](Entity roomEntity, RoomComponent& room)
             {
-                (void)roomEntity;
-
-                if (!room.isActive)
+                if (!registry.HasComponent<ActiveComponent>(roomEntity) ||
+                    !room.isActive)
                     return;
 
                 room.oxygen += oxygenPerRoom * deltaTime;

@@ -31,6 +31,9 @@ public:
         registry.ForEach<GeneratorComponent>(
             [&](Entity entity, GeneratorComponent& generator)
             {
+                if (!registry.HasComponent<ActiveComponent>(entity))
+                    return;
+
                 auto& grid = grids[FindGridRoot(registry, entity)];
                 if (generator.isOnline && !generator.isScrammed)
                     grid.generationMw += (std::max)(0.0f, generator.currentOutputMw);
@@ -42,6 +45,9 @@ public:
                 consumer.suppliedMw = 0.0f;
                 consumer.powerRatio = 0.0f;
                 consumer.hasPower = false;
+
+                if (!registry.HasComponent<ActiveComponent>(entity))
+                    return;
 
                 auto& grid = grids[FindGridRoot(registry, entity)];
                 grid.consumers.push_back(&consumer);

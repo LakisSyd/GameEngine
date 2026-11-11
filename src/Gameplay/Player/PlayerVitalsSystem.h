@@ -1,35 +1,44 @@
 #pragma once
 
-#include <algorithm>
+#include <cmath>
 
 #include <ECSRegistry.h>
-#include "PlayerComponents.h"
+#include "CharacterVitalsComponent.h"
 #include "Components.h"
 
 class PlayerVitalsSystem
 {
 public:
-    static void Update(ECSRegistry& registry, Entity player, float deltaTime)
+    static void Update(ECSRegistry& registry, float deltaTime)
     {
-        if (player == INVALID_ENTITY)
+        if (!std::isfinite(deltaTime) || deltaTime <= 0.0f)
             return;
 
-        if (deltaTime <= 0.0f)
-            return;
+        registry.ForEach<CharacterVitalsComponent>(
+            [&](Entity entity, CharacterVitalsComponent& vitals)
+            {
+                UpdateEntity(registry, entity, vitals, deltaTime);
+            });
+    }
 
-        auto* playerComp = registry.GetComponent<PlayerComponent>(player);
-        if (!playerComp)
+private:
+    static void UpdateEntity(
+        ECSRegistry& registry,
+        Entity entity,
+        CharacterVitalsComponent& vitals,
+        float deltaTime)
+    {
+        if (!registry.HasComponent<ActiveComponent>(entity))
             return;
 
         RoomComponent* currentRoom = nullptr;
-
         auto& rooms = registry.GetComponents<RoomComponent>();
 
         for (auto& [roomEntity, room] : rooms)
         {
             for (Entity object : room.objectsInRoom)
             {
-                if (object == player)
+                if (object == entity)
                 {
                     currentRoom = &room;
                     break;
@@ -40,67 +49,47 @@ public:
                 break;
         }
 
-        float targetOxygen = 100.0f;
-
+        float targetOxygen = vitals.maxOxygen;
         if (currentRoom)
+            targetOxygen = currentRoom->oxygen * vitals.maxOxygen;
+
+        if (vitals.oxygen < targetOxygen)
         {
-            targetOxygen = currentRoom->oxygen * 100.0f;
+            vitals.oxygen += vitals.oxygenChangePerSecond * deltaTime;
+            if (vitals.oxygen > targetOxygen)
+                vitals.oxygen = targetOxygen;
+        }
+        else if (vitals.oxygen > targetOxygen)
+        {
+            vitals.oxygen -= vitals.oxygenChangePerSecond * deltaTime;
+            if (vitals.oxygen < targetOxygen)
+                vitals.oxygen = targetOxygen;
         }
 
-        const float oxygenChangeSpeed = 25.0f;
-        const float damagePerSecond = 10.0f;
-
-        if (playerComp->oxygen < targetOxygen)
+        if (vitals.oxygen <= 0.0f &&
+            vitals.takesSuffocationDamage &&
+            !registry.HasComponent<InvulnerableComponent>(entity))
         {
-            playerComp->oxygen += oxygenChangeSpeed * deltaTime;
-
-            if (playerComp->oxygen > targetOxygen)
-                playerComp->oxygen = targetOxygen;
-        }
-        else if (playerComp->oxygen > targetOxygen)
-        {
-            playerComp->oxygen -= oxygenChangeSpeed * deltaTime;
-
-            if (playerComp->oxygen < targetOxygen)
-                playerComp->oxygen = targetOxygen;
+            vitals.health -= vitals.suffocationDamagePerSecond * deltaTime;
         }
 
-        playerComp->oxygen = std::clamp(playerComp->oxygen, 0.0f, 100.0f);
-
-        if (playerComp->oxygen <= 0.0f)
-        {
-            playerComp->health -= damagePerSecond * deltaTime;
-        }
-
-        playerComp->health = std::clamp(playerComp->health, 0.0f, 100.0f);
-
-		StaminaUpdate(registry, player, deltaTime);
-
+        StaminaUpdate(registry, entity, vitals, deltaTime);
+        vitals.Normalize();
     }
 
-   static void StaminaUpdate(ECSRegistry& registry, Entity player, float deltaTime)
+    static void StaminaUpdate(
+        ECSRegistry& registry,
+        Entity entity,
+        CharacterVitalsComponent& vitals,
+        float deltaTime)
     {
-
-
-        if (player == INVALID_ENTITY)
+        const auto* movement = registry.GetComponent<CharacterMovement>(entity);
+        if (!movement)
             return;
 
-		auto* playerComp = registry.GetComponent<PlayerComponent>(player);
-		auto* movementComp = registry.GetComponent<CharacterMovement>(player);
-        if(!playerComp)
-			return;
-
-        if (!movementComp)
-            return;
-
-        if (movementComp->isRunning)
-        {
-            playerComp->stamina -= 20.0f * deltaTime;
-        }
-        else if (!movementComp->wantsRun)
-        {
-            playerComp->stamina += 10.0f * deltaTime;
-        }
-        playerComp->Normalize();
+        if (movement->isRunning)
+            vitals.stamina -= vitals.staminaDrainPerSecond * deltaTime;
+        else
+            vitals.stamina += vitals.staminaRecoveryPerSecond * deltaTime;
     }
 };

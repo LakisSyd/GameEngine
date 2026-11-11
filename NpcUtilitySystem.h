@@ -11,6 +11,7 @@
 #include "Gameplay/Repair/RepairComponent.h"
 #include "Gameplay/Power/GeneratorComponent.h"
 #include "Gameplay/Power/OxygenGeneratorComponent.h"
+#include "Gameplay/AI/CrewTaskCoordinator.h"
 
 
 // =============================================================================
@@ -48,7 +49,8 @@
 class NpcUtilitySystem
 {
 public:
-
+    // Один проход принятия автоматических решений для всех NPC. deltaTime пока
+    // не используется: score зависит от состояния мира, а не частоты кадров.
     void Update(
         ECSRegistry& registry,
         float deltaTime)
@@ -57,9 +59,43 @@ public:
 
         registry.ForEach<NPCComponent, NpcBrainComponent>(
             [&](Entity npc,
-                NPCComponent&,
+                NPCComponent& npcData,
                 NpcBrainComponent& brain)
             {
+                const auto* crew =
+                    registry.GetComponent<CrewMemberComponent>(npc);
+                const auto* combat =
+                    registry.GetComponent<NPCCombatComponent>(npc);
+                const auto* faction =
+                    registry.GetComponent<FactionComponent>(npc);
+                // Фракционный боец не должен каждый кадр сбрасываться
+                // в Idle старой crew-utility системой. isHostile остаётся
+                // только как обратная совместимость со старыми сценами.
+                const bool factionCombatant = combat && faction &&
+                    faction->faction != FactionId::Neutral;
+                const bool unavailable =
+                    !registry.HasComponent<ActiveComponent>(npc) ||
+                    npcData.isHostile || factionCombatant || (crew && !crew->onDuty);
+                if (unavailable)
+                {
+                    brain.repairScore = 0.0f;
+                    if (!brain.command.IsActive() &&
+                        (brain.state == NpcState::MoveToRepair ||
+                            brain.state == NpcState::Repairing ||
+                            brain.state == NpcState::WaitingForDoor))
+                    {
+                        brain.repairTarget = INVALID_ENTITY;
+                        brain.state = NpcState::Idle;
+                        brain.routeDirty = true;
+                        brain.status = !registry.HasComponent<ActiveComponent>(npc)
+                            ? "NPC is inactive"
+                            : (npcData.isHostile || factionCombatant)
+                            ? "Combat NPC: crew utility disabled"
+                            : "Crew member is off duty";
+                    }
+                    return;
+                }
+
                 EvaluateNpc(
                     registry,
                     npc,
@@ -74,6 +110,8 @@ private:
     // ВЫБОР ЛУЧШЕЙ ЗАДАЧИ
     // =========================================================================
 
+    // Сравнивает Idle и все доступные ремонтные цели для одного NPC. Метод
+    // только записывает brain.repairTarget/state; физически ничего не чинит.
     static void EvaluateNpc(
         ECSRegistry& registry,
         Entity npc,
@@ -105,6 +143,15 @@ private:
             registry.GetComponents<HullBreachComponent>())
         {
             (void)breach;
+
+            // CrewTaskCoordinator окончательно решает, кто из живых членов экипажа
+            // получит эту работу. Utility AI может помнить собственную заявку, но
+            // не имеет права отправить второго NPC к задаче, уже занятой напарником.
+            if (CrewTaskCoordinator::IsClaimedByOther(
+                registry, breachEntity, npc))
+            {
+                continue;
+            }
 
             const float score =
                 CalculateBreachRepairScore(
@@ -139,6 +186,12 @@ private:
             // оценивать не надо.
             if (registry.HasComponent<HullBreachComponent>(
                 equipmentEntity))
+            {
+                continue;
+            }
+
+            if (CrewTaskCoordinator::IsClaimedByOther(
+                registry, equipmentEntity, npc))
             {
                 continue;
             }
@@ -188,7 +241,11 @@ private:
         {
             if (IsRepairTargetStillValid(
                 registry,
-                brain.repairTarget))
+                brain.repairTarget) &&
+                !CrewTaskCoordinator::IsClaimedByOther(
+                    registry,
+                    brain.repairTarget,
+                    npc))
             {
                 return;
             }
@@ -248,6 +305,8 @@ private:
     // ПРОВЕРКА, НУЖНО ЛИ ВСЁ ЕЩЁ РЕМОНТИРОВАТЬ ТЕКУЩУЮ ЦЕЛЬ
     // =========================================================================
 
+    // Повторная дешёвая проверка уже выбранной цели. Нужна, чтобы не менять
+    // цель каждый кадр, пока прежнюю ещё можно закончить.
     static bool IsRepairTargetStillValid(
         ECSRegistry& registry,
         Entity target)
@@ -301,6 +360,7 @@ private:
     // ТЕКСТ ДЛЯ DEBUG UI
     // =========================================================================
 
+    // Выбирает понятную строку статуса по типу ремонтируемого объекта.
     static const char* GetRepairStatus(
         ECSRegistry& registry,
         Entity target)
@@ -341,6 +401,8 @@ private:
     // SCORE РЕМОНТА ПРОБОИНЫ
     // =========================================================================
 
+    // Возвращает полезность ремонта пробоины 0..1. Ноль также означает, что
+    // цель невалидна или лежит дальше detectionRange.
     static float CalculateBreachRepairScore(
         ECSRegistry& registry,
         Entity npc,
@@ -465,6 +527,8 @@ private:
     // SCORE РЕМОНТА ОБОРУДОВАНИЯ
     // =========================================================================
 
+    // Возвращает полезность ремонта оборудования 0..1 по повреждению,
+    // критичности типа устройства и расстоянию до NPC.
     static float CalculateEquipmentRepairScore(
         ECSRegistry& registry,
         Entity npc,

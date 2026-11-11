@@ -10,16 +10,21 @@
 #include "ShaderManager.h"
 #include "PhysicsSystem.h"
 #include "AnimationSystem.h"
+#include "Animation/WeaponIKSystem.h"
+#include "Animation/MeleeActionJson.h"
+#include "Gameplay/Combat/PlayerPunchSystem.h"
 #include "AssetsLoadSystem.h"
 #include "../Render/FrustumCulling.h"
 #include "../Render/RenderCandidateSystem.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <stdexcept>
 #include <future>
 #include <atomic>
 #include <chrono>
 #include <unordered_map>
+#include <unordered_set>
 #include "CharacterSpawnSystem.h"
 #include "JointConnectionSystem.h"
 #include "SubmarineJointSystem.h"
@@ -42,8 +47,48 @@
 #include "Gameplay/Player/FirstPersonViewSystem.h"
 #include "../../NPCComponents.h"
 #include "Gameplay/AI/NpcNavMeshSystem.h"
+#include "Gameplay/AI/CrewTaskCoordinator.h"
+#include "Gameplay/Interaction/TriggerZoneComponent.h"
+#include "Gameplay/Interaction/TriggerActionSystem.h"
+#include "Gameplay/Inventory/InventoryComponent.h"
+#include "Gameplay/Inventory/WeaponPickupSystem.h"
 namespace
 {
+    nlohmann::json WriteWeaponBallistics(const WeaponComponent& w)
+    {
+        return { { "spread_degrees", w.spreadDegrees },
+            { "moving_multiplier", w.movingSpreadMultiplier },
+            { "recoil_per_shot", w.recoilPerShotDegrees },
+            { "max_recoil", w.maxRecoilDegrees }, { "recoil_recovery", w.recoilRecoveryDegrees },
+            { "magazine_size", w.magazineSize },
+            { "ammo_in_magazine", w.ammoInMagazine },
+            { "reserve_ammo", w.reserveAmmo },
+            { "reload_duration", w.reloadDuration },
+            { "flash_enabled", w.muzzleFlashEnabled }, { "flash_scale", w.muzzleFlashScale } };
+    }
+
+    void ReadWeaponBallistics(const nlohmann::json& j, WeaponComponent& w)
+    {
+        if (!j.is_object()) return;
+        // Старые сцены без этих полей получают рабочие значения из компонента.
+        w.spreadDegrees = (std::clamp)(j.value("spread_degrees", w.spreadDegrees), 0.0f, 45.0f);
+        w.movingSpreadMultiplier = (std::clamp)(j.value("moving_multiplier", w.movingSpreadMultiplier), 1.0f, 10.0f);
+        w.recoilPerShotDegrees = (std::clamp)(j.value("recoil_per_shot", w.recoilPerShotDegrees), 0.0f, 20.0f);
+        w.maxRecoilDegrees = (std::clamp)(j.value("max_recoil", w.maxRecoilDegrees), 0.0f, 45.0f);
+        w.recoilRecoveryDegrees = (std::clamp)(j.value("recoil_recovery", w.recoilRecoveryDegrees), 0.0f, 60.0f);
+        w.magazineSize = (std::max)(1, j.value("magazine_size", w.magazineSize));
+        w.ammoInMagazine = std::clamp(
+            j.value("ammo_in_magazine", w.ammoInMagazine), 0, w.magazineSize);
+        w.reserveAmmo = (std::max)(0, j.value("reserve_ammo", w.reserveAmmo));
+        w.reloadDuration = (std::clamp)(
+            j.value("reload_duration", w.reloadDuration), 0.05f, 60.0f);
+        // Runtime progress never survives a scene/profile load.
+        w.reloadTimer = 0.0f;
+        w.isReloading = false;
+        w.muzzleFlashEnabled = j.value("flash_enabled", w.muzzleFlashEnabled);
+        w.muzzleFlashScale = (std::clamp)(j.value("flash_scale", w.muzzleFlashScale), 0.1f, 4.0f);
+    }
+
     constexpr bool kUseShipPanelVisualBatch = true;
 
     bool CanUseAsyncMeshPath(const std::string& path)
@@ -2141,7 +2186,8 @@ void SceneManager::ReleasePhysicsRuntime() noexcept
 //
 // Р—РґРµСЃСЊ РјРѕР¶РЅРѕ РґРѕР±Р°РІРёС‚СЊ РґСЂСѓРіРёРµ СЃРёСЃС‚РµРјС‹: С„РёР·РёРєСѓ, Р°РЅРёРјР°С†РёРё, СЃРєСЂРёРїС‚С‹.
 // ============================================================================
-void SceneManager::UpdateAll(float deltaTime, Entity player)
+void SceneManager::UpdateAll(float deltaTime, Entity player,
+    CameraClass* previewCamera, btDynamicsWorld* previewWorld)
 {
     // РЈ РёРјРїРѕСЂС‚РёСЂРѕРІР°РЅРЅРѕРіРѕ РєРѕСЂР°Р±Р»СЏ РґРµС‚Р°Р»Рё РїРѕРєР° С…СЂР°РЅСЏС‚ world transform.
     // РџРѕСЌС‚РѕРјСѓ Р»СЋР±РѕРµ РїРµСЂРµРјРµС‰РµРЅРёРµ ShipRoot РїРµСЂРµРЅРѕСЃРёРј РЅР° РІСЃРµ ShipPart РїРѕ delta.
@@ -2179,6 +2225,8 @@ void SceneManager::UpdateAll(float deltaTime, Entity player)
     }
 
     AnimationSystem::Update(m_registry, deltaTime);
+    WeaponIKSystem::Update(m_registry);
+    PlayerPunchSystem::ApplyIK(m_registry, previewCamera, previewWorld);
     FirstPersonViewSystem::UpdateBoneAttachments(m_registry);
 
 	RoomSystem::Update(
@@ -2190,6 +2238,9 @@ void SceneManager::UpdateAll(float deltaTime, Entity player)
     m_registry.ForEach<GeneratorComponent>(
         [&](Entity entity, GeneratorComponent& generator)
         {
+            if (!m_registry.HasComponent<ActiveComponent>(entity))
+                return;
+
             const auto* damage = m_registry.GetComponent<DamageableComponent>(entity);
             if (damage && damage->isDestroyed)
                 generator.isOnline = false;
@@ -2202,6 +2253,11 @@ void SceneManager::UpdateAll(float deltaTime, Entity player)
     m_registry.ForEach<LightComponent>(
         [&](Entity entity, LightComponent& light)
         {
+            // Rendering already excludes inactive entities. Do not overwrite
+            // the authored light switch while the entity is disabled.
+            if (!m_registry.HasComponent<ActiveComponent>(entity))
+                return;
+
             auto* consumer = m_registry.GetComponent<PowerConsumerComponent>(entity);
             if (!consumer)
                 return;
@@ -2216,6 +2272,14 @@ void SceneManager::UpdateAll(float deltaTime, Entity player)
             const auto* consumer = m_registry.GetComponent<PowerConsumerComponent>(entity);
             const auto* damage = m_registry.GetComponent<DamageableComponent>(entity);
 
+            if (!m_registry.HasComponent<ActiveComponent>(entity))
+            {
+                // hasPower is derived runtime telemetry; enabled/broken are
+                // retained so toggling Active does not rewrite authoring data.
+                generator.hasPower = false;
+                return;
+            }
+
             generator.hasPower = !consumer || consumer->hasPower;
             generator.broken = damage && damage->isDestroyed;
         });
@@ -2224,7 +2288,7 @@ void SceneManager::UpdateAll(float deltaTime, Entity player)
 
     OxygenGeneratorSystem::Update(m_registry, deltaTime);
 
-	PlayerVitalsSystem::Update(m_registry, player, deltaTime);
+    PlayerVitalsSystem::Update(m_registry, deltaTime);
     ShipAlertSystem::Update(m_registry, player);
    
 }
@@ -2771,36 +2835,139 @@ void SceneManager::SetWorldSettings(const WorldSettings& settings)
 	m_worldSettings = settings;
 }
 
+std::string SceneManager::WeaponProfilePath(const std::string& profileName)
+{
+    // Treat profile IDs as names, never as paths supplied by the editor.
+    if (profileName.empty() || profileName.size() > 64 ||
+        !std::all_of(profileName.begin(), profileName.end(),
+            [](unsigned char c) {
+                return std::isalnum(c) || c == '_' || c == '-';
+            }))
+        return {};
+    return (fs::path("assets/config/weapons") /
+        (profileName + ".json")).string();
+}
+
+namespace
+{
+struct WeaponProfileViewContext
+{
+    PlayCameraComponent* camera = nullptr;
+    FirstPersonViewComponent* arms = nullptr;
+};
+
+WeaponProfileViewContext FindWeaponProfileViewContext(
+    ECSRegistry& registry, const WeaponComponent& weapon)
+{
+    Entity weaponEntity = INVALID_ENTITY;
+    registry.ForEach<WeaponComponent>(
+        [&](Entity entity, WeaponComponent& candidate)
+        {
+            if (&candidate == &weapon)
+                weaponEntity = entity;
+        });
+    if (weaponEntity == INVALID_ENTITY)
+        return {};
+
+    Entity owner = INVALID_ENTITY;
+    if (const auto* weaponOwner =
+        registry.GetComponent<WeaponOwnerComponent>(weaponEntity))
+        owner = weaponOwner->owner;
+    if (owner == INVALID_ENTITY &&
+        registry.HasComponent<PlayerGameTag>(weaponEntity))
+        owner = weaponEntity;
+    if (owner == INVALID_ENTITY)
+        registry.ForEach<EquippedWeaponComponent>(
+            [&](Entity entity, EquippedWeaponComponent& equipped)
+            {
+                if (equipped.weapon == weaponEntity)
+                    owner = entity;
+            });
+    if (owner == INVALID_ENTITY)
+        return {};
+
+    WeaponProfileViewContext result;
+    result.camera = registry.GetComponent<PlayCameraComponent>(owner);
+    registry.ForEach<FirstPersonViewComponent>(
+        [&](Entity, FirstPersonViewComponent& view)
+        {
+            if (view.owner == owner && view.followCamera)
+                result.arms = &view;
+        });
+    return result;
+}
+}
+
 bool SceneManager::SaveWeaponProfile(
     const WeaponComponent& weapon,
-    const std::string& filename) const
+    const std::string& filename)
 {
+    const std::string pathName = filename.empty()
+        ? WeaponProfilePath(weapon.gripProfileName) : filename;
+    if (pathName.empty()) return false;
+    const fs::path path(pathName);
+    fs::path firstPersonPath = path;
+    firstPersonPath.replace_extension(".fp.json");
+    const auto readExisting = [](const fs::path& source)
+    {
+        json document = json::object();
+        std::ifstream input(source);
+        if (input)
+        {
+            try
+            {
+                input >> document;
+                if (!document.is_object()) document = json::object();
+            }
+            catch (const json::exception&)
+            {
+                document = json::object();
+            }
+        }
+        return document;
+    };
+    const auto view = FindWeaponProfileViewContext(m_registry, weapon);
     const auto vec3 = [](const DirectX::XMFLOAT3& value)
     {
         return json::array({ value.x, value.y, value.z });
     };
 
-    json profile;
-    profile["version"] = 1;
+    json profile = readExisting(path);
+    for (const char* key : { "first_person_position", "first_person_rotation",
+        "first_person_scale", "first_person_pivot", "first_person_pitch_scale",
+        "first_person_pitch_offset", "first_person_eye_offset",
+        "arms_camera_offset", "arms_rotation_offset", "arms_scale",
+        "look_up_limit", "look_down_limit", "show_first_person_visual" })
+        profile.erase(key);
+    profile["version"] = 4;
+    profile["view"] = "third_person";
+    profile["profile_name"] = weapon.gripProfileName;
     profile["visual_model"] = weapon.visualModelPath;
     profile["right_hand_bone"] = weapon.rightHandBone;
     profile["rifle_idle_animation"] = weapon.rifleIdleAnimation;
+    profile["pistol_pose"] = weapon.pistolPose;
     profile["rifle_gun_animation"] = weapon.rifleGunAnimation;
     profile["world_position"] = vec3(weapon.worldGrip.position);
     profile["world_rotation"] = vec3(weapon.worldGrip.rotation);
     profile["world_scale"] = vec3(weapon.worldGrip.scale);
-    profile["first_person_position"] = vec3(weapon.firstPersonGrip.position);
-    profile["first_person_rotation"] = vec3(weapon.firstPersonGrip.rotation);
-    profile["first_person_scale"] = vec3(weapon.firstPersonGrip.scale);
-    profile["first_person_pitch_scale"] = weapon.firstPersonPitchScale;
-    profile["first_person_pitch_offset"] = weapon.firstPersonPitchOffset;
+    profile["world_pivot"] = vec3(weapon.worldGrip.pivot);
     profile["left_hand_grip"] = vec3(weapon.leftHandGrip);
+    profile["left_hand_rotation"] = vec3(weapon.leftHandRotation);
+    profile["left_upper_arm_bone"] = weapon.leftUpperArmBone;
+    profile["left_forearm_bone"] = weapon.leftForearmBone;
+    profile["left_hand_bone"] = weapon.leftHandBone;
     profile["muzzle_position"] = vec3(weapon.muzzlePosition);
+    profile["ballistics"] = WriteWeaponBallistics(weapon);
     profile["show_world_visual"] = weapon.showWorldVisual;
-    profile["show_first_person_visual"] = weapon.showFirstPersonVisual;
     profile["enable_left_hand_ik"] = weapon.enableLeftHandIK;
+    if (view.camera)
+    {
+        profile["third_person_target_offset"] =
+            vec3(view.camera->thirdPersonTargetOffset);
+        profile["third_person_distance"] = view.camera->thirdPersonDistance;
+        profile["render_distance"] = view.camera->renderDistance;
+    }
 
-    const fs::path path(filename);
     if (path.has_parent_path())
     {
         std::error_code error;
@@ -2809,18 +2976,55 @@ bool SceneManager::SaveWeaponProfile(
             return false;
     }
 
-    std::ofstream file(filename);
+    json firstPersonProfile = readExisting(firstPersonPath);
+    firstPersonProfile["version"] = 2;
+    firstPersonProfile["profile_name"] = weapon.gripProfileName;
+    firstPersonProfile["view"] = "first_person";
+    firstPersonProfile["first_person_position"] = vec3(weapon.firstPersonGrip.position);
+    firstPersonProfile["first_person_rotation"] = vec3(weapon.firstPersonGrip.rotation);
+    firstPersonProfile["first_person_scale"] = vec3(weapon.firstPersonGrip.scale);
+    firstPersonProfile["first_person_pivot"] = vec3(weapon.firstPersonGrip.pivot);
+    firstPersonProfile["left_hand_grip"] = vec3(weapon.firstPersonLeftHandGrip);
+    firstPersonProfile["left_hand_rotation"] = vec3(weapon.firstPersonLeftHandRotation);
+    firstPersonProfile["enable_left_hand_ik"] = weapon.enableFirstPersonLeftHandIK;
+    firstPersonProfile["show_visual"] = weapon.showFirstPersonVisual;
+    firstPersonProfile["first_person_pitch_scale"] = weapon.firstPersonPitchScale;
+    firstPersonProfile["first_person_pitch_offset"] = weapon.firstPersonPitchOffset;
+    if (view.camera)
+        firstPersonProfile["first_person_eye_offset"] =
+            vec3(view.camera->firstPersonEyeOffset);
+    if (view.arms)
+    {
+        firstPersonProfile["arms_camera_offset"] = vec3(view.arms->cameraOffset);
+        firstPersonProfile["arms_rotation_offset"] = vec3(view.arms->rotationOffset);
+        firstPersonProfile["arms_scale"] = vec3(view.arms->scale);
+        firstPersonProfile["look_up_limit"] = view.arms->lookUpLimit;
+        firstPersonProfile["look_down_limit"] = view.arms->lookDownLimit;
+    }
+    std::ofstream firstPersonFile(firstPersonPath);
+    if (!firstPersonFile.is_open())
+        return false;
+    firstPersonFile << firstPersonProfile.dump(4);
+    firstPersonFile.close();
+    if (!firstPersonFile.good())
+        return false;
+
+    std::ofstream file(pathName);
     if (!file.is_open())
         return false;
     file << profile.dump(4);
+    file.close();
     return file.good();
 }
 
 bool SceneManager::LoadWeaponProfile(
     WeaponComponent& weapon,
-    const std::string& filename) const
+    const std::string& filename)
 {
-    std::ifstream file(filename);
+    const std::string pathName = filename.empty()
+        ? WeaponProfilePath(weapon.gripProfileName) : filename;
+    if (pathName.empty()) return false;
+    std::ifstream file(pathName);
     if (!file.is_open())
         return false;
 
@@ -2832,6 +3036,25 @@ bool SceneManager::LoadWeaponProfile(
     catch (const json::exception&)
     {
         return false;
+    }
+
+    // Version 2 profiles kept both grips in one file. A sidecar takes
+    // precedence when present; old profiles continue to load unchanged.
+    fs::path firstPersonPath(pathName);
+    firstPersonPath.replace_extension(".fp.json");
+    json firstPersonProfile;
+    std::ifstream firstPersonFile(firstPersonPath);
+    if (firstPersonFile.is_open())
+    {
+        try
+        {
+            firstPersonFile >> firstPersonProfile;
+            if (!firstPersonProfile.is_object()) return false;
+        }
+        catch (const json::exception&)
+        {
+            return false;
+        }
     }
 
     const auto readVec3 = [&](const char* key, DirectX::XMFLOAT3& value)
@@ -2846,25 +3069,97 @@ bool SceneManager::LoadWeaponProfile(
             profile[key][1].get<float>(),
             profile[key][2].get<float>() };
     };
+    const auto view = FindWeaponProfileViewContext(m_registry, weapon);
 
     weapon.visualModelPath = profile.value("visual_model", weapon.visualModelPath);
     weapon.rightHandBone = profile.value("right_hand_bone", weapon.rightHandBone);
     weapon.rifleIdleAnimation = profile.value(
         "rifle_idle_animation", weapon.rifleIdleAnimation);
+    weapon.pistolPose = profile.value("pistol_pose", weapon.pistolPose);
     weapon.rifleGunAnimation = profile.value(
         "rifle_gun_animation", weapon.rifleGunAnimation);
     readVec3("world_position", weapon.worldGrip.position);
     readVec3("world_rotation", weapon.worldGrip.rotation);
     readVec3("world_scale", weapon.worldGrip.scale);
+    readVec3("world_pivot", weapon.worldGrip.pivot);
     readVec3("first_person_position", weapon.firstPersonGrip.position);
     readVec3("first_person_rotation", weapon.firstPersonGrip.rotation);
     readVec3("first_person_scale", weapon.firstPersonGrip.scale);
+    readVec3("first_person_pivot", weapon.firstPersonGrip.pivot);
     weapon.firstPersonPitchScale = profile.value(
         "first_person_pitch_scale", weapon.firstPersonPitchScale);
     weapon.firstPersonPitchOffset = profile.value(
         "first_person_pitch_offset", weapon.firstPersonPitchOffset);
+    if (view.camera)
+    {
+        readVec3("third_person_target_offset",
+            view.camera->thirdPersonTargetOffset);
+        view.camera->thirdPersonDistance = profile.value(
+            "third_person_distance", view.camera->thirdPersonDistance);
+        view.camera->renderDistance = std::clamp(profile.value(
+            "render_distance", view.camera->renderDistance), 1.0f, 10000.0f);
+        readVec3("first_person_eye_offset",
+            view.camera->firstPersonEyeOffset);
+    }
+    if (view.arms)
+    {
+        readVec3("arms_camera_offset", view.arms->cameraOffset);
+        readVec3("arms_rotation_offset", view.arms->rotationOffset);
+        readVec3("arms_scale", view.arms->scale);
+        view.arms->lookUpLimit = profile.value(
+            "look_up_limit", view.arms->lookUpLimit);
+        view.arms->lookDownLimit = profile.value(
+            "look_down_limit", view.arms->lookDownLimit);
+    }
+    if (firstPersonProfile.is_object())
+    {
+        const auto readFirstPersonVec3 = [&](const char* key,
+            DirectX::XMFLOAT3& value)
+        {
+            if (!firstPersonProfile.contains(key) ||
+                !firstPersonProfile[key].is_array() ||
+                firstPersonProfile[key].size() < 3)
+                return;
+            value = {
+                firstPersonProfile[key][0].get<float>(),
+                firstPersonProfile[key][1].get<float>(),
+                firstPersonProfile[key][2].get<float>() };
+        };
+        readFirstPersonVec3("first_person_position", weapon.firstPersonGrip.position);
+        readFirstPersonVec3("first_person_rotation", weapon.firstPersonGrip.rotation);
+        readFirstPersonVec3("first_person_scale", weapon.firstPersonGrip.scale);
+        readFirstPersonVec3("first_person_pivot", weapon.firstPersonGrip.pivot);
+        readFirstPersonVec3("left_hand_grip", weapon.firstPersonLeftHandGrip);
+        readFirstPersonVec3("left_hand_rotation", weapon.firstPersonLeftHandRotation);
+        if (view.camera)
+            readFirstPersonVec3("first_person_eye_offset",
+                view.camera->firstPersonEyeOffset);
+        if (view.arms)
+        {
+            readFirstPersonVec3("arms_camera_offset", view.arms->cameraOffset);
+            readFirstPersonVec3("arms_rotation_offset", view.arms->rotationOffset);
+            readFirstPersonVec3("arms_scale", view.arms->scale);
+            view.arms->lookUpLimit = firstPersonProfile.value(
+                "look_up_limit", view.arms->lookUpLimit);
+            view.arms->lookDownLimit = firstPersonProfile.value(
+                "look_down_limit", view.arms->lookDownLimit);
+        }
+        weapon.enableFirstPersonLeftHandIK = firstPersonProfile.value(
+            "enable_left_hand_ik", weapon.enableFirstPersonLeftHandIK);
+        weapon.showFirstPersonVisual = firstPersonProfile.value(
+            "show_visual", weapon.showFirstPersonVisual);
+        weapon.firstPersonPitchScale = firstPersonProfile.value(
+            "first_person_pitch_scale", weapon.firstPersonPitchScale);
+        weapon.firstPersonPitchOffset = firstPersonProfile.value(
+            "first_person_pitch_offset", weapon.firstPersonPitchOffset);
+    }
     readVec3("left_hand_grip", weapon.leftHandGrip);
+    readVec3("left_hand_rotation", weapon.leftHandRotation);
+    weapon.leftUpperArmBone = profile.value("left_upper_arm_bone", weapon.leftUpperArmBone);
+    weapon.leftForearmBone = profile.value("left_forearm_bone", weapon.leftForearmBone);
+    weapon.leftHandBone = profile.value("left_hand_bone", weapon.leftHandBone);
     readVec3("muzzle_position", weapon.muzzlePosition);
+    if (profile.contains("ballistics")) ReadWeaponBallistics(profile["ballistics"], weapon);
     weapon.showWorldVisual = profile.value(
         "show_world_visual", weapon.showWorldVisual);
     weapon.showFirstPersonVisual = profile.value(
@@ -2872,6 +3167,99 @@ bool SceneManager::LoadWeaponProfile(
     weapon.enableLeftHandIK = profile.value(
         "enable_left_hand_ik", weapon.enableLeftHandIK);
     return true;
+}
+
+bool SceneManager::ImportBlenderWeaponSockets(
+    WeaponComponent& weapon, std::string& status,
+    const std::string& filename) const
+{
+    std::ifstream file(filename);
+    if (!file)
+    {
+        status = "Blender socket file is missing: " + filename;
+        return false;
+    }
+
+    try
+    {
+        json document;
+        file >> document;
+        if (!document.is_object() || document.value("version", 0) != 1 ||
+            !document.contains("weapons") || !document["weapons"].is_array())
+            throw std::runtime_error("Unsupported Blender socket file format.");
+
+        std::string selectedModel = fs::path(weapon.visualModelPath).filename().string();
+        std::transform(selectedModel.begin(), selectedModel.end(),
+            selectedModel.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+        if (selectedModel.empty())
+            throw std::runtime_error("Choose a weapon visual model first.");
+
+        const json* matched = nullptr;
+        for (const auto& entry : document["weapons"])
+        {
+            if (!entry.is_object()) continue;
+            std::string model = fs::path(
+                entry.value("visual_model", std::string{})).filename().string();
+            std::transform(model.begin(), model.end(), model.begin(),
+                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (model == selectedModel)
+            {
+                matched = &entry;
+                break;
+            }
+        }
+        if (!matched)
+            throw std::runtime_error(
+                "No Blender sockets match the equipped weapon model.");
+
+        const auto readVec3 = [&](const char* key) -> DirectX::XMFLOAT3
+        {
+            const json& value = matched->at(key);
+            if (!value.is_array() || value.size() != 3)
+                throw std::runtime_error(std::string("Invalid socket field: ") + key);
+            DirectX::XMFLOAT3 result{
+                value[0].get<float>(), value[1].get<float>(),
+                value[2].get<float>() };
+            if (!std::isfinite(result.x) || !std::isfinite(result.y) ||
+                !std::isfinite(result.z))
+                throw std::runtime_error(std::string("Non-finite socket field: ") + key);
+            return result;
+        };
+
+        WeaponComponent candidate = weapon;
+        if (candidate.gripProfileName.empty())
+        {
+            const std::string profileName =
+                matched->value("profile_name", std::string{});
+            if (!profileName.empty() && WeaponProfilePath(profileName).empty())
+                throw std::runtime_error("Invalid Blender weapon profile name.");
+            candidate.gripProfileName = profileName;
+        }
+        candidate.rightHandBone = matched->at("right_hand_bone").get<std::string>();
+        if (candidate.rightHandBone.empty())
+            throw std::runtime_error("Blender socket parent bone is empty.");
+        candidate.worldGrip.position = readVec3("world_position");
+        candidate.worldGrip.rotation = readVec3("world_rotation");
+        candidate.worldGrip.scale = readVec3("world_scale");
+        if (candidate.worldGrip.scale.x <= 0.0f ||
+            candidate.worldGrip.scale.y <= 0.0f ||
+            candidate.worldGrip.scale.z <= 0.0f)
+            throw std::runtime_error("Blender socket scale must be positive.");
+        candidate.leftHandGrip = readVec3("left_hand_grip");
+        candidate.leftHandRotation = readVec3("left_hand_rotation");
+        candidate.muzzlePosition = readVec3("muzzle_position");
+        weapon = std::move(candidate);
+        status = "Imported Blender sockets from " + filename +
+            ". Save the weapon profile to keep them.";
+        return true;
+    }
+    catch (const std::exception& error)
+    {
+        status = std::string("Blender socket import failed: ") + error.what();
+        return false;
+    }
 }
 
 // ============================================================================
@@ -2883,26 +3271,35 @@ bool SceneManager::SaveScene(const std::string& filename)
 {
     json scene;
     scene["scene_name"] = "MyLevel";
-    scene["version"] = 1;
+    scene["version"] = 2;
     scene["objects"] = json::array();
 
     int id = 0;
+    std::unordered_set<Entity> savedEntities;
+    auto saveEntity = [&](Entity entity)
+    {
+        if (!m_registry.IsAlive(entity))
+            return;
+        if (m_registry.HasComponent<NpcWeaponVisualComponent>(entity))
+            return; // Визуал восстановится из экипировки, без дубликатов после загрузки.
+        if (m_registry.HasComponent<ShipPartComponent>(entity))
+            return;
+        if (!savedEntities.insert(entity).second)
+            return;
+        scene["objects"].push_back(SerializeObject(entity, id++));
+    };
 
     // Imported ship parts own temporary submeshes, so save the GLB root only.
     auto& shipRootPool = m_registry.GetComponents<ShipRootComponent>();
     for (auto& [entity, shipRoot] : shipRootPool)
     {
-        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
-        if (m_registry.HasComponent<ShipPartComponent>(entity)) continue;
-        scene["objects"].push_back(SerializeObject(entity, id++));
+        saveEntity(entity);
     }
     // -- РЎРѕС…СЂР°РЅСЏРµРј РѕР±СЉРµРєС‚С‹ СЃ РјРµС€РµРј (РѕР±С‹С‡РЅС‹Рµ РѕР±СЉРµРєС‚С‹, РєРѕСЂРЅРё РїРѕРґР»РѕРґРѕРє Рё С‚.Рґ.) --
     auto& meshPool = m_registry.GetComponents<MeshRendererComponent>();
     for (auto& [entity, mesh] : meshPool)
     {
-        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
-        if (m_registry.HasComponent<ShipPartComponent>(entity)) continue;
-        scene["objects"].push_back(SerializeObject(entity, id++));
+        saveEntity(entity);
     }
 
     
@@ -2911,10 +3308,7 @@ bool SceneManager::SaveScene(const std::string& filename)
     {
       
         if (m_registry.HasComponent<MeshRendererComponent>(entity)) continue;
-        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
-        if (m_registry.HasComponent<ShipPartComponent>(entity)) continue;
-
-        scene["objects"].push_back(SerializeObject(entity, id++));
+        saveEntity(entity);
     }
 
     // -- РЎРѕС…СЂР°РЅСЏРµРј РєРѕРјРЅР°С‚С‹ Р‘Р•Р— РјРµС€Р° (Р»РѕРіРёС‡РµСЃРєРёРµ RoomComponent) ----------------
@@ -2923,21 +3317,21 @@ bool SceneManager::SaveScene(const std::string& filename)
     {
         if (m_registry.HasComponent<MeshRendererComponent>(entity)) continue;
         if (m_registry.HasComponent<CompartmentComponent>(entity)) continue;
-        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
-        if (m_registry.HasComponent<ShipPartComponent>(entity)) continue;
-
-        scene["objects"].push_back(SerializeObject(entity, id++));
+        saveEntity(entity);
     }
     // -- РЎРѕС…СЂР°РЅСЏРµРј standalone-РєРѕР»Р»РёР·РёРё Р±РµР· РјРµС€Р° -------------------------------
+    for (auto& [entity, surface] : m_registry.GetComponents<NavMeshSurfaceComponent>())
+    {
+        (void)surface;
+        saveEntity(entity);
+    }
+
     auto& rbPool = m_registry.GetComponents<RigidBodyComponent>();
     for (auto& [entity, rb] : rbPool)
     {
         if (m_registry.HasComponent<MeshRendererComponent>(entity)) continue;
         if (m_registry.HasComponent<CompartmentComponent>(entity)) continue;
-        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
-        if (m_registry.HasComponent<ShipPartComponent>(entity)) continue;
-
-        scene["objects"].push_back(SerializeObject(entity, id++));
+        saveEntity(entity);
     }
 
     // -- РЎРѕС…СЂР°РЅСЏРµРј Р»РѕРіРёС‡РµСЃРєРёРµ РїСЂРѕР±РѕРёРЅС‹ Р±РµР· РјРµС€Р° -------------------------------
@@ -2948,10 +3342,7 @@ bool SceneManager::SaveScene(const std::string& filename)
         if (m_registry.HasComponent<RigidBodyComponent>(entity)) continue;
         if (m_registry.HasComponent<CompartmentComponent>(entity)) continue;
         if (m_registry.HasComponent<RoomComponent>(entity)) continue;
-        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
-        if (m_registry.HasComponent<ShipPartComponent>(entity)) continue;
-
-        scene["objects"].push_back(SerializeObject(entity, id++));
+        saveEntity(entity);
     }
 
     // NPCs are normally rendered objects and were already saved through meshPool.
@@ -2965,10 +3356,7 @@ bool SceneManager::SaveScene(const std::string& filename)
         if (m_registry.HasComponent<CompartmentComponent>(entity)) continue;
         if (m_registry.HasComponent<RoomComponent>(entity)) continue;
         if (m_registry.HasComponent<HullBreachComponent>(entity)) continue;
-        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
-        if (m_registry.HasComponent<ShipPartComponent>(entity)) continue;
-
-        scene["objects"].push_back(SerializeObject(entity, id++));
+        saveEntity(entity);
     }
 
     auto& weaponPool = m_registry.GetComponents<WeaponComponent>();
@@ -2981,10 +3369,50 @@ bool SceneManager::SaveScene(const std::string& filename)
         if (m_registry.HasComponent<RoomComponent>(entity)) continue;
         if (m_registry.HasComponent<HullBreachComponent>(entity)) continue;
         if (m_registry.HasComponent<NPCComponent>(entity)) continue;
-        if (!m_registry.HasComponent<ActiveComponent>(entity)) continue;
-        if (m_registry.HasComponent<ShipPartComponent>(entity)) continue;
+        saveEntity(entity);
+    }
 
-        scene["objects"].push_back(SerializeObject(entity, id++));
+    // Logical authoring entities used to disappear after reloading because the
+    // old save pass only enumerated render/physics pools. Keep areas and pure
+    // interaction anchors persistent as first-class scene objects.
+    for (auto& [entity, area] : m_registry.GetComponents<WorldAreaComponent>())
+    {
+        (void)area;
+        saveEntity(entity);
+    }
+    for (auto& [entity, interaction] : m_registry.GetComponents<InteractionComponent>())
+    {
+        (void)interaction;
+        saveEntity(entity);
+    }
+    for (auto& [entity, trigger] : m_registry.GetComponents<TriggerZoneComponent>())
+    {
+        (void)trigger;
+        saveEntity(entity);
+    }
+    for (auto& [entity, action] : m_registry.GetComponents<TriggerActionComponent>())
+    {
+        (void)action;
+        saveEntity(entity);
+    }
+    for (auto& [entity, inventory] : m_registry.GetComponents<InventoryComponent>())
+    {
+        (void)inventory;
+        saveEntity(entity);
+    }
+    for (auto& [entity, pickup] : m_registry.GetComponents<WeaponPickupComponent>())
+    {
+        (void)pickup;
+        saveEntity(entity);
+    }
+
+    // Named logical entities (empty anchors, disabled lights and no-code action
+    // targets) are authored scene objects too. ActiveComponent is state, not an
+    // ownership marker, so inactive entities must survive a save/load cycle.
+    for (auto& [entity, name] : m_registry.GetComponents<NameComponent>())
+    {
+        (void)name;
+        saveEntity(entity);
     }
     std::ofstream file(filename);
     if (!file.is_open()) return false;
@@ -3002,6 +3430,9 @@ json SceneManager::SerializeObject(Entity entity, int id)
     json objJson;
     objJson["id"] = id;
     objJson["entity_id"] = static_cast<uint32_t>(entity); // < СЃРѕС…СЂР°РЅСЏРµРј РѕСЂРёРіРёРЅР°Р»СЊРЅС‹Р№ Entity ID
+    objJson["active"] = m_registry.HasComponent<ActiveComponent>(entity);
+    objJson["invulnerable"] =
+        m_registry.HasComponent<InvulnerableComponent>(entity);
 
     // -- Model / Texture paths -------------------------------------------------
     const bool hasMeshRenderer = m_registry.HasComponent<MeshRendererComponent>(entity);
@@ -3030,6 +3461,101 @@ json SceneManager::SerializeObject(Entity entity, int id)
 
     if (auto* name = m_registry.GetComponent<NameComponent>(entity))
         objJson["object_name"] = name->name;
+
+    if (auto* area = m_registry.GetComponent<WorldAreaComponent>(entity))
+    {
+        objJson["has_world_area"] = true;
+        objJson["world_area_type"] = static_cast<int>(area->type);
+        objJson["world_area_center"] = {
+            area->center.x, area->center.y, area->center.z };
+        objJson["world_area_size"] = {
+            area->size.x, area->size.y, area->size.z };
+        objJson["world_area_density"] = area->density;
+        objJson["world_area_seed"] = area->seed;
+        objJson["world_area_enabled"] = area->enabled;
+    }
+
+    if (auto* interaction = m_registry.GetComponent<InteractionComponent>(entity))
+    {
+        objJson["has_interaction"] = true;
+        objJson["interaction_enabled"] = interaction->enabled;
+        objJson["interaction_distance"] = interaction->maxDistance;
+        objJson["interaction_prompt"] = interaction->prompt;
+    }
+
+    if (auto* trigger = m_registry.GetComponent<TriggerZoneComponent>(entity))
+    {
+        objJson["has_trigger_zone"] = true;
+        objJson["trigger_enabled"] = trigger->enabled;
+        objJson["trigger_shape"] = static_cast<int>(trigger->shape);
+        objJson["trigger_local_center"] = {
+            trigger->localCenter.x, trigger->localCenter.y, trigger->localCenter.z };
+        objJson["trigger_box_half_extents"] = {
+            trigger->boxHalfExtents.x,
+            trigger->boxHalfExtents.y,
+            trigger->boxHalfExtents.z };
+        objJson["trigger_sphere_radius"] = trigger->sphereRadius;
+        objJson["trigger_actor_mask"] =
+            static_cast<std::uint32_t>(trigger->actorMask);
+        objJson["trigger_one_shot"] = trigger->oneShot;
+        objJson["trigger_cooldown"] = trigger->cooldownSeconds;
+        objJson["trigger_emit_stay"] = trigger->emitStay;
+        objJson["trigger_stay_interval"] = trigger->stayIntervalSeconds;
+        objJson["trigger_event_id"] = trigger->eventId;
+        objJson["trigger_linked_entity"] =
+            static_cast<std::uint32_t>(trigger->linkedEntity);
+        objJson["trigger_show_debug"] = trigger->showDebugShape;
+        objJson["trigger_debug_color"] = {
+            trigger->debugColor.x, trigger->debugColor.y,
+            trigger->debugColor.z, trigger->debugColor.w };
+    }
+
+    if (auto* action = m_registry.GetComponent<TriggerActionComponent>(entity))
+    {
+        objJson["has_trigger_action"] = true;
+        objJson["trigger_action_type"] = static_cast<int>(action->action);
+        objJson["trigger_action_target"] =
+            static_cast<std::uint32_t>(action->target);
+        objJson["trigger_action_on_enter"] = action->executeOnEnter;
+        objJson["trigger_action_on_stay"] = action->executeOnStay;
+        objJson["trigger_action_on_exit"] = action->executeOnExit;
+        objJson["trigger_action_value"] = action->value;
+        objJson["trigger_action_invert_exit"] = action->invertOnExit;
+        objJson["trigger_action_message"] = action->hudMessage;
+        objJson["trigger_action_message_duration"] = action->messageDuration;
+    }
+
+    if (auto* inventory = m_registry.GetComponent<InventoryComponent>(entity))
+    {
+        objJson["has_inventory"] = true;
+        objJson["inventory_active_slot"] = inventory->activeSlot;
+        objJson["inventory_slots"] = json::array();
+        for (const InventorySlot& slot : inventory->slots)
+            objJson["inventory_slots"].push_back(
+                static_cast<std::uint32_t>(slot.item));
+    }
+
+    if (auto* pickup = m_registry.GetComponent<WeaponPickupComponent>(entity))
+    {
+        objJson["has_weapon_pickup"] = true;
+        objJson["pickup_enabled"] = pickup->enabled;
+        objJson["pickup_equip_on_pickup"] = pickup->equipOnPickup;
+        objJson["pickup_create_physics_on_drop"] = pickup->createPhysicsOnDrop;
+        objJson["pickup_drop_mass"] = pickup->dropMass;
+        objJson["pickup_collision_size"] = {
+            pickup->dropCollisionSize.x,
+            pickup->dropCollisionSize.y,
+            pickup->dropCollisionSize.z };
+        objJson["pickup_prompt"] = pickup->prompt;
+    }
+
+    if (auto* crew = m_registry.GetComponent<CrewMemberComponent>(entity))
+    {
+        objJson["has_crew_member"] = true;
+        objJson["crew_role"] = static_cast<int>(crew->role);
+        objJson["crew_on_duty"] = crew->onDuty;
+        objJson["crew_repair_skill"] = crew->repairSkill;
+    }
 
     if (auto* shipRoot = m_registry.GetComponent<ShipRootComponent>(entity))
     {
@@ -3205,6 +3731,22 @@ json SceneManager::SerializeObject(Entity entity, int id)
     if (m_registry.HasComponent<PlayerGameTag>(entity))
         objJson["has_player_tag"] = true;
 
+    if (auto* playCamera = m_registry.GetComponent<PlayCameraComponent>(entity))
+    {
+        objJson["has_play_camera"] = true;
+        objJson["play_camera_first_person_eye_offset"] = {
+            playCamera->firstPersonEyeOffset.x,
+            playCamera->firstPersonEyeOffset.y,
+            playCamera->firstPersonEyeOffset.z };
+        objJson["play_camera_third_person_target_offset"] = {
+            playCamera->thirdPersonTargetOffset.x,
+            playCamera->thirdPersonTargetOffset.y,
+            playCamera->thirdPersonTargetOffset.z };
+        objJson["play_camera_third_person_distance"] =
+            playCamera->thirdPersonDistance;
+        objJson["play_camera_render_distance"] = playCamera->renderDistance;
+    }
+
     if (auto* firstPerson = m_registry.GetComponent<FirstPersonViewComponent>(entity))
     {
         objJson["has_first_person_view"] = true;
@@ -3217,6 +3759,8 @@ json SceneManager::SerializeObject(Entity entity, int id)
             firstPerson->scale.x, firstPerson->scale.y, firstPerson->scale.z };
         objJson["first_person_pitch_scale"] = firstPerson->pitchScale;
         objJson["first_person_pitch_offset"] = firstPerson->pitchOffset;
+        objJson["first_person_look_up_limit"] = firstPerson->lookUpLimit;
+        objJson["first_person_look_down_limit"] = firstPerson->lookDownLimit;
         objJson["first_person_follow_camera"] = firstPerson->followCamera;
         objJson["first_person_sync_animation"] = firstPerson->syncAnimation;
         objJson["first_person_hide_owner"] = firstPerson->hideOwner;
@@ -3245,13 +3789,32 @@ json SceneManager::SerializeObject(Entity entity, int id)
     if (auto* player = m_registry.GetComponent<PlayerComponent>(entity))
     {
         objJson["has_player_component"] = true;
-        objJson["player_health"] = player->health;
-        objJson["player_stamina"] = player->stamina;
-        objJson["player_oxygen"] = player->oxygen;
+        if (const auto* vitals =
+            m_registry.GetComponent<CharacterVitalsComponent>(entity))
+        {
+            objJson["player_health"] = vitals->health;
+            objJson["player_stamina"] = vitals->stamina;
+            objJson["player_oxygen"] = vitals->oxygen;
+            objJson["player_max_health"] = vitals->maxHealth;
+            objJson["player_max_stamina"] = vitals->maxStamina;
+            objJson["player_max_oxygen"] = vitals->maxOxygen;
+            objJson["player_oxygen_change_per_second"] = vitals->oxygenChangePerSecond;
+            objJson["player_suffocation_damage_per_second"] = vitals->suffocationDamagePerSecond;
+            objJson["player_stamina_drain_per_second"] = vitals->staminaDrainPerSecond;
+            objJson["player_stamina_recovery_per_second"] = vitals->staminaRecoveryPerSecond;
+            objJson["player_sprint_start_threshold"] = vitals->sprintStartThreshold;
+        }
 
-        objJson["player_max_health"] = player->maxHealth;
-        objJson["player_max_stamina"] = player->maxStamina;
-        objJson["player_max_oxygen"] = player->maxOxygen;
+        objJson["player_punch_damage"] = player->punchDamage;
+        objJson["player_punch_reach"] = player->punchReach;
+        objJson["player_punch_contact_radius"] = player->punchContactRadius;
+        objJson["player_punch_contact_phase"] = player->punchContactPhase;
+        objJson["player_punch_ik_strength"] = player->punchIKStrength;
+        objJson["player_punch_fp_ik_strength"] = player->punchFirstPersonIKStrength;
+        objJson["player_punch_fist_offset"] = {
+            player->punchFistOffset.x,
+            player->punchFistOffset.y,
+            player->punchFistOffset.z };
 
         
     }
@@ -3263,10 +3826,13 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["weapon_damage"] = weapon->damage;
         objJson["weapon_range"] = weapon->range;
         objJson["weapon_fire_rate"] = weapon->fireRate;
+        objJson["weapon_ballistics"] = WriteWeaponBallistics(*weapon);
         objJson["weapon_breach_radius"] = weapon->breachRadius;
         objJson["weapon_visual_model"] = weapon->visualModelPath;
+        objJson["weapon_grip_profile"] = weapon->gripProfileName;
         objJson["weapon_right_hand_bone"] = weapon->rightHandBone;
         objJson["weapon_rifle_idle_animation"] = weapon->rifleIdleAnimation;
+        objJson["weapon_pistol_pose"] = weapon->pistolPose;
         objJson["weapon_rifle_gun_animation"] = weapon->rifleGunAnimation;
         objJson["weapon_world_grip_position"] = {
             weapon->worldGrip.position.x, weapon->worldGrip.position.y, weapon->worldGrip.position.z };
@@ -3274,21 +3840,35 @@ json SceneManager::SerializeObject(Entity entity, int id)
             weapon->worldGrip.rotation.x, weapon->worldGrip.rotation.y, weapon->worldGrip.rotation.z };
         objJson["weapon_world_grip_scale"] = {
             weapon->worldGrip.scale.x, weapon->worldGrip.scale.y, weapon->worldGrip.scale.z };
+        objJson["weapon_world_grip_pivot"] = {
+            weapon->worldGrip.pivot.x, weapon->worldGrip.pivot.y, weapon->worldGrip.pivot.z };
         objJson["weapon_fp_grip_position"] = {
             weapon->firstPersonGrip.position.x, weapon->firstPersonGrip.position.y, weapon->firstPersonGrip.position.z };
         objJson["weapon_fp_grip_rotation"] = {
             weapon->firstPersonGrip.rotation.x, weapon->firstPersonGrip.rotation.y, weapon->firstPersonGrip.rotation.z };
         objJson["weapon_fp_grip_scale"] = {
             weapon->firstPersonGrip.scale.x, weapon->firstPersonGrip.scale.y, weapon->firstPersonGrip.scale.z };
+        objJson["weapon_fp_grip_pivot"] = {
+            weapon->firstPersonGrip.pivot.x, weapon->firstPersonGrip.pivot.y, weapon->firstPersonGrip.pivot.z };
         objJson["weapon_fp_pitch_scale"] = weapon->firstPersonPitchScale;
         objJson["weapon_fp_pitch_offset"] = weapon->firstPersonPitchOffset;
         objJson["weapon_left_hand_grip"] = {
             weapon->leftHandGrip.x, weapon->leftHandGrip.y, weapon->leftHandGrip.z };
+        objJson["weapon_fp_left_hand_grip"] = {
+            weapon->firstPersonLeftHandGrip.x, weapon->firstPersonLeftHandGrip.y, weapon->firstPersonLeftHandGrip.z };
+        objJson["weapon_fp_left_hand_rotation"] = {
+            weapon->firstPersonLeftHandRotation.x, weapon->firstPersonLeftHandRotation.y,
+            weapon->firstPersonLeftHandRotation.z };
+        objJson["weapon_fp_enable_left_hand_ik"] = weapon->enableFirstPersonLeftHandIK;
         objJson["weapon_muzzle_position"] = {
             weapon->muzzlePosition.x, weapon->muzzlePosition.y, weapon->muzzlePosition.z };
         objJson["weapon_show_world_visual"] = weapon->showWorldVisual;
         objJson["weapon_show_fp_visual"] = weapon->showFirstPersonVisual;
         objJson["weapon_enable_left_hand_ik"] = weapon->enableLeftHandIK;
+        objJson["weapon_left_hand_rotation"] = { weapon->leftHandRotation.x, weapon->leftHandRotation.y, weapon->leftHandRotation.z };
+        objJson["weapon_left_upper_arm_bone"] = weapon->leftUpperArmBone;
+        objJson["weapon_left_forearm_bone"] = weapon->leftForearmBone;
+        objJson["weapon_left_hand_bone"] = weapon->leftHandBone;
     }
 
     if (auto* owner = m_registry.GetComponent<WeaponOwnerComponent>(entity))
@@ -3329,6 +3909,13 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["character_use_ghost_sweep"] = tuning->useGhostSweepTest;
         objJson["character_max_penetration_depth"] = tuning->maxPenetrationDepth;
         objJson["character_fall_speed"] = tuning->fallSpeed;
+        objJson["character_push_dynamic_bodies"] = tuning->pushDynamicBodies;
+        objJson["character_dynamic_push_force"] = tuning->dynamicBodyPushForce;
+        objJson["character_dynamic_push_probe"] = tuning->dynamicBodyPushProbe;
+        objJson["character_dynamic_max_pushable_mass"] =
+            tuning->dynamicBodyMaxPushableMass;
+        objJson["character_dynamic_max_push_speed"] =
+            tuning->dynamicBodyMaxPushSpeed;
         objJson["character_clamp_step"] = tuning->clampNormalStepHeight;
         objJson["character_minimum_step"] = tuning->minimumStepHeight;
         objJson["character_maximum_step"] = tuning->maximumStepHeight;
@@ -3352,9 +3939,24 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["has_npc"] = true;
         objJson["npc_name"] = npc->name;
         objJson["npc_description"] = npc->description;
-        objJson["npc_health"] = npc->health;
-        objJson["npc_max_health"] = npc->maxHealth;
         objJson["npc_hostile"] = npc->isHostile;
+        if (const auto* vitals =
+            m_registry.GetComponent<CharacterVitalsComponent>(entity))
+        {
+            objJson["npc_health"] = vitals->health;
+            objJson["npc_max_health"] = vitals->maxHealth;
+            objJson["npc_oxygen"] = vitals->oxygen;
+            objJson["npc_max_oxygen"] = vitals->maxOxygen;
+            objJson["npc_stamina"] = vitals->stamina;
+            objJson["npc_max_stamina"] = vitals->maxStamina;
+            objJson["npc_oxygen_change_per_second"] = vitals->oxygenChangePerSecond;
+            objJson["npc_suffocation_damage_per_second"] = vitals->suffocationDamagePerSecond;
+            objJson["npc_takes_suffocation_damage"] =
+                vitals->takesSuffocationDamage;
+            objJson["npc_stamina_drain_per_second"] = vitals->staminaDrainPerSecond;
+            objJson["npc_stamina_recovery_per_second"] = vitals->staminaRecoveryPerSecond;
+            objJson["npc_sprint_start_threshold"] = vitals->sprintStartThreshold;
+        }
 
         if (auto* npcMovement = m_registry.GetComponent<NPCMovementComponent>(entity))
         {
@@ -3377,6 +3979,123 @@ json SceneManager::SerializeObject(Entity entity, int id)
             objJson["npc_stuck_timeout"] = brain->stuckTimeout;
             objJson["npc_wander_radius"] = brain->wanderRadius;
         }
+
+        if (auto* patrol = m_registry.GetComponent<NpcPatrolComponent>(entity))
+        {
+            objJson["npc_patrol_enabled"] = patrol->enabled;
+            objJson["npc_patrol_route_id"] = patrol->routeId;
+            objJson["npc_patrol_loop"] = patrol->loop;
+            objJson["npc_patrol_ping_pong"] = patrol->pingPong;
+            objJson["npc_patrol_allow_running"] = patrol->allowRunning;
+            objJson["npc_patrol_arrival_distance"] = patrol->arrivalDistance;
+            objJson["npc_patrol_default_wait"] = patrol->defaultWaitTime;
+        }
+
+        const auto* combat =
+            m_registry.GetComponent<NPCCombatComponent>(entity);
+        objJson["has_npc_combat"] = combat != nullptr;
+        if (combat)
+        {
+            objJson["npc_combat_see_range"] = combat->seeRange;
+            objJson["npc_combat_close_awareness_range"] =
+                combat->closeAwarenessRange;
+            objJson["npc_combat_wander_until_contact"] =
+                combat->wanderUntilContact;
+            objJson["npc_combat_contact_wander_radius"] =
+                combat->contactWanderRadius;
+            objJson["npc_combat_attack_range"] = combat->attackRange;
+            objJson["npc_combat_attack_cooldown"] = combat->attackCooldown;
+            objJson["npc_combat_ranged_attack_range"] = combat->rangedAttackRange;
+            objJson["npc_combat_ranged_aim_delay"] = combat->rangedAimDelay;
+            objJson["npc_combat_chase_resume_margin"] = combat->chaseResumeMargin;
+            objJson["npc_combat_stance_enter_delay"] = combat->stanceEnterDelay;
+            objJson["npc_combat_prediction_seconds"] = combat->predictionSeconds;
+            objJson["npc_combat_max_prediction_distance"] = combat->maxPredictionDistance;
+            objJson["npc_combat_prediction_travel_timeout"] = combat->predictionTravelTimeout;
+            objJson["npc_combat_lose_target_delay"] =
+                combat->loseTargetDelay;
+            objJson["npc_combat_field_of_view"] =
+                combat->fieldOfViewDegrees;
+
+            const auto* modules =
+                m_registry.GetComponent<NpcCombatModulesComponent>(entity);
+            objJson["has_npc_combat_modules"] = modules != nullptr;
+            if (modules)
+            {
+                objJson["npc_module_perception"] = modules->perception;
+                objJson["npc_module_engagement"] = modules->engagement;
+                objJson["npc_module_pursuit"] = modules->pursuit;
+                objJson["npc_module_stationary_fire"] = modules->stationaryFire;
+                objJson["npc_module_search"] = modules->search;
+                objJson["npc_module_automatic_tactics"] = modules->automaticTactics;
+                objJson["npc_module_cover_selection"] = modules->coverSelection;
+                objJson["npc_module_peek_cycle"] = modules->peekCycle;
+                objJson["npc_module_cover_reposition"] = modules->coverReposition;
+                objJson["npc_module_dynamic_cover"] = modules->dynamicCover;
+                objJson["npc_module_moving_fire"] = modules->movingFire;
+                objJson["npc_module_incoming_fire_reaction"] =
+                    modules->incomingFireReaction;
+                objJson["npc_module_squad_tactics"] = modules->squadTactics;
+            }
+        }
+    }
+    if (auto* tactical = m_registry.GetComponent<NpcTacticalComponent>(entity))
+    {
+        objJson["has_npc_tactical"] = true;
+        objJson["npc_squad_id"] = tactical->squadId;
+        objJson["npc_tactical_selected_style"] =
+            static_cast<int>(tactical->selectedStyle);
+        objJson["npc_tactical_aggression"] = tactical->tacticalAggression;
+        objJson["npc_tactical_style_commit"] =
+            tactical->tacticCommitDuration;
+        objJson["npc_tactical_decision_interval"] = tactical->decisionInterval;
+        objJson["npc_tactical_hide_duration"] = tactical->hideDuration;
+        objJson["npc_tactical_expose_duration"] = tactical->exposeDuration;
+        objJson["npc_tactical_peek_speed"] = tactical->peekMoveSpeed;
+        objJson["npc_tactical_moving_burst_size"] = tactical->movingBurstSize;
+        objJson["npc_tactical_moving_burst_pause"] =
+            tactical->movingBurstPauseDuration;
+        objJson["npc_tactical_failed_peeks_before_relocate"] =
+            tactical->failedPeeksBeforeRelocate;
+        objJson["npc_tactical_minimum_cover_hold"] =
+            tactical->minimumCoverHoldDuration;
+        objJson["npc_tactical_cover_validation_grace"] =
+            tactical->coverValidationGraceDuration;
+        objJson["npc_tactical_incoming_fire_awareness_range"] =
+            tactical->incomingFireAwarenessRange;
+        objJson["npc_tactical_flank_weight"] = tactical->flankWeight;
+        objJson["npc_tactical_preferred_range"] = tactical->preferredRange;
+        objJson["npc_tactical_dynamic_cover"] = tactical->allowDynamicCover;
+        objJson["npc_tactical_dynamic_cover_radius"] =
+            tactical->dynamicCoverSearchRadius;
+        objJson["npc_tactical_dynamic_cover_samples"] =
+            tactical->dynamicCoverSamples;
+    }
+    if (auto* faction = m_registry.GetComponent<FactionComponent>(entity))
+    {
+        // Фракция — авторская часть сцены. Без этих полей
+        // после загрузки полигона оба NPC снова становились Neutral.
+        objJson["has_faction"] = true;
+        objJson["faction_id"] = static_cast<int>(faction->faction);
+    }
+    if (auto* cover = m_registry.GetComponent<NpcCoverPointComponent>(entity))
+    {
+        objJson["has_npc_cover_point"] = true;
+        objJson["npc_cover_peek_offset"] = {
+            cover->peekOffset.x, cover->peekOffset.y, cover->peekOffset.z };
+        objJson["npc_cover_allow_opposite_peek"] =
+            cover->allowOppositePeek;
+        objJson["npc_cover_protection_height"] = cover->protectionHeight;
+        objJson["npc_cover_crouched"] = cover->crouched;
+        objJson["npc_cover_enabled"] = cover->enabled;
+    }
+    if (auto* point = m_registry.GetComponent<NpcPatrolPointComponent>(entity))
+    {
+        objJson["has_npc_patrol_point"] = true;
+        objJson["npc_patrol_point_route_id"] = point->routeId;
+        objJson["npc_patrol_point_order"] = point->order;
+        objJson["npc_patrol_point_wait"] = point->waitTime;
+        objJson["npc_patrol_point_enabled"] = point->enabled;
     }
 
     if (auto* anim = m_registry.GetComponent<AnimationComponent>(entity))
@@ -3386,6 +4105,7 @@ json SceneManager::SerializeObject(Entity entity, int id)
         objJson["animation_index"] = anim->animationIndex;
         objJson["animation_time"] = anim->currentTime;
         objJson["animation_is_playing"] = anim->isPlaying;
+        objJson["animation_profile"] = anim->profileName;
         objJson["animation_bindings"] = json::array();
         for (const AnimationBinding& binding : anim->animations)
         {
@@ -3394,6 +4114,20 @@ json SceneManager::SerializeObject(Entity entity, int id)
                 { "name", binding.name }
                 });
         }
+        MeleeActionJson::Write(objJson, *anim, "animation_punch_variants");
+        objJson["animation_pose_keys"] = json::array();
+        for (const auto& key : anim->poseKeys)
+            objJson["animation_pose_keys"].push_back({
+                { "clip", key.clip }, { "bone", key.bone },
+                { "variant", key.variant }, { "time", key.time },
+                { "position", { key.position.x, key.position.y, key.position.z } },
+                { "rotation", { key.rotation.x, key.rotation.y, key.rotation.z } } });
+        objJson["animation_fist_keys"] = json::array();
+        for (const auto& key : anim->fistKeys)
+            objJson["animation_fist_keys"].push_back({
+                { "clip", key.clip }, { "variant", key.variant },
+                { "time", key.time }, { "right_hand", key.rightHand },
+                { "amount", key.amount } });
     }
 // -- DoorComponent ---------------------------------------------------------
     if (auto* door = m_registry.GetComponent<DoorComponent>(entity))
@@ -3441,6 +4175,11 @@ json SceneManager::SerializeObject(Entity entity, int id)
         for (Entity connected : room->connectedRooms)
             connectedRoomsJson.push_back(static_cast<uint32_t>(connected));
         objJson["room_connected"] = connectedRoomsJson;
+    }
+    if (auto* surface = m_registry.GetComponent<NavMeshSurfaceComponent>(entity))
+    {
+        objJson["has_navmesh_surface"] = true;
+        objJson["navmesh_surface_enabled"] = surface->enabled;
     }
     // -- OxygenGeneratorComponent ---------------------------------------------
     if (auto* generator = m_registry.GetComponent<OxygenGeneratorComponent>(entity))
@@ -3615,6 +4354,7 @@ bool SceneManager::LoadScene(const std::string& filename,
 
     Clear();
     std::unordered_map<uint32_t, Entity> remap;
+    std::unordered_set<Entity> restoredEntities;
 
     if (scene.contains("world"))
     {
@@ -3726,12 +4466,32 @@ bool SceneManager::LoadScene(const std::string& filename,
                 e = DeserializeObject(obj, device, deviceContext);
             }
 
-            if (e != INVALID_ENTITY && obj.contains("entity_id"))
-                remap[obj["entity_id"].get<uint32_t>()] = e;
+            if (e != INVALID_ENTITY)
+            {
+                restoredEntities.insert(e);
+                if (obj.contains("entity_id"))
+                    remap[obj["entity_id"].get<uint32_t>()] = e;
+            }
         }
     }
 
-    RemapEntityReferences(remap);
+    // Only components populated from serialized object fields contain old IDs.
+    // Imported GLB parts and helper entities already point at their freshly
+    // created runtime IDs; remapping them could corrupt a ship hierarchy when
+    // one of those new IDs happens to equal an old saved ID.
+    RemapEntityReferences(remap, restoredEntities);
+
+    // Deserialization restores rigid-body authoring data, but Bullet objects
+    // are runtime resources and cannot be serialized. Recreate them only after
+    // every entity/model/reference exists so loaded pickups and colliders are
+    // immediately raycastable and physically valid.
+    for (auto& [entity, rigidBody] :
+        m_registry.GetComponents<RigidBodyComponent>())
+    {
+        if (!rigidBody.body)
+            PhysicsSystem::CreateRigidBody(m_registry, entity);
+    }
+
     ResolveRepairZones();
     // Temporary GUN <-> CAPTAIN staircase portal is idempotent: if it was
     // already saved (or replaced by a real door), this call creates nothing.
@@ -3765,10 +4525,165 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
     if (j.contains("rotation")) transform.rotation = readVec3Object(j["rotation"], transform.rotation);
     if (j.contains("scale")) transform.scale = readVec3Object(j["scale"], transform.scale);
     m_registry.AddComponent<TransformComponent>(e, transform);
-    m_registry.AddComponent<ActiveComponent>(e, ActiveComponent{});
+    if (j.value("active", true))
+        m_registry.AddComponent<ActiveComponent>(e, ActiveComponent{});
+    if (j.value("invulnerable", j.value("player_god_mode", false)))
+        m_registry.AddComponent<InvulnerableComponent>(
+            e, InvulnerableComponent{});
 
     if (j.contains("object_name"))
         m_registry.AddComponent<NameComponent>(e, NameComponent{ j["object_name"].get<std::string>() });
+
+    if (j.value("has_world_area", false))
+    {
+        WorldAreaComponent area;
+        const int type = std::clamp(
+            j.value("world_area_type", static_cast<int>(area.type)),
+            static_cast<int>(WorldAreaType::Grass),
+            static_cast<int>(WorldAreaType::Trigger));
+        area.type = static_cast<WorldAreaType>(type);
+        if (j.contains("world_area_center"))
+            area.center = readVec3Array(j["world_area_center"], area.center);
+        if (j.contains("world_area_size"))
+            area.size = readVec3Array(j["world_area_size"], area.size);
+        area.density = j.value("world_area_density", area.density);
+        area.seed = j.value("world_area_seed", area.seed);
+        area.enabled = j.value("world_area_enabled", area.enabled);
+        m_registry.AddComponent<WorldAreaComponent>(e, area);
+    }
+
+    if (j.value("has_interaction", false))
+    {
+        InteractionComponent interaction;
+        interaction.enabled = j.value("interaction_enabled", interaction.enabled);
+        interaction.maxDistance = j.value(
+            "interaction_distance", interaction.maxDistance);
+        interaction.prompt = j.value("interaction_prompt", interaction.prompt);
+        m_registry.AddComponent<InteractionComponent>(e, interaction);
+    }
+
+    if (j.value("has_trigger_zone", false))
+    {
+        TriggerZoneComponent trigger;
+        trigger.enabled = j.value("trigger_enabled", trigger.enabled);
+        const int shape = std::clamp(
+            j.value("trigger_shape", static_cast<int>(trigger.shape)),
+            static_cast<int>(TriggerZoneShape::Box),
+            static_cast<int>(TriggerZoneShape::Sphere));
+        trigger.shape = static_cast<TriggerZoneShape>(shape);
+        if (j.contains("trigger_local_center"))
+            trigger.localCenter = readVec3Array(
+                j["trigger_local_center"], trigger.localCenter);
+        if (j.contains("trigger_box_half_extents"))
+            trigger.boxHalfExtents = readVec3Array(
+                j["trigger_box_half_extents"], trigger.boxHalfExtents);
+        trigger.sphereRadius = j.value(
+            "trigger_sphere_radius", trigger.sphereRadius);
+        const std::uint32_t actorMask = j.value(
+            "trigger_actor_mask",
+            static_cast<std::uint32_t>(trigger.actorMask));
+        trigger.actorMask = static_cast<TriggerZoneActorMask>(
+            actorMask & static_cast<std::uint32_t>(TriggerZoneActorMask::All));
+        trigger.oneShot = j.value("trigger_one_shot", trigger.oneShot);
+        trigger.cooldownSeconds = j.value(
+            "trigger_cooldown", trigger.cooldownSeconds);
+        trigger.emitStay = j.value("trigger_emit_stay", trigger.emitStay);
+        trigger.stayIntervalSeconds = j.value(
+            "trigger_stay_interval", trigger.stayIntervalSeconds);
+        trigger.eventId = j.value("trigger_event_id", trigger.eventId);
+        trigger.linkedEntity = static_cast<Entity>(j.value(
+            "trigger_linked_entity",
+            static_cast<std::uint32_t>(trigger.linkedEntity)));
+        trigger.showDebugShape = j.value(
+            "trigger_show_debug", trigger.showDebugShape);
+        if (j.contains("trigger_debug_color") &&
+            j["trigger_debug_color"].is_array() &&
+            j["trigger_debug_color"].size() >= 4)
+        {
+            trigger.debugColor = {
+                j["trigger_debug_color"][0].get<float>(),
+                j["trigger_debug_color"][1].get<float>(),
+                j["trigger_debug_color"][2].get<float>(),
+                j["trigger_debug_color"][3].get<float>() };
+        }
+        m_registry.AddComponent<TriggerZoneComponent>(e, trigger);
+    }
+
+    if (j.value("has_trigger_action", false))
+    {
+        TriggerActionComponent action;
+        const int actionType = std::clamp(
+            j.value("trigger_action_type", static_cast<int>(action.action)),
+            static_cast<int>(TriggerActionType::None),
+            static_cast<int>(TriggerActionType::SetDoorOpen));
+        action.action = static_cast<TriggerActionType>(actionType);
+        action.target = static_cast<Entity>(j.value(
+            "trigger_action_target",
+            static_cast<std::uint32_t>(action.target)));
+        action.executeOnEnter = j.value(
+            "trigger_action_on_enter", action.executeOnEnter);
+        action.executeOnStay = j.value(
+            "trigger_action_on_stay", action.executeOnStay);
+        action.executeOnExit = j.value(
+            "trigger_action_on_exit", action.executeOnExit);
+        action.value = j.value("trigger_action_value", action.value);
+        action.invertOnExit = j.value(
+            "trigger_action_invert_exit", action.invertOnExit);
+        action.hudMessage = j.value(
+            "trigger_action_message", action.hudMessage);
+        action.messageDuration = j.value(
+            "trigger_action_message_duration", action.messageDuration);
+        m_registry.AddComponent<TriggerActionComponent>(e, action);
+    }
+
+    if (j.value("has_inventory", false))
+    {
+        InventoryComponent inventory;
+        inventory.activeSlot = (std::min)(
+            j.value("inventory_active_slot", inventory.activeSlot),
+            InventoryComponent::SlotCount - 1);
+        if (j.contains("inventory_slots") && j["inventory_slots"].is_array())
+        {
+            const std::size_t count = (std::min)(
+                inventory.slots.size(), j["inventory_slots"].size());
+            for (std::size_t slot = 0; slot < count; ++slot)
+            {
+                inventory.slots[slot].item = static_cast<Entity>(
+                    j["inventory_slots"][slot].get<std::uint32_t>());
+            }
+        }
+        m_registry.AddComponent<InventoryComponent>(e, inventory);
+    }
+
+    if (j.value("has_weapon_pickup", false))
+    {
+        WeaponPickupComponent pickup;
+        pickup.enabled = j.value("pickup_enabled", pickup.enabled);
+        pickup.equipOnPickup = j.value(
+            "pickup_equip_on_pickup", pickup.equipOnPickup);
+        pickup.createPhysicsOnDrop = j.value(
+            "pickup_create_physics_on_drop", pickup.createPhysicsOnDrop);
+        pickup.dropMass = j.value("pickup_drop_mass", pickup.dropMass);
+        if (j.contains("pickup_collision_size"))
+            pickup.dropCollisionSize = readVec3Array(
+                j["pickup_collision_size"], pickup.dropCollisionSize);
+        pickup.prompt = j.value("pickup_prompt", pickup.prompt);
+        m_registry.AddComponent<WeaponPickupComponent>(e, pickup);
+    }
+
+    if (j.value("has_crew_member", false))
+    {
+        CrewMemberComponent crew;
+        const int role = std::clamp(
+            j.value("crew_role", static_cast<int>(crew.role)),
+            static_cast<int>(CrewRole::Generalist),
+            static_cast<int>(CrewRole::Medic));
+        crew.role = static_cast<CrewRole>(role);
+        crew.onDuty = j.value("crew_on_duty", crew.onDuty);
+        crew.repairSkill = std::clamp(
+            j.value("crew_repair_skill", crew.repairSkill), 0.25f, 2.0f);
+        m_registry.AddComponent<CrewMemberComponent>(e, crew);
+    }
 
     const std::string modelPath = j.value("model_path", std::string());
     const std::string texturePath = j.value("texture_path", std::string());
@@ -3823,6 +4738,12 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
                 anim.animationIndex = j.value("animation_index", anim.animationIndex);
                 anim.currentTime = j.value("animation_time", anim.currentTime);
                 anim.isPlaying = j.value("animation_is_playing", anim.isPlaying);
+                anim.profileName = j.value("animation_profile", std::string{});
+                const bool usesLegacyDefaultProfile =
+                    !j.contains("animation_profile") &&
+                    j.value("has_player_tag", false);
+                if (usesLegacyDefaultProfile)
+                    anim.profileName = "Kevin";
                 if (j.contains("animation_bindings") && j["animation_bindings"].is_array())
                 {
                     for (const auto& savedBinding : j["animation_bindings"])
@@ -3840,6 +4761,24 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
                         }
                     }
                 }
+                MeleeActionJson::Read(j, anim, "animation_punch_variants");
+                MeleeActionJson::ReadPoseKeys(
+                    j, anim, "animation_pose_keys");
+                MeleeActionJson::ReadFistKeys(
+                    j, anim, "animation_fist_keys");
+                std::vector<AnimationPoseKey> legacyScenePoseKeys;
+                std::vector<AnimationFistKey> legacySceneFistKeys;
+                if (usesLegacyDefaultProfile && !anim.poseKeys.empty())
+                    legacyScenePoseKeys = anim.poseKeys;
+                if (usesLegacyDefaultProfile && !anim.fistKeys.empty())
+                    legacySceneFistKeys = anim.fistKeys;
+                if (!anim.profileName.empty())
+                    MeleeActionJson::LoadProfile(anim.profileName, anim,
+                        j.value("has_first_person_view", false));
+                if (!legacyScenePoseKeys.empty())
+                    anim.poseKeys = std::move(legacyScenePoseKeys);
+                if (!legacySceneFistKeys.empty())
+                    anim.fistKeys = std::move(legacySceneFistKeys);
                 m_registry.AddComponent<AnimationComponent>(e, anim);
             }
         }
@@ -3957,6 +4896,13 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
                 room.connectedRooms.push_back(static_cast<Entity>(connected.get<uint32_t>()));
         }
         m_registry.AddComponent<RoomComponent>(e, room);
+    }
+
+    if (j.value("has_navmesh_surface", false))
+    {
+        NavMeshSurfaceComponent surface;
+        surface.enabled = j.value("navmesh_surface_enabled", surface.enabled);
+        m_registry.AddComponent<NavMeshSurfaceComponent>(e, surface);
     }
 
     if (j.value("has_oxygen_generator", false))
@@ -4144,6 +5090,38 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
     if (j.value("has_player_tag", false))
         m_registry.AddComponent<PlayerGameTag>(e, PlayerGameTag{});
 
+    if (j.value("has_play_camera", false))
+    {
+        PlayCameraComponent playCamera;
+        if (j.contains("play_camera_first_person_eye_offset"))
+            playCamera.firstPersonEyeOffset = readVec3Array(
+                j["play_camera_first_person_eye_offset"],
+                playCamera.firstPersonEyeOffset);
+        if (j.contains("play_camera_third_person_target_offset"))
+            playCamera.thirdPersonTargetOffset = readVec3Array(
+                j["play_camera_third_person_target_offset"],
+                playCamera.thirdPersonTargetOffset);
+        playCamera.firstPersonEyeOffset.x = std::clamp(
+            playCamera.firstPersonEyeOffset.x, -1.0f, 1.0f);
+        playCamera.firstPersonEyeOffset.y = std::clamp(
+            playCamera.firstPersonEyeOffset.y, 0.1f, 3.0f);
+        playCamera.firstPersonEyeOffset.z = std::clamp(
+            playCamera.firstPersonEyeOffset.z, -1.0f, 1.0f);
+        playCamera.thirdPersonTargetOffset.x = std::clamp(
+            playCamera.thirdPersonTargetOffset.x, -2.0f, 2.0f);
+        playCamera.thirdPersonTargetOffset.y = std::clamp(
+            playCamera.thirdPersonTargetOffset.y, 0.1f, 3.0f);
+        playCamera.thirdPersonTargetOffset.z = std::clamp(
+            playCamera.thirdPersonTargetOffset.z, -2.0f, 2.0f);
+        playCamera.thirdPersonDistance = std::clamp(j.value(
+            "play_camera_third_person_distance", playCamera.thirdPersonDistance),
+            1.0f, 30.0f);
+        playCamera.renderDistance = std::clamp(j.value(
+            "play_camera_render_distance", playCamera.renderDistance),
+            1.0f, 10000.0f);
+        m_registry.AddComponent<PlayCameraComponent>(e, playCamera);
+    }
+
     if (j.value("has_first_person_view", false))
     {
         FirstPersonViewComponent firstPerson;
@@ -4159,6 +5137,10 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
             firstPerson.scale = readVec3Array(j["first_person_scale"], firstPerson.scale);
         firstPerson.pitchScale = j.value("first_person_pitch_scale", firstPerson.pitchScale);
         firstPerson.pitchOffset = j.value("first_person_pitch_offset", firstPerson.pitchOffset);
+        firstPerson.lookUpLimit = std::clamp(
+            j.value("first_person_look_up_limit", firstPerson.lookUpLimit), 0.0f, 89.0f);
+        firstPerson.lookDownLimit = std::clamp(
+            j.value("first_person_look_down_limit", firstPerson.lookDownLimit), 0.0f, 89.0f);
         firstPerson.followCamera = j.value("first_person_follow_camera", firstPerson.followCamera);
         firstPerson.syncAnimation = j.value("first_person_sync_animation", firstPerson.syncAnimation);
         firstPerson.hideOwner = j.value("first_person_hide_owner", firstPerson.hideOwner);
@@ -4195,14 +5177,43 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
     if (j.value("has_player_component", false))
     {
         PlayerComponent player;
-        player.maxHealth = j.value("player_max_health", j.value("Max_Health", player.maxHealth));
-        player.maxStamina = j.value("player_max_stamina", j.value("Max_Stamina", player.maxStamina));
-        player.maxOxygen = j.value("player_max_oxygen", j.value("Max_Oxygen", player.maxOxygen));
-        player.health = j.value("player_health", j.value("Current_Health", player.health));
-        player.stamina = j.value("player_stamina", j.value("Current_Stamina", player.stamina));
-        player.oxygen = j.value("player_oxygen", j.value("Current_Oxygen", player.oxygen));
-        player.Normalize();
+        CharacterVitalsComponent vitals;
+        vitals.maxHealth = j.value("player_max_health", j.value("Max_Health", vitals.maxHealth));
+        vitals.maxStamina = j.value("player_max_stamina", j.value("Max_Stamina", vitals.maxStamina));
+        vitals.maxOxygen = j.value("player_max_oxygen", j.value("Max_Oxygen", vitals.maxOxygen));
+        vitals.health = j.value("player_health", j.value("Current_Health", vitals.health));
+        vitals.stamina = j.value("player_stamina", j.value("Current_Stamina", vitals.stamina));
+        vitals.oxygen = j.value("player_oxygen", j.value("Current_Oxygen", vitals.oxygen));
+        vitals.oxygenChangePerSecond = j.value(
+            "player_oxygen_change_per_second", vitals.oxygenChangePerSecond);
+        vitals.suffocationDamagePerSecond = j.value(
+            "player_suffocation_damage_per_second", vitals.suffocationDamagePerSecond);
+        vitals.staminaDrainPerSecond = j.value(
+            "player_stamina_drain_per_second", vitals.staminaDrainPerSecond);
+        vitals.staminaRecoveryPerSecond = j.value(
+            "player_stamina_recovery_per_second", vitals.staminaRecoveryPerSecond);
+        vitals.sprintStartThreshold = j.value(
+            "player_sprint_start_threshold", vitals.sprintStartThreshold);
+        player.punchDamage = j.value("player_punch_damage", player.punchDamage);
+        player.punchReach = j.value("player_punch_reach", player.punchReach);
+        player.punchContactRadius = j.value("player_punch_contact_radius", player.punchContactRadius);
+        player.punchContactPhase = j.value("player_punch_contact_phase", player.punchContactPhase);
+        player.punchIKStrength = j.value("player_punch_ik_strength", player.punchIKStrength);
+        player.punchFirstPersonIKStrength = j.value("player_punch_fp_ik_strength",
+            player.punchFirstPersonIKStrength);
+        if (j.contains("player_punch_fist_offset"))
+            player.punchFistOffset = readVec3Array(
+                j["player_punch_fist_offset"], player.punchFistOffset);
+        player.punchDamage = (std::max)(0.0f, player.punchDamage);
+        player.punchReach = std::clamp(player.punchReach, 0.1f, 3.0f);
+        player.punchContactRadius = std::clamp(player.punchContactRadius, 0.01f, 1.0f);
+        player.punchContactPhase = std::clamp(player.punchContactPhase, 0.05f, 0.95f);
+        player.punchIKStrength = std::clamp(player.punchIKStrength, 0.0f, 1.0f);
+        player.punchFirstPersonIKStrength = std::clamp(
+            player.punchFirstPersonIKStrength, 0.0f, 1.0f);
+        vitals.Normalize();
         m_registry.AddComponent<PlayerComponent>(e, player);
+        m_registry.AddComponent<CharacterVitalsComponent>(e, vitals);
     }
 
     if (j.value("has_weapon", false))
@@ -4212,12 +5223,15 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
         weapon.damage = j.value("weapon_damage", weapon.damage);
         weapon.range = j.value("weapon_range", weapon.range);
         weapon.fireRate = j.value("weapon_fire_rate", weapon.fireRate);
+        if (j.contains("weapon_ballistics")) ReadWeaponBallistics(j["weapon_ballistics"], weapon);
         weapon.currentCooldown = 0.0f;
         weapon.breachRadius = j.value("weapon_breach_radius", weapon.breachRadius);
         weapon.visualModelPath = j.value("weapon_visual_model", weapon.visualModelPath);
+        weapon.gripProfileName = j.value("weapon_grip_profile", weapon.gripProfileName);
         weapon.rightHandBone = j.value("weapon_right_hand_bone", weapon.rightHandBone);
         weapon.rifleIdleAnimation = j.value(
             "weapon_rifle_idle_animation", weapon.rifleIdleAnimation);
+        weapon.pistolPose = j.value("weapon_pistol_pose", weapon.pistolPose);
         weapon.rifleGunAnimation = j.value(
             "weapon_rifle_gun_animation", weapon.rifleGunAnimation);
         if (j.contains("weapon_world_grip_position"))
@@ -4229,6 +5243,9 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
         if (j.contains("weapon_world_grip_scale"))
             weapon.worldGrip.scale = readVec3Array(
                 j["weapon_world_grip_scale"], weapon.worldGrip.scale);
+        if (j.contains("weapon_world_grip_pivot"))
+            weapon.worldGrip.pivot = readVec3Array(
+                j["weapon_world_grip_pivot"], weapon.worldGrip.pivot);
         if (j.contains("weapon_fp_grip_position"))
             weapon.firstPersonGrip.position = readVec3Array(
                 j["weapon_fp_grip_position"], weapon.firstPersonGrip.position);
@@ -4238,6 +5255,9 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
         if (j.contains("weapon_fp_grip_scale"))
             weapon.firstPersonGrip.scale = readVec3Array(
                 j["weapon_fp_grip_scale"], weapon.firstPersonGrip.scale);
+        if (j.contains("weapon_fp_grip_pivot"))
+            weapon.firstPersonGrip.pivot = readVec3Array(
+                j["weapon_fp_grip_pivot"], weapon.firstPersonGrip.pivot);
         weapon.firstPersonPitchScale = j.value(
             "weapon_fp_pitch_scale", weapon.firstPersonPitchScale);
         weapon.firstPersonPitchOffset = j.value(
@@ -4245,6 +5265,14 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
         if (j.contains("weapon_left_hand_grip"))
             weapon.leftHandGrip = readVec3Array(
                 j["weapon_left_hand_grip"], weapon.leftHandGrip);
+        if (j.contains("weapon_fp_left_hand_grip"))
+            weapon.firstPersonLeftHandGrip = readVec3Array(
+                j["weapon_fp_left_hand_grip"], weapon.firstPersonLeftHandGrip);
+        if (j.contains("weapon_fp_left_hand_rotation"))
+            weapon.firstPersonLeftHandRotation = readVec3Array(
+                j["weapon_fp_left_hand_rotation"], weapon.firstPersonLeftHandRotation);
+        weapon.enableFirstPersonLeftHandIK = j.value(
+            "weapon_fp_enable_left_hand_ik", weapon.enableFirstPersonLeftHandIK);
         if (j.contains("weapon_muzzle_position"))
             weapon.muzzlePosition = readVec3Array(
                 j["weapon_muzzle_position"], weapon.muzzlePosition);
@@ -4252,6 +5280,11 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
             "weapon_show_world_visual", weapon.showWorldVisual);
         weapon.showFirstPersonVisual = j.value(
             "weapon_show_fp_visual", weapon.showFirstPersonVisual);
+        if (j.contains("weapon_left_hand_rotation"))
+            weapon.leftHandRotation = readVec3Array(j["weapon_left_hand_rotation"], weapon.leftHandRotation);
+        weapon.leftUpperArmBone = j.value("weapon_left_upper_arm_bone", weapon.leftUpperArmBone);
+        weapon.leftForearmBone = j.value("weapon_left_forearm_bone", weapon.leftForearmBone);
+        weapon.leftHandBone = j.value("weapon_left_hand_bone", weapon.leftHandBone);
         weapon.enableLeftHandIK = j.value(
             "weapon_enable_left_hand_ik", weapon.enableLeftHandIK);
         m_registry.AddComponent<WeaponComponent>(e, weapon);
@@ -4305,6 +5338,18 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
         tuning.maxPenetrationDepth = j.value(
             "character_max_penetration_depth", tuning.maxPenetrationDepth);
         tuning.fallSpeed = j.value("character_fall_speed", tuning.fallSpeed);
+        tuning.pushDynamicBodies = j.value(
+            "character_push_dynamic_bodies", tuning.pushDynamicBodies);
+        tuning.dynamicBodyPushForce = j.value(
+            "character_dynamic_push_force", tuning.dynamicBodyPushForce);
+        tuning.dynamicBodyPushProbe = j.value(
+            "character_dynamic_push_probe", tuning.dynamicBodyPushProbe);
+        tuning.dynamicBodyMaxPushableMass = j.value(
+            "character_dynamic_max_pushable_mass",
+            tuning.dynamicBodyMaxPushableMass);
+        tuning.dynamicBodyMaxPushSpeed = j.value(
+            "character_dynamic_max_push_speed",
+            tuning.dynamicBodyMaxPushSpeed);
         tuning.clampNormalStepHeight = j.value("character_clamp_step", tuning.clampNormalStepHeight);
         tuning.minimumStepHeight = j.value("character_minimum_step", tuning.minimumStepHeight);
         tuning.maximumStepHeight = j.value("character_maximum_step", tuning.maximumStepHeight);
@@ -4341,10 +5386,33 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
         NPCComponent npc;
         npc.name = j.value("npc_name", npc.name);
         npc.description = j.value("npc_description", npc.description);
-        npc.maxHealth = j.value("npc_max_health", npc.maxHealth);
-        npc.health = std::clamp(j.value("npc_health", npc.health), 0.0f, npc.maxHealth);
         npc.isHostile = j.value("npc_hostile", npc.isHostile);
         m_registry.AddComponent<NPCComponent>(e, npc);
+
+        CharacterVitalsComponent vitals;
+        vitals.maxHealth = j.value("npc_max_health", vitals.maxHealth);
+        vitals.health = j.value("npc_health", vitals.health);
+        vitals.maxOxygen = j.value("npc_max_oxygen", vitals.maxOxygen);
+        vitals.oxygen = j.value("npc_oxygen", vitals.oxygen);
+        vitals.maxStamina = j.value("npc_max_stamina", vitals.maxStamina);
+        vitals.stamina = j.value("npc_stamina", vitals.stamina);
+        vitals.oxygenChangePerSecond = j.value(
+            "npc_oxygen_change_per_second", vitals.oxygenChangePerSecond);
+        vitals.suffocationDamagePerSecond = j.value(
+            "npc_suffocation_damage_per_second", vitals.suffocationDamagePerSecond);
+        vitals.takesSuffocationDamage = j.value(
+            "npc_takes_suffocation_damage", vitals.takesSuffocationDamage);
+        vitals.staminaDrainPerSecond = j.value(
+            "npc_stamina_drain_per_second", vitals.staminaDrainPerSecond);
+        vitals.staminaRecoveryPerSecond = j.value(
+            "npc_stamina_recovery_per_second", vitals.staminaRecoveryPerSecond);
+        vitals.sprintStartThreshold = j.value(
+            "npc_sprint_start_threshold", vitals.sprintStartThreshold);
+        vitals.Normalize();
+        if (m_registry.HasComponent<CharacterVitalsComponent>(e))
+            *m_registry.GetComponent<CharacterVitalsComponent>(e) = vitals;
+        else
+            m_registry.AddComponent<CharacterVitalsComponent>(e, vitals);
 
         NPCMovementComponent npcMovement;
         npcMovement.speed = j.value("npc_speed", npcMovement.speed);
@@ -4366,6 +5434,115 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
         brain.wanderRadius = j.value("npc_wander_radius", brain.wanderRadius);
         m_registry.AddComponent<NpcBrainComponent>(e, brain);
 
+        // Компонент создаётся для любого NPC, включая старые сцены. Включение
+        // остаётся авторской настройкой, поэтому миграция никого не двигает сама.
+        NpcPatrolComponent patrol;
+        patrol.enabled = j.value("npc_patrol_enabled", patrol.enabled);
+        patrol.routeId = j.value("npc_patrol_route_id", patrol.routeId);
+        patrol.loop = j.value("npc_patrol_loop", patrol.loop);
+        patrol.pingPong = j.value("npc_patrol_ping_pong", patrol.pingPong);
+        patrol.allowRunning = j.value(
+            "npc_patrol_allow_running", patrol.allowRunning);
+        patrol.arrivalDistance = (std::max)(0.05f, j.value(
+            "npc_patrol_arrival_distance", patrol.arrivalDistance));
+        patrol.defaultWaitTime = (std::max)(0.0f, j.value(
+            "npc_patrol_default_wait", patrol.defaultWaitTime));
+        m_registry.AddComponent<NpcPatrolComponent>(e, patrol);
+
+        // Older scenes did not serialize NPCCombatComponent. A hostile NPC in
+        // such a scene receives the default combat settings; new scenes keep
+        // the component presence explicitly through has_npc_combat.
+        const bool hasNpcCombat = j.value("has_npc_combat", npc.isHostile);
+        if (hasNpcCombat)
+        {
+            NPCCombatComponent combat;
+            combat.seeRange = (std::max)(0.0f, j.value(
+                "npc_combat_see_range", combat.seeRange));
+            combat.closeAwarenessRange = (std::max)(0.0f, j.value(
+                "npc_combat_close_awareness_range",
+                combat.closeAwarenessRange));
+            combat.wanderUntilContact = j.value(
+                "npc_combat_wander_until_contact",
+                combat.wanderUntilContact);
+            combat.contactWanderRadius = (std::max)(1.0f, j.value(
+                "npc_combat_contact_wander_radius",
+                combat.contactWanderRadius));
+            combat.attackRange = (std::max)(0.0f, j.value(
+                "npc_combat_attack_range", combat.attackRange));
+            combat.attackCooldown = (std::max)(0.0f, j.value(
+                "npc_combat_attack_cooldown", combat.attackCooldown));
+            combat.rangedAttackRange = (std::max)(0.1f, j.value(
+                "npc_combat_ranged_attack_range", combat.rangedAttackRange));
+            combat.rangedAimDelay = (std::max)(0.0f, j.value(
+                "npc_combat_ranged_aim_delay", combat.rangedAimDelay));
+            combat.chaseResumeMargin = (std::max)(0.0f, j.value(
+                "npc_combat_chase_resume_margin", combat.chaseResumeMargin));
+            combat.stanceEnterDelay = (std::max)(0.0f, j.value(
+                "npc_combat_stance_enter_delay", combat.stanceEnterDelay));
+            combat.predictionSeconds = std::clamp(j.value(
+                "npc_combat_prediction_seconds", combat.predictionSeconds), 0.0f, 3.0f);
+            combat.maxPredictionDistance = std::clamp(j.value(
+                "npc_combat_max_prediction_distance", combat.maxPredictionDistance), 0.0f, 10.0f);
+            combat.predictionTravelTimeout = std::clamp(j.value(
+                "npc_combat_prediction_travel_timeout", combat.predictionTravelTimeout), 0.0f, 30.0f);
+            combat.loseTargetDelay = (std::max)(0.0f, j.value(
+                "npc_combat_lose_target_delay", combat.loseTargetDelay));
+            combat.fieldOfViewDegrees = std::clamp(j.value(
+                "npc_combat_field_of_view", combat.fieldOfViewDegrees),
+                0.0f, 360.0f);
+            m_registry.AddComponent<NPCCombatComponent>(e, combat);
+
+            // Compatibility has three distinct cases:
+            //  * no key: scene predates modular combat, preserve old behavior;
+            //  * true: restore the explicitly saved modular configuration;
+            //  * false: the author explicitly saved no component, keep it absent.
+            const auto modulesPresence = j.find("has_npc_combat_modules");
+            const bool isLegacyScene = modulesPresence == j.end();
+            const bool hasSavedModules = !isLegacyScene &&
+                modulesPresence->is_boolean() && modulesPresence->get<bool>();
+
+            if (hasSavedModules)
+            {
+                NpcCombatModulesComponent modules;
+                modules.perception = j.value(
+                    "npc_module_perception", modules.perception);
+                modules.engagement = j.value(
+                    "npc_module_engagement", modules.engagement);
+                modules.pursuit = j.value(
+                    "npc_module_pursuit", modules.pursuit);
+                modules.stationaryFire = j.value(
+                    "npc_module_stationary_fire", modules.stationaryFire);
+                modules.search = j.value(
+                    "npc_module_search", modules.search);
+                modules.automaticTactics = j.value(
+                    "npc_module_automatic_tactics", modules.automaticTactics);
+                modules.coverSelection = j.value(
+                    "npc_module_cover_selection", modules.coverSelection);
+                modules.peekCycle = j.value(
+                    "npc_module_peek_cycle", modules.peekCycle);
+                modules.coverReposition = j.value(
+                    "npc_module_cover_reposition", modules.coverReposition);
+                modules.dynamicCover = j.value(
+                    "npc_module_dynamic_cover", modules.dynamicCover);
+                modules.movingFire = j.value(
+                    "npc_module_moving_fire", modules.movingFire);
+                modules.incomingFireReaction = j.value(
+                    "npc_module_incoming_fire_reaction",
+                    modules.incomingFireReaction);
+                modules.squadTactics = j.value(
+                    "npc_module_squad_tactics", modules.squadTactics);
+                m_registry.AddComponent<NpcCombatModulesComponent>(e, modules);
+            }
+            else if (isLegacyScene)
+            {
+                // Отсутствующий ключ возможен только у старых сцен. Явный
+                // `false` сюда не попадает и компонент не создаёт.
+                NpcCombatModulesComponent modules;
+                modules.ApplyPreset(NpcCombatModulePreset::Legacy);
+                m_registry.AddComponent<NpcCombatModulesComponent>(e, modules);
+            }
+        }
+
         if (!m_registry.HasComponent<CharacterMovement>(e))
             m_registry.AddComponent<CharacterMovement>(e, CharacterMovement{});
         if (!m_registry.HasComponent<CharacterController>(e))
@@ -4373,6 +5550,98 @@ Entity SceneManager::DeserializeObject(const json& j, ID3D11Device* device,
         if (!m_registry.HasComponent<CharacterPhysicsTuningComponent>(e))
             m_registry.AddComponent<CharacterPhysicsTuningComponent>(
                 e, CharacterPhysicsTuningComponent{});
+    }
+
+    if (j.value("has_npc_tactical", false))
+    {
+        NpcTacticalComponent tactical;
+        tactical.squadId = j.value("npc_squad_id", tactical.squadId);
+        const int savedStyle = std::clamp(
+            j.value("npc_tactical_selected_style",
+                static_cast<int>(tactical.selectedStyle)),
+            static_cast<int>(NpcTacticalStyle::Auto),
+            static_cast<int>(NpcTacticalStyle::Defensive));
+        tactical.selectedStyle = static_cast<NpcTacticalStyle>(savedStyle);
+        tactical.tacticalAggression = std::clamp(j.value(
+            "npc_tactical_aggression",
+            tactical.tacticalAggression), 0.0f, 1.0f);
+        tactical.tacticCommitDuration = (std::max)(0.0f, j.value(
+            "npc_tactical_style_commit",
+            tactical.tacticCommitDuration));
+        tactical.decisionInterval = (std::max)(0.05f, j.value(
+            "npc_tactical_decision_interval", tactical.decisionInterval));
+        tactical.hideDuration = (std::max)(0.1f, j.value(
+            "npc_tactical_hide_duration", tactical.hideDuration));
+        tactical.exposeDuration = (std::max)(0.1f, j.value(
+            "npc_tactical_expose_duration", tactical.exposeDuration));
+        tactical.peekMoveSpeed = (std::max)(0.1f, j.value(
+            "npc_tactical_peek_speed", tactical.peekMoveSpeed));
+        tactical.movingBurstSize = (std::max)(1, j.value(
+            "npc_tactical_moving_burst_size", tactical.movingBurstSize));
+        tactical.movingBurstPauseDuration = (std::max)(0.0f, j.value(
+            "npc_tactical_moving_burst_pause",
+            tactical.movingBurstPauseDuration));
+        tactical.failedPeeksBeforeRelocate = (std::max)(1, j.value(
+            "npc_tactical_failed_peeks_before_relocate",
+            tactical.failedPeeksBeforeRelocate));
+        tactical.minimumCoverHoldDuration = (std::max)(0.0f, j.value(
+            "npc_tactical_minimum_cover_hold",
+            tactical.minimumCoverHoldDuration));
+        tactical.coverValidationGraceDuration = (std::max)(0.0f, j.value(
+            "npc_tactical_cover_validation_grace",
+            tactical.coverValidationGraceDuration));
+        tactical.incomingFireAwarenessRange = (std::max)(0.0f, j.value(
+            "npc_tactical_incoming_fire_awareness_range",
+            tactical.incomingFireAwarenessRange));
+        tactical.flankWeight = (std::max)(0.0f, j.value(
+            "npc_tactical_flank_weight", tactical.flankWeight));
+        tactical.preferredRange = (std::max)(0.5f, j.value(
+            "npc_tactical_preferred_range", tactical.preferredRange));
+        tactical.allowDynamicCover = j.value(
+            "npc_tactical_dynamic_cover", tactical.allowDynamicCover);
+        tactical.dynamicCoverSearchRadius = (std::max)(4.0f, j.value(
+            "npc_tactical_dynamic_cover_radius",
+            tactical.dynamicCoverSearchRadius));
+        tactical.dynamicCoverSamples = (std::max)(12, j.value(
+            "npc_tactical_dynamic_cover_samples",
+            tactical.dynamicCoverSamples));
+        m_registry.AddComponent<NpcTacticalComponent>(e, tactical);
+    }
+    if (j.value("has_faction", false))
+    {
+        FactionComponent faction;
+        const int firstFaction = static_cast<int>(FactionId::Iridian);
+        const int lastFaction = static_cast<int>(FactionId::Neutral);
+        const int savedFaction = std::clamp(
+            j.value("faction_id", static_cast<int>(faction.faction)),
+            firstFaction,
+            lastFaction);
+        faction.faction = static_cast<FactionId>(savedFaction);
+        m_registry.AddComponent<FactionComponent>(e, faction);
+    }
+    if (j.value("has_npc_cover_point", false))
+    {
+        NpcCoverPointComponent cover;
+        if (j.contains("npc_cover_peek_offset"))
+            cover.peekOffset = readVec3Array(j["npc_cover_peek_offset"], cover.peekOffset);
+        cover.allowOppositePeek = j.value(
+            "npc_cover_allow_opposite_peek",
+            cover.allowOppositePeek);
+        cover.protectionHeight = (std::max)(0.2f, j.value(
+            "npc_cover_protection_height", cover.protectionHeight));
+        cover.crouched = j.value("npc_cover_crouched", cover.crouched);
+        cover.enabled = j.value("npc_cover_enabled", cover.enabled);
+        m_registry.AddComponent<NpcCoverPointComponent>(e, cover);
+    }
+    if (j.value("has_npc_patrol_point", false))
+    {
+        NpcPatrolPointComponent point;
+        point.routeId = j.value("npc_patrol_point_route_id", point.routeId);
+        point.order = j.value("npc_patrol_point_order", point.order);
+        point.waitTime = (std::max)(0.0f, j.value(
+            "npc_patrol_point_wait", point.waitTime));
+        point.enabled = j.value("npc_patrol_point_enabled", point.enabled);
+        m_registry.AddComponent<NpcPatrolPointComponent>(e, point);
     }
 
     return e;
@@ -4751,7 +6020,8 @@ void SceneManager::UpdateLights()
 }
 
 void SceneManager::RemapEntityReferences(
-    const std::unordered_map<uint32_t, Entity>& remap)
+    const std::unordered_map<uint32_t, Entity>& remap,
+    const std::unordered_set<Entity>& restoredEntities)
 {
     auto remapEntity = [&](Entity old) -> Entity
         {
@@ -4765,11 +6035,19 @@ void SceneManager::RemapEntityReferences(
             OutputDebugStringA(buf);
             return old;
         };
+    auto remapEntityOrInvalid = [&](Entity old) -> Entity
+        {
+            if (old == INVALID_ENTITY)
+                return INVALID_ENTITY;
+            const auto it = remap.find(static_cast<uint32_t>(old));
+            return it != remap.end() ? it->second : INVALID_ENTITY;
+        };
 
     // -- SubmarineComponent ----------------------------------------------------
     auto& subPool = m_registry.GetComponents<SubmarineComponent>();
     for (auto& [entity, sub] : subPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         sub.submarineRoot = remapEntity(sub.submarineRoot);
 
         for (Entity& c : sub.allCompartments)
@@ -4782,6 +6060,7 @@ void SceneManager::RemapEntityReferences(
     auto& compPool = m_registry.GetComponents<CompartmentComponent>();
     for (auto& [entity, comp] : compPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         for (Entity& c : comp.connectedCompartments)
             c = remapEntity(c);
     }
@@ -4790,6 +6069,7 @@ void SceneManager::RemapEntityReferences(
     auto& roomPool = m_registry.GetComponents<RoomComponent>();
     for (auto& [entity, room] : roomPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         for (Entity& connectedRoom : room.connectedRooms)
             connectedRoom = remapEntity(connectedRoom);
     }
@@ -4797,6 +6077,7 @@ void SceneManager::RemapEntityReferences(
     auto& doorPool = m_registry.GetComponents<DoorComponent>();
     for (auto& [entity, door] : doorPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         if (door.compartmentA != INVALID_ENTITY)
             door.compartmentA = remapEntity(door.compartmentA);
         if (door.compartmentB != INVALID_ENTITY)
@@ -4814,6 +6095,7 @@ void SceneManager::RemapEntityReferences(
     auto& lightPool = m_registry.GetComponents<LightComponent>();
     for (auto& [entity, light] : lightPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         if (light.attachedTo != INVALID_ENTITY)
             light.attachedTo = remapEntity(light.attachedTo);
     }
@@ -4821,6 +6103,7 @@ void SceneManager::RemapEntityReferences(
     auto& equippedPool = m_registry.GetComponents<EquippedWeaponComponent>();
     for (auto& [entity, equipped] : equippedPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         if (equipped.weapon != INVALID_ENTITY)
             equipped.weapon = remapEntity(equipped.weapon);
     }
@@ -4828,20 +6111,73 @@ void SceneManager::RemapEntityReferences(
     auto& weaponOwnerPool = m_registry.GetComponents<WeaponOwnerComponent>();
     for (auto& [entity, owner] : weaponOwnerPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         if (owner.owner != INVALID_ENTITY)
             owner.owner = remapEntity(owner.owner);
+    }
+
+    auto& inventoryPool = m_registry.GetComponents<InventoryComponent>();
+    for (auto& [entity, inventory] : inventoryPool)
+    {
+        if (!restoredEntities.contains(entity)) continue;
+        for (InventorySlot& slot : inventory.slots)
+        {
+            if (slot.item != INVALID_ENTITY)
+                slot.item = remapEntityOrInvalid(slot.item);
+        }
+    }
+
+    auto& triggerPool = m_registry.GetComponents<TriggerZoneComponent>();
+    for (auto& [entity, trigger] : triggerPool)
+    {
+        if (!restoredEntities.contains(entity)) continue;
+        if (trigger.linkedEntity != INVALID_ENTITY)
+            trigger.linkedEntity = remapEntityOrInvalid(trigger.linkedEntity);
+    }
+
+    auto& triggerActionPool =
+        m_registry.GetComponents<TriggerActionComponent>();
+    for (auto& [entity, action] : triggerActionPool)
+    {
+        if (!restoredEntities.contains(entity)) continue;
+        if (action.target != INVALID_ENTITY)
+            action.target = remapEntityOrInvalid(action.target);
     }
 
     auto& firstPersonPool = m_registry.GetComponents<FirstPersonViewComponent>();
     for (auto& [entity, firstPerson] : firstPersonPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         if (firstPerson.owner != INVALID_ENTITY)
             firstPerson.owner = remapEntity(firstPerson.owner);
+        if (!firstPerson.syncAnimation) continue;
+        auto* viewAnimation =
+            m_registry.GetComponent<AnimationComponent>(entity);
+        const auto* ownerAnimation =
+            m_registry.GetComponent<AnimationComponent>(firstPerson.owner);
+        if (!viewAnimation || !ownerAnimation) continue;
+        const bool inheritedProfile = viewAnimation->profileName.empty();
+        std::vector<AnimationPoseKey> legacyViewPoseKeys;
+        std::vector<AnimationFistKey> legacyViewFistKeys;
+        if (inheritedProfile && !viewAnimation->poseKeys.empty())
+            legacyViewPoseKeys = viewAnimation->poseKeys;
+        if (inheritedProfile && !viewAnimation->fistKeys.empty())
+            legacyViewFistKeys = viewAnimation->fistKeys;
+        if (inheritedProfile)
+            viewAnimation->profileName = ownerAnimation->profileName;
+        if (!viewAnimation->profileName.empty())
+            MeleeActionJson::LoadProfile(
+                viewAnimation->profileName, *viewAnimation, true);
+        if (!legacyViewPoseKeys.empty())
+            viewAnimation->poseKeys = std::move(legacyViewPoseKeys);
+        if (!legacyViewFistKeys.empty())
+            viewAnimation->fistKeys = std::move(legacyViewFistKeys);
     }
 
     auto& attachmentPool = m_registry.GetComponents<BoneAttachmentComponent>();
     for (auto& [entity, attachment] : attachmentPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         if (attachment.parent != INVALID_ENTITY)
             attachment.parent = remapEntity(attachment.parent);
     }
@@ -4850,6 +6186,7 @@ void SceneManager::RemapEntityReferences(
     auto& jointPool = m_registry.GetComponents<SubmarineJointComponent>();
     for (auto& [entity, joint] : jointPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         joint.compartmentA = remapEntity(joint.compartmentA);
         joint.compartmentB = remapEntity(joint.compartmentB);
     }
@@ -4858,6 +6195,7 @@ void SceneManager::RemapEntityReferences(
     auto& connPool = m_registry.GetComponents<JointConnectionComponent>();
     for (auto& [entity, conn] : connPool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         if (conn.targetEntity != INVALID_ENTITY)
             conn.targetEntity = remapEntity(conn.targetEntity);
     }
@@ -4865,6 +6203,7 @@ void SceneManager::RemapEntityReferences(
     auto& zonePool = m_registry.GetComponents<WorkZoneComponent>();
     for (auto& [entity, zone] : zonePool)
     {
+        if (!restoredEntities.contains(entity)) continue;
         if (zone.owner != INVALID_ENTITY)
             zone.owner = remapEntity(zone.owner);
     }

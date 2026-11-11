@@ -1,9 +1,12 @@
 #include "DamageSystem.h"
 #include "PlayerComponents.h"
+#include "NPCComponents.h"
 #include "Components.h"
 #include "Gameplay/Repair/RepairComponent.h"
 #include "Gameplay/Repair/RuntimeMeshDamageComponent.h"
 #include "Gameplay/Ship/DecompressionSourceComponent.h"
+#include "Gameplay/Combat/WeaponComponent.h"
+#include "Gameplay/AI/NpcCombatDecisionRules.h"
 #include <Gameplay/Effects/ParticleSystem.h>
 #include <Gameplay/Effects/ExplosionSystem.h>
 #include <algorithm>
@@ -114,11 +117,102 @@ void DamageSystem::Update(
 
         if (damageEvent.target == INVALID_ENTITY || damageEvent.damageAmount <= 0.0f)
             continue;
+        if (!registry.HasComponent<ActiveComponent>(damageEvent.target))
+            continue;
 
-        if (auto* player = registry.GetComponent<PlayerComponent>(damageEvent.target))
+        // Бессмертие запрещает уменьшать здоровье, но не отменяет реакцию
+        // на обычное попадание. silentKill — единственное исключение:
+        // будущая stealth-атака нанесёт урон, но не включит боевую тревогу.
+        if (!damageEvent.silentKill)
         {
-            player->health -= damageEvent.damageAmount;
-            player->Normalize();
+            if (auto* tactical =
+                    registry.GetComponent<NpcTacticalComponent>(damageEvent.target))
+            {
+                tactical->underFireTime = 3.0f;
+                // Это настоящий DamageEvent, а не отладочный near miss.
+                // Счётчик обновляется на каждое попадание, даже если общий
+                // reaction cooldown ещё не разрешает новое резкое решение.
+                tactical->damageReactionWasHit = true;
+                ++tactical->recentDamageHits;
+                tactical->recentDamageWindow = 4.0f;
+                if (tactical->damageReactionCooldown <= 0.0f)
+                    tactical->damageReactionPending = true;
+
+                // DamageEvent.source обычно указывает на Entity оружия.
+                // Разрешаем её до владельца, но не записываем Entity в combat:
+                // NPC получает только направление, а цель ещё нужно увидеть.
+                Entity perceivedSource = damageEvent.source;
+                if (perceivedSource != INVALID_ENTITY)
+                {
+                    if (const auto* owner =
+                            registry.GetComponent<WeaponOwnerComponent>(perceivedSource))
+                    {
+                        perceivedSource = owner->owner;
+                    }
+                }
+
+                const auto* victimTransform =
+                    registry.GetComponent<TransformComponent>(damageEvent.target);
+                const auto* sourceTransform = perceivedSource != INVALID_ENTITY
+                    ? registry.GetComponent<TransformComponent>(perceivedSource)
+                    : nullptr;
+                if (perceivedSource != damageEvent.target &&
+                    victimTransform && sourceTransform)
+                {
+                    const float dx = sourceTransform->position.x -
+                        victimTransform->position.x;
+                    const float dz = sourceTransform->position.z -
+                        victimTransform->position.z;
+                    const float distanceSquared = dx * dx + dz * dz;
+                    const float awarenessRange = (std::max)(
+                        0.0f,
+                        tactical->incomingFireAwarenessRange);
+
+                    // Выстрел за сотни метров не даёт точной ориентации.
+                    // Близкий попавший стрелок даёт короткую память направления.
+                    if (NpcCombatDecisionRules::CanReactToIncomingFireDirection(
+                            damageEvent.silentKill,
+                            distanceSquared,
+                            awarenessRange))
+                    {
+                        const float inverseLength =
+                            1.0f / std::sqrt(distanceSquared);
+                        tactical->incomingFireDirection = {
+                            dx * inverseLength,
+                            0.0f,
+                            dz * inverseLength };
+                        tactical->hasIncomingFireDirection = true;
+                        tactical->incomingFireTurnTimer = 1.5f;
+                    }
+                }
+            }
+        }
+
+        // После регистрации тактической реакции бессмертие останавливает
+        // именно последствия урона: здоровье, пробоины и уничтожение Entity.
+        if (registry.HasComponent<InvulnerableComponent>(damageEvent.target))
+            continue;
+
+        if (registry.HasComponent<PlayerComponent>(damageEvent.target))
+        {
+            if (auto* vitals = registry.GetComponent<CharacterVitalsComponent>(damageEvent.target))
+            {
+                vitals->health -= damageEvent.damageAmount;
+                vitals->Normalize();
+            }
+            continue;
+        }
+
+        if (auto* npc = registry.GetComponent<NPCComponent>(damageEvent.target);
+            npc && !registry.HasComponent<DamageableComponent>(damageEvent.target))
+        {
+            auto* vitals = registry.GetComponent<CharacterVitalsComponent>(damageEvent.target);
+            if (!vitals)
+                continue;
+            vitals->health -= damageEvent.damageAmount;
+            vitals->Normalize();
+            if (vitals->health <= 0.0f)
+                registry.RemoveComponent<ActiveComponent>(damageEvent.target);
             continue;
         }
 
@@ -245,6 +339,14 @@ void DamageSystem::Update(
         const bool wasAlive = damageable->IsAlive();
         damageable->health -= damageEvent.damageAmount;
         damageable->Normalize();
+        if (registry.HasComponent<NPCComponent>(damageEvent.target))
+        {
+            if (auto* vitals = registry.GetComponent<CharacterVitalsComponent>(damageEvent.target))
+            {
+                vitals->health = damageable->health;
+                vitals->Normalize();
+            }
+        }
 
         if (wasAlive && !damageable->IsAlive())
         {

@@ -2,6 +2,7 @@
 
 #include <btBulletDynamicsCommon.h>
 #include <DirectXMath.h>
+#include <cmath>
 
 #include <ECSTypes.h>
 #include <cameraclass.h>
@@ -37,7 +38,8 @@ public:
         const btCollisionObject* hitObject = rayResult.m_collisionObject;
 
         if (hitObject == m_ignoredObject ||
-            static_cast<Entity>(hitObject->getUserIndex()) == m_ignoredEntity)
+            static_cast<Entity>(hitObject->getUserIndex()) == m_ignoredEntity ||
+            hitObject->getActivationState() == DISABLE_SIMULATION)
         {
             return 1.0f;
         }
@@ -61,22 +63,38 @@ public:
         const btCollisionObject* ignoredObject,
         PhysicsRaycastHit& outHit)
     {
-        outHit = {};
+        if (!camera)
+            return false;
+        return CastRay(camera->GetPosition(), camera->GetForward(), world,
+            distance, ignoredEntity, ignoredObject, outHit);
+    }
 
-        if (!camera || !world || distance <= 0.0f)
+    static bool CastRay(
+        const DirectX::XMFLOAT3& origin,
+        const DirectX::XMFLOAT3& direction,
+        btDynamicsWorld* world,
+        float distance,
+        Entity ignoredEntity,
+        const btCollisionObject* ignoredObject,
+        PhysicsRaycastHit& outHit)
+    {
+        outHit = {};
+        if (!world || distance <= 0.0f)
+            return false;
+        using namespace DirectX;
+        const XMVECTOR normalized = XMVector3Normalize(XMLoadFloat3(&direction));
+        XMFLOAT3 forward{};
+        XMStoreFloat3(&forward, normalized);
+        if (!std::isfinite(forward.x) || !std::isfinite(forward.y) ||
+            !std::isfinite(forward.z))
             return false;
 
-        const DirectX::XMFLOAT3 cameraPosition = camera->GetPosition();
-        const DirectX::XMFLOAT3 cameraForward = camera->GetForward();
-
         outHit.rayStart = btVector3(
-            cameraPosition.x,
-            cameraPosition.y,
-            cameraPosition.z);
+            origin.x, origin.y, origin.z);
         outHit.rayEnd = btVector3(
-            cameraPosition.x + cameraForward.x * distance,
-            cameraPosition.y + cameraForward.y * distance,
-            cameraPosition.z + cameraForward.z * distance);
+            origin.x + forward.x * distance,
+            origin.y + forward.y * distance,
+            origin.z + forward.z * distance);
 
         IgnoreEntityRayCallback callback(
             outHit.rayStart,

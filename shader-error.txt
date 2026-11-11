@@ -1,1 +1,6 @@
-C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Ps\SkyShader.ps(26,16-27): error X4000: variable 'uv' used without having been completely initialized
+C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Ps\pbr.ps(146,20): warning X4000: use of potentially uninitialized variable (CalculateShadow)
+C:\Users\Lakis\Desktop\DX_FrameWork\DX_FrameWork\src\Render\Shader\Ps\pbr.ps(119,21): warning X4000: use of potentially uninitialized variable (RepairEnvironmentPinholes)
+src/Render/Shader/Vs/fog_common.hlsli(32,21): warning X4000: use of potentially uninitialized variable (ApplyFog)
+error X8000: D3D11 Internal Compiler Error: Invalid Bytecode: Masks (and if pixel shader, also interpolation mode) on all input registers in an index range must be identical. Input register [11] does not match with others in the index range from 10 to 13. 
+error X8000: D3D11 Internal Compiler Error: Invalid Bytecode: Masks (and if pixel shader, also interpolation mode) on all input registers in an index range must be identical. Input register [12] does not match with others in the index range from 10 to 13. 
+error X8000: D3D11 Internal Compiler Error: Invalid Bytecode: Masks (and if pixel shader, also interpolation mode) on all input registers in an index range must be identical. Input register [13] does not match with others in the index range from 10 to 13. 

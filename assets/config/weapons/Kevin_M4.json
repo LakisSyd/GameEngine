@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "profile_name": "Kevin_M4",
+  "visual_model": "assets/model/Rifle_M4_CC0.glb",
+  "right_hand_bone": "mixamorig:RightHand",
+  "rifle_idle_animation": "Kevin_Aim_Rifle",
+  "rifle_gun_animation": "Kevin_Aim_Shoot_R",
+  "world_position": [0.0298783, 0.0213676, 0.1143637],
+  "world_rotation": [-0.0080474, 0.0122972, -1.870682],
+  "world_scale": [0.8, 0.8, 0.8],
+  "left_hand_grip": [-0.365106, 0.0318003, -0.306782],
+  "left_hand_rotation": [2.0677649, -0.4732285, -0.1169028],
+  "left_upper_arm_bone": "mixamorig:LeftArm",
+  "left_forearm_bone": "mixamorig:LeftForeArm",
+  "left_hand_bone": "mixamorig:LeftHand",
+  "muzzle_position": [0.0, 0.11, 0.607],
+  "show_world_visual": true,
+  "show_first_person_visual": true,
+  "enable_left_hand_ik": true
+}

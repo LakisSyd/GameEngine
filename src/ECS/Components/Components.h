@@ -3,13 +3,13 @@
 #include <DirectXMath.h>
 #include "assimpmodelclass.h"
 #include "MaterialClass.h"
-#include <btBulletDynamicsCommon.h>
+#include <bullet/btBulletDynamicsCommon.h>
 #include "ECSTypes.h"
 #include <vector>
 #include <string>
 #include <utility>
-#include <BulletCollision/CollisionDispatch/btGhostObject.h>        // btPairCachingGhostObject
-#include <BulletDynamics/Character/btKinematicCharacterController.h> // btKinematicCharacterController
+#include <bullet/BulletCollision/CollisionDispatch/btGhostObject.h>        // btPairCachingGhostObject
+#include <bullet/BulletDynamics/Character/btKinematicCharacterController.h> // btKinematicCharacterController
 #include "WorldAreaComponent.h"
 #include "PhysicsWorld.h"
 using namespace DirectX;
@@ -122,6 +122,13 @@ struct RigidBodyComponent
     XMFLOAT3 lastSyncedRotation = { 0, 0, 0 };
     XMFLOAT3 lastSyncedScale = { 1, 1, 1 };
 
+    // Runtime bridge between ECS ActiveComponent and Bullet. PhysicsSystem
+    // preserves the body's flags when an entity is disabled, freezes it and
+    // restores the original state when the entity becomes active again.
+    bool suspendedByActiveState = false;
+    int collisionFlagsBeforeSuspend = 0;
+    int activationStateBeforeSuspend = ACTIVE_TAG;
+
 	AssimpModelClass* collisionModel = nullptr; // Исходная модель для коллизии (для динамических мешей)
     std::string collisionModelPath;
 	bool useSeparateCollisionMesh = false; // Использовать ли отдельную модель для коллизии (для динамических мешей)
@@ -230,6 +237,9 @@ struct RigidBodyComponent
         , lastSyncedPosition(other.lastSyncedPosition)
         , lastSyncedRotation(other.lastSyncedRotation)
         , lastSyncedScale(other.lastSyncedScale)
+        , suspendedByActiveState(other.suspendedByActiveState)
+        , collisionFlagsBeforeSuspend(other.collisionFlagsBeforeSuspend)
+        , activationStateBeforeSuspend(other.activationStateBeforeSuspend)
         , collisionModel(other.collisionModel)
         , collisionModelPath(std::move(other.collisionModelPath))
         , useSeparateCollisionMesh(other.useSeparateCollisionMesh)
@@ -274,6 +284,9 @@ struct RigidBodyComponent
         lastSyncedPosition = other.lastSyncedPosition;
         lastSyncedRotation = other.lastSyncedRotation;
         lastSyncedScale = other.lastSyncedScale;
+        suspendedByActiveState = other.suspendedByActiveState;
+        collisionFlagsBeforeSuspend = other.collisionFlagsBeforeSuspend;
+        activationStateBeforeSuspend = other.activationStateBeforeSuspend;
         collisionModel = other.collisionModel;
         collisionModelPath = std::move(other.collisionModelPath);
         useSeparateCollisionMesh = other.useSeparateCollisionMesh;
@@ -395,6 +408,7 @@ struct CharacterController
     float maxSlope = 45.0f;
 
     bool isGrounded = false;
+    bool suspendedByActiveState = false;
 
     // Последняя синхронизированная позиция/ротация — для детекции изменений из редактора
     XMFLOAT3 lastSyncedPosition = { 0.0f, 0.0f, 0.0f };
@@ -418,6 +432,7 @@ struct CharacterController
         , gravity(other.gravity)
         , maxSlope(other.maxSlope)
         , isGrounded(other.isGrounded)
+        , suspendedByActiveState(other.suspendedByActiveState)
         , lastSyncedPosition(other.lastSyncedPosition)
         , lastSyncedRotation(other.lastSyncedRotation)
     {
@@ -441,6 +456,7 @@ struct CharacterController
         gravity = other.gravity;
         maxSlope = other.maxSlope;
         isGrounded = other.isGrounded;
+        suspendedByActiveState = other.suspendedByActiveState;
         lastSyncedPosition = other.lastSyncedPosition;
         lastSyncedRotation = other.lastSyncedRotation;
 
@@ -482,6 +498,7 @@ struct CharacterMovement
 	bool isRunning = false;                 // ? По умолчанию — не бежит
     bool isMoving = false;                // ? По умолчанию — стоит
     bool isGrounded = false;              // ? По умолчанию — в воздухе (безопаснее) 
+	bool isCrouching = false;             // ? По умолчанию — не приседает
     float currentSpeed = 0.0f;
 
     PlayerLocomotionState locomotionState = PlayerLocomotionState::Idle;
@@ -1008,6 +1025,12 @@ struct RoomComponent
     bool isActive = true;
 };
 
+// Static collision geometry marked as walkable for the scene-wide NPC NavMesh.
+struct NavMeshSurfaceComponent
+{
+    bool enabled = true;
+};
+
 
 #pragma once
 #include <algorithm>
@@ -1030,6 +1053,13 @@ struct DamageableComponent
     }
 };
 
+// Opt-in per-entity damage immunity. Keeping this separate from a particular
+// health component lets the editor use one switch for players, NPCs, hull
+// panels and ordinary Damageable entities.
+struct InvulnerableComponent
+{
+};
+
 
 struct RoomMembershipComponent
 {
@@ -1046,9 +1076,29 @@ struct FirstPersonViewComponent
     XMFLOAT3 scale = { 1.0f, 1.0f, 1.0f };
     float pitchScale = 1.0f;
     float pitchOffset = 0.0f;
+    float lookUpLimit = 65.0f;   // degrees
+    float lookDownLimit = 70.0f; // degrees
     bool followCamera = true;
     bool syncAnimation = true;
     bool hideOwner = true;
+      // Runtime-only Animation Studio state. Freezes the current arms anchor
+      // so the free camera can move around and inspect the FP mesh.
+      bool studioFreezeCameraAnchor = false;
+      bool studioCameraAnchorCaptured = false;
+      XMFLOAT3 studioCameraPosition = {};
+      XMFLOAT3 studioCameraRotation = {};
+};
+
+// Saved gameplay camera framing for the local player. Offsets use camera yaw:
+// X is right, Y is up, Z is forward.
+struct PlayCameraComponent
+{
+    XMFLOAT3 firstPersonEyeOffset = { 0.0f, 1.6f, 0.15f };
+    XMFLOAT3 thirdPersonTargetOffset = { 0.0f, 1.5f, 0.0f };
+    float thirdPersonDistance = 4.0f;
+    // Дальняя плоскость основной игровой камеры. Объекты за ней не попадают
+    // в кадр и отсекаются тем же frustum culling, который использует renderer.
+    float renderDistance = 15.0f;
 };
 
 // Attaches an entity transform to an animated bone on another mesh. The local
